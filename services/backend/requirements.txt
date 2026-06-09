@@ -1,0 +1,9 @@
+Django>=5.0
+djangorestframework
+uvicorn[standard]
+psycopg2-binary
+redis
+whitenoise
+django-redis
+clickhouse-driver
+djangorestframework-simplejwt
