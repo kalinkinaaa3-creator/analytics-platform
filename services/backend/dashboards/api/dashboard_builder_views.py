@@ -1,30 +1,17 @@
-from rest_framework.views import (
-    APIView
-)
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 
-from rest_framework.response import (
-    Response
-)
-
-from dashboards.services.dashboard_builder import (
-    build_dashboard
-)
+from dashboards.services.dashboard_builder import build_dashboard
 
 
-class DashboardBuilderView(
-    APIView
-):
+class DashboardBuilderView(APIView):
+    permission_classes = [IsAuthenticated]
 
-    def get(
-        self,
-        request,
-        dashboard_id
-    ):
-
+    def get(self, request, dashboard_id):
         result = build_dashboard(
-            dashboard_id
+            dashboard_id=dashboard_id,
+            user=request.user,
         )
 
-        return Response(
-            result
-        )
+        return Response(result)

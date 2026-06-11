@@ -1,15 +1,3 @@
-def build_table(rows):
-    if not rows:
-        return {
-            "columns": [],
-            "rows": [],
-        }
-
-    return {
-        "columns": list(rows[0].keys()),
-        "rows": rows,
-    }
-
 
 def build_line_chart(rows, x_field, y_field):
     return {

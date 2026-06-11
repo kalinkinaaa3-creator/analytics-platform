@@ -16,8 +16,7 @@ urlpatterns = [
 
     # API V1 - ЧЁТКАЯ СЕГМЕНТАЦИЯ
     path("api/v1/datasets/", include("datasets.api.urls")),
-    path("api/v1/analytics/", include("analytics.api.urls")),
-    path("api/v1/charts/", include("analytics.api.charts.urls")),
+    
     path("api/v1/dashboards/", include("dashboards.api.urls")),
 ]
 

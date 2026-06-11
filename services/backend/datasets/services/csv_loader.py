@@ -13,11 +13,11 @@ def load_csv(dataset: Dataset):
     with open(
         path,
         mode="r",
-        encoding="utf-8",
+        encoding="utf-8-sig",
         newline=""
     ) as csv_file:
 
-        reader = csv.DictReader(csv_file)
+        reader = csv.DictReader(csv_file, delimiter=";")
 
         for row in reader:
 

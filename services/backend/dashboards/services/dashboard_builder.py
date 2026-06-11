@@ -1,80 +1,71 @@
-from dashboards.models import (
-    Dashboard
-)
-
-from analytics.services.charts.bar import (
-    build_bar_chart
-)
-
-from analytics.services.charts.line import (
-    build_line_chart
-)
-
-from analytics.services.charts.pie import (
-    build_pie_chart
-)
-
 from django.core.cache import cache
 
-from dashboards.cache.dashboard_cache import (
-    dashboard_cache_key
-)
+from analytics.clickhouse.repository import ClickHouseRepository
+
+from dashboards.models import Dashboard
+from dashboards.cache.dashboard_cache import dashboard_cache_key
+from dashboards.services.tables import build_table
+from dashboards.services.charts import build_line_chart
 
 
-def build_dashboard(dashboard_id: int):
+def build_dashboard(dashboard_id: int, user=None):
 
-    key = dashboard_cache_key(dashboard_id)
+    if user is not None:
+        key = dashboard_cache_key(f"user:{user.id}:dashboard:{dashboard_id}")
+    else:
+        key = dashboard_cache_key(dashboard_id)
 
     cached = cache.get(key)
     if cached:
         return cached
 
-    dashboard = Dashboard.objects.prefetch_related(
-        "widgets"
-    ).get(id=dashboard_id)
+    queryset = Dashboard.objects.prefetch_related("widgets")
+
+    if user is not None:
+        queryset = queryset.filter(owner=user)
+
+    dashboard = queryset.get(id=dashboard_id)
+
+    repository = ClickHouseRepository()
 
     widgets_data = []
 
-    for widget in dashboard.widgets.all():
+    for widget in dashboard.widgets.all().order_by("position"):
 
-        chart = None
+        config = widget.config or {}
 
-        if widget.chart_type == "bar":
-            chart = build_bar_chart(
-                dataset_id=widget.dataset_id,
-                x_field=widget.x_field,
-                y_field=widget.y_field
-            )
-
-        elif widget.chart_type == "line":
-            chart = build_line_chart(
-                dataset_id=widget.dataset_id,
-                x_field=widget.x_field,
-                y_field=widget.y_field
-            )
-
-        elif widget.chart_type == "pie":
-            chart = build_pie_chart(
-                dataset_id=widget.dataset_id,
-                field=widget.x_field
-            )
-
-        widgets_data.append({
+        widget_data = {
             "id": widget.id,
-            "title": widget.title,
-            "chart_type": widget.chart_type,
-            "position_x": widget.position_x,
-            "position_y": widget.position_y,
-            "width": widget.width,
-            "height": widget.height,
-            "chart": chart,
-        })
+            "type": widget.type,
+            "position": widget.position,
+            "config": config,
+            "data": None,
+        }
+
+        dataset_id = config.get("dataset_id")
+
+        if dataset_id:
+            rows = repository.fetch_dataset_rows(dataset_id)
+        else:
+            rows = []
+
+        if widget.type == "table":
+            widget_data["data"] = build_table(rows)
+
+        elif widget.type == "line_chart":
+            widget_data["data"] = build_line_chart(
+                rows,
+                config.get("x", "id"),
+                config.get("y", "amount"),
+            )
+
+        widgets_data.append(widget_data)
 
     result = {
         "dashboard": {
             "id": dashboard.id,
             "name": dashboard.name,
-            "description": dashboard.description,
+            "owner": dashboard.owner_id,
         },
         "widgets": widgets_data,
     }

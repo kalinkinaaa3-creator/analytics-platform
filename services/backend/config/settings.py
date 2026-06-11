@@ -133,14 +133,7 @@ STATIC_URL = "/static/"
 STATICFILES_DIRS = []
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-'''
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": "redis://redis:6379/1",
-    }
-}
-'''
+
 
 CACHES = {
     "default": {
@@ -156,13 +149,7 @@ CACHES = {
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-'''
-STORAGES = {
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
-'''
+
 
 STORAGES = {
     "default": {

@@ -1,17 +1,14 @@
-from django.urls import include
-from django.urls import path
-
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import DatasetViewSet
 from .views import DatasetRowViewSet
 
 
-
 router = DefaultRouter()
 
 router.register(
-    r"datasets",
+    r"",
     DatasetViewSet,
     basename="datasets"
 )
