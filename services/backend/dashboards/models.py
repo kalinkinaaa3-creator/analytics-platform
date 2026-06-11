@@ -25,6 +25,7 @@ class DashboardWidget(models.Model):
     WIDGET_TYPES = (
         ("table", "Table"),
         ("line_chart", "Line Chart"),
+        ("fb_project_gantt", "FB Project Gantt"),
     )
 
     dashboard = models.ForeignKey(

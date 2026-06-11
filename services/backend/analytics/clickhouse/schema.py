@@ -13,3 +13,16 @@ def ensure_dataset_rows_table():
         ENGINE = MergeTree()
         ORDER BY dataset_id
     """)
+
+
+def ensure_fb_project_table():
+    client = get_clickhouse_client()
+
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS default.fb_project
+        (
+            data String
+        )
+        ENGINE = MergeTree()
+        ORDER BY tuple()
+    """)

@@ -15,3 +15,7 @@ class DatasetRowSerializer(serializers.ModelSerializer):
     class Meta:
         model = DatasetRow
         fields = "__all__"
+
+
+class FbProjectUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()

@@ -59,6 +59,14 @@ def build_dashboard(dashboard_id: int, user=None):
                 config.get("y", "amount"),
             )
 
+        elif widget.type == "fb_project_gantt":
+            rows = repository.fetch_fb_project_rows()
+
+            if rows:
+                widget_data["data"] = rows[0]
+            else:
+                widget_data["data"] = None
+
         widgets_data.append(widget_data)
 
     result = {
