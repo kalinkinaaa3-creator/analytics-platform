@@ -75,6 +75,98 @@ def prepare_fb_project_rows() -> list[dict]:
     )
 
 
+
+
+
+def get_default_project_filters(filters: dict | None = None) -> dict:
+    filters = filters or {}
+
+    year_now = date.today().year - 1
+    next_year = year_now + 2
+
+    return {
+        "project_name": filters.get("project_name", ""),
+        "project_type": filters.get("project_type", ""),
+        "department": filters.get("department", ""),
+        "deviation_project": filters.get("deviation_project", ""),
+        "project_manager": filters.get("project_manager", ""),
+        "project_status": filters.get("project_status", ""),
+        "folder_lvl1": filters.get("folder_lvl1", ""),
+        "folder_lvl2": filters.get("folder_lvl2", ""),
+        "folder_lvl3": filters.get("folder_lvl3", ""),
+        "project_start": filters.get("project_start", f"{year_now}-01-01"),
+        "project_end": filters.get("project_end", f"{next_year}-12-31"),
+    }
+
+
+
+
+
+
+
+
+
+
+def build_filter_values(projects_list: list[dict], filters: dict) -> dict:
+    return {
+        "deviation": sorted(
+            set(project["deviation_project"] for project in projects_list if project.get("deviation_project"))
+        ),
+        "department": sorted(
+            set(project["department"] for project in projects_list if project.get("department"))
+        ),
+        "type": sorted(
+            set(project["project_type"] for project in projects_list if project.get("project_type"))
+        ),
+        "name": sorted(
+            set(project["project_name"] for project in projects_list if project.get("project_name"))
+        ),
+        "managers": sorted(
+            set(project["project_manager"] for project in projects_list if project.get("project_manager"))
+        ),
+        "statuses": sorted(
+            set(project["project_status"] for project in projects_list if project.get("project_status"))
+        ),
+        "folder_lvl1": sorted(
+            set(project["folder_lvl1"] for project in projects_list if project.get("folder_lvl1"))
+        ),
+        "folder_lvl2": sorted(
+            set(
+                project["folder_lvl2"]
+                for project in projects_list
+                if project.get("folder_lvl2")
+                and (
+                    not filters["folder_lvl1"]
+                    or project.get("folder_lvl1") == filters["folder_lvl1"]
+                )
+            )
+        ),
+        "folder_lvl3": sorted(
+            set(
+                project["folder_lvl3"]
+                for project in projects_list
+                if project.get("folder_lvl3")
+                and (
+                    not filters["folder_lvl2"]
+                    or project.get("folder_lvl2") == filters["folder_lvl2"]
+                )
+            )
+        ),
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def assign_knot_fields(project_tasks: list[dict]) -> list[dict]:
     dedup_key_fields = (
         "project_name",
@@ -239,11 +331,6 @@ def calc_bar(start, end, months_list):
     }
 
 
-def _conv_to_date_if_dt(value):
-    if isinstance(value, datetime):
-        return value.date()
-
-    return value
 
 
 def build_months_list(start_date: date, end_date: date) -> list[dict]:
@@ -363,12 +450,12 @@ def build_projects_tree(project_tasks: list[dict], months_list: list[dict]):
         project = projects_map[project_key]
 
         if is_valid_date_val(row.get("start_date")):
-            current_start = _conv_to_date_if_dt(row.get("start_date"))
+            current_start = _to_date_or_none(row.get("start_date"))
             if global_min is None or current_start < global_min:
                 global_min = current_start
 
         if is_valid_date_val(row.get("end_date")):
-            current_end = _conv_to_date_if_dt(row.get("end_date"))
+            current_end = _to_date_or_none(row.get("end_date"))
             if global_max is None or current_end > global_max:
                 global_max = current_end
 
@@ -578,30 +665,42 @@ def build_projects_tree(project_tasks: list[dict], months_list: list[dict]):
     return result, global_min or "", global_max or "", today_offset
 
 
+
+
 def prepare_fb_project_gantt(
-    project_start: str | None = None,
-    project_end: str | None = None,
+    rows: list[dict] | None = None,
+    filters: dict | None = None,
 ) -> dict:
-    today = date.today()
+    filters = get_default_project_filters(filters)
 
-    if project_start:
-        start_date = datetime.strptime(project_start, "%Y-%m-%d").date()
-    else:
-        start_date = date(today.year - 1, 1, 1)
+    start_date = datetime.strptime(
+        filters["project_start"],
+        "%Y-%m-%d",
+    ).date()
 
-    if project_end:
-        end_date = datetime.strptime(project_end, "%Y-%m-%d").date()
-    else:
-        end_date = date(today.year + 1, 12, 31)
+    end_date = datetime.strptime(
+        filters["project_end"],
+        "%Y-%m-%d",
+    ).date()
 
-    months_list = build_months_list(start_date, end_date)
+    months_list = build_months_list(
+        start_date,
+        end_date,
+    )
 
-    rows = prepare_fb_project_rows()
-    rows = assign_knot_fields(rows)
+    if rows is None:
+        rows = prepare_fb_project_rows()
+
+    project_tasks = assign_knot_fields(rows)
 
     projects_tree, global_min, global_max, today_offset = build_projects_tree(
-        rows,
+        project_tasks,
         months_list,
+    )
+
+    filter_values = build_filter_values(
+        projects_tree,
+        filters,
     )
 
     return {
@@ -610,4 +709,8 @@ def prepare_fb_project_gantt(
         "global_max": global_max,
         "today_offset": today_offset,
         "months_list": months_list,
+        "filters": filters,
+        "filter_values": filter_values,
+        "total_projects": len(projects_tree),
+        "total_rows": len(project_tasks),
     }

@@ -7,13 +7,28 @@ from dashboards.cache.dashboard_cache import dashboard_cache_key
 from dashboards.services.tables import build_table
 from dashboards.services.charts import build_line_chart
 
+import hashlib
+import json
+from analytics.services.fb_project_prepare import prepare_fb_project_gantt
 
-def build_dashboard(dashboard_id: int, user=None):
+
+def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
+
+
+    filters = filters or {}
+
+    filters_hash = hashlib.md5(
+        json.dumps(filters, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
 
     if user is not None:
-        key = dashboard_cache_key(f"user:{user.id}:dashboard:{dashboard_id}")
+        key = dashboard_cache_key(
+            f"user:{user.id}:dashboard:{dashboard_id}:filters:{filters_hash}"
+        )
     else:
-        key = dashboard_cache_key(dashboard_id)
+        key = dashboard_cache_key(
+            f"dashboard:{dashboard_id}:filters:{filters_hash}"
+        )
 
     cached = cache.get(key)
     if cached:
@@ -60,12 +75,14 @@ def build_dashboard(dashboard_id: int, user=None):
             )
 
         elif widget.type == "fb_project_gantt":
-            rows = repository.fetch_fb_project_rows()
+            rows = repository.fetch_fb_project_rows(
+                filters=filters,
+            )
 
-            if rows:
-                widget_data["data"] = rows[0]
-            else:
-                widget_data["data"] = None
+            widget_data["data"] = prepare_fb_project_gantt(
+                rows=rows,
+                filters=filters,
+            )
 
         widgets_data.append(widget_data)
 

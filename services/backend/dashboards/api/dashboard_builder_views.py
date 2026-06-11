@@ -12,6 +12,7 @@ class DashboardBuilderView(APIView):
         result = build_dashboard(
             dashboard_id=dashboard_id,
             user=request.user,
+            filters=request.query_params.dict(),
         )
 
         return Response(result)

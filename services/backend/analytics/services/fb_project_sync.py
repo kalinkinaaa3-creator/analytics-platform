@@ -1,13 +1,17 @@
+from datasets.models import FbProject
 from analytics.clickhouse.repository import ClickHouseRepository
-from analytics.services.fb_project_prepare import prepare_fb_project_gantt
 
 
 def sync_fb_project_to_clickhouse() -> int:
-    data = prepare_fb_project_gantt()
+    rows = list(
+        FbProject.objects.all()
+        .order_by("id")
+        .values()
+    )
 
     repository = ClickHouseRepository()
 
     repository.truncate_fb_project()
-    repository.insert_fb_project_rows([data])
+    repository.insert_fb_project_rows(rows)
 
-    return len(data.get("projects_tree", []))
+    return len(rows)
