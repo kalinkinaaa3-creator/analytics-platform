@@ -25,3 +25,15 @@ def get_cache_by_key(key: str):
 
 def set_cache_by_key(key: str, value: dict):
     cache.set(key, value, timeout=60 * 5)
+
+
+def delete_dashboard_cache_for_user(user_id: int, dashboard_id: int):
+    key = dashboard_cache_key(
+        f"user:{user_id}:dashboard:{dashboard_id}"
+    )
+    cache.delete(key)
+
+
+def delete_dashboard_cache(dashboard_id: int):
+    key = dashboard_cache_key(dashboard_id)
+    cache.delete(key)
