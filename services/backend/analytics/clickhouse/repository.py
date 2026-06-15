@@ -5,6 +5,10 @@ from analytics.clickhouse.schema import (
     ensure_dataset_rows_table,
     ensure_fb_project_table,
     ensure_yd_wordstat_for_table,
+    ensure_fb_purchases_use_table,
+    ensure_fb_purchases_indicator_table,
+    ensure_fb_turnover_use_table,
+    ensure_fb_turnover_indicator_table,
 )
 from datetime import date, datetime
 
@@ -111,6 +115,53 @@ YD_WORDSTAT_COLUMNS = [
     "sng_macroregion",
     "other_macroregion",
 ]
+
+
+
+FB_PURCHASES_USE_COLUMNS = [
+    "id",
+    "quantity_1C",
+    "revenue_1C",
+    "VAT_1C",
+    "nomenclature_code",
+    "date_draft",
+    "party_status",
+    "partner",
+    "nomenclature",
+]
+
+
+FB_PURCHASES_INDICATOR_COLUMNS = [
+    "id",
+    "indicator",
+    "date_draft",
+]
+
+
+
+FB_TURNOVER_USE_COLUMNS = [
+    "id",
+    "date_stock",
+    "date_start",
+    "date_end",
+    "warehouse_group",
+    "warehouse",
+    "nomenclature",
+    "quantity",
+    "price",
+    "amount_day",
+    "middle_stock",
+    "middle_rubstock",
+]
+
+
+FB_TURNOVER_INDICATOR_COLUMNS = [
+    "id",
+    "indicator",
+    "date_start",
+]
+
+
 
 
 
@@ -393,4 +444,343 @@ class ClickHouseRepository:
 
 
 
+    def truncate_fb_purchases_use(self):
+        ensure_fb_purchases_use_table()
 
+        client = get_clickhouse_client()
+
+        client.execute("""
+            TRUNCATE TABLE default.fb_purchases_use
+        """)
+
+    def truncate_fb_purchases_indicator(self):
+        ensure_fb_purchases_indicator_table()
+
+        client = get_clickhouse_client()
+
+        client.execute("""
+            TRUNCATE TABLE default.fb_purchases_ind
+        """)
+
+    def insert_fb_purchases_use_rows(self, rows):
+        ensure_fb_purchases_use_table()
+
+        client = get_clickhouse_client()
+
+        if not rows:
+            return 0
+
+        payload = []
+
+        for row in rows:
+            payload.append(
+                tuple(row.get(col) for col in FB_PURCHASES_USE_COLUMNS)
+            )
+
+        columns_sql = ", ".join(FB_PURCHASES_USE_COLUMNS)
+
+        client.execute(
+            f"""
+            INSERT INTO default.fb_purchases_use
+            ({columns_sql})
+            VALUES
+            """,
+            payload,
+        )
+
+        return len(payload)
+
+    def insert_fb_purchases_indicator_rows(self, rows):
+        ensure_fb_purchases_indicator_table()
+
+        client = get_clickhouse_client()
+
+        if not rows:
+            return 0
+
+        payload = []
+
+        for row in rows:
+            payload.append(
+                tuple(row.get(col) for col in FB_PURCHASES_INDICATOR_COLUMNS)
+            )
+
+        columns_sql = ", ".join(FB_PURCHASES_INDICATOR_COLUMNS)
+
+        client.execute(
+            f"""
+            INSERT INTO default.fb_purchases_ind
+            ({columns_sql})
+            VALUES
+            """,
+            payload,
+        )
+
+        return len(payload)
+
+    def fetch_fb_purchases_use_rows(self, filters=None):
+        ensure_fb_purchases_use_table()
+
+        filters = filters or {}
+
+        client = get_clickhouse_client()
+
+        where = []
+        params = {}
+
+        if filters.get("nomenclature_code"):
+            where.append("nomenclature_code = %(nomenclature_code)s")
+            params["nomenclature_code"] = filters["nomenclature_code"]
+
+        if filters.get("nomenclature"):
+            where.append("nomenclature = %(nomenclature)s")
+            params["nomenclature"] = filters["nomenclature"]
+
+        if filters.get("partner"):
+            where.append("partner = %(partner)s")
+            params["partner"] = filters["partner"]
+
+        if filters.get("date_start"):
+            where.append("date_draft >= %(date_start)s")
+            params["date_start"] = filters["date_start"]
+
+        if filters.get("date_end"):
+            where.append("date_draft <= %(date_end)s")
+            params["date_end"] = filters["date_end"]
+
+        where_sql = ""
+
+        if where:
+            where_sql = "WHERE " + " AND ".join(where)
+
+        columns_sql = ", ".join(FB_PURCHASES_USE_COLUMNS)
+
+        result = client.execute(
+            f"""
+            SELECT {columns_sql}
+            FROM default.fb_purchases_use
+            {where_sql}
+            ORDER BY date_draft DESC, nomenclature_code, nomenclature, partner
+            """,
+            params,
+        )
+
+        return [
+            dict(zip(FB_PURCHASES_USE_COLUMNS, row))
+            for row in result
+        ]
+
+    def fetch_fb_purchases_indicator_rows(self, filters=None):
+        ensure_fb_purchases_indicator_table()
+
+        filters = filters or {}
+
+        client = get_clickhouse_client()
+
+        where = []
+        params = {}
+
+        if filters.get("date_start"):
+            where.append("date_draft >= %(date_start)s")
+            params["date_start"] = filters["date_start"]
+
+        if filters.get("date_end"):
+            where.append("date_draft <= %(date_end)s")
+            params["date_end"] = filters["date_end"]
+
+        where_sql = ""
+
+        if where:
+            where_sql = "WHERE " + " AND ".join(where)
+
+        columns_sql = ", ".join(FB_PURCHASES_INDICATOR_COLUMNS)
+
+        result = client.execute(
+            f"""
+            SELECT {columns_sql}
+            FROM default.fb_purchases_ind
+            {where_sql}
+            ORDER BY date_draft
+            """,
+            params,
+        )
+
+        return [
+            dict(zip(FB_PURCHASES_INDICATOR_COLUMNS, row))
+            for row in result
+        ]
+
+
+
+
+
+
+    def truncate_fb_turnover_use(self):
+        ensure_fb_turnover_use_table()
+
+        client = get_clickhouse_client()
+
+        client.execute("""
+            TRUNCATE TABLE default.fb_turnover_use
+        """)
+
+    def truncate_fb_turnover_indicator(self):
+        ensure_fb_turnover_indicator_table()
+
+        client = get_clickhouse_client()
+
+        client.execute("""
+            TRUNCATE TABLE default.fb_turnover_ind
+        """)
+
+    def insert_fb_turnover_use_rows(self, rows):
+        ensure_fb_turnover_use_table()
+
+        client = get_clickhouse_client()
+
+        if not rows:
+            return 0
+
+        payload = []
+
+        for row in rows:
+            payload.append(
+                tuple(row.get(col) for col in FB_TURNOVER_USE_COLUMNS)
+            )
+
+        columns_sql = ", ".join(FB_TURNOVER_USE_COLUMNS)
+
+        client.execute(
+            f"""
+            INSERT INTO default.fb_turnover_use
+            ({columns_sql})
+            VALUES
+            """,
+            payload,
+        )
+
+        return len(payload)
+
+    def insert_fb_turnover_indicator_rows(self, rows):
+        ensure_fb_turnover_indicator_table()
+
+        client = get_clickhouse_client()
+
+        if not rows:
+            return 0
+
+        payload = []
+
+        for row in rows:
+            payload.append(
+                tuple(row.get(col) for col in FB_TURNOVER_INDICATOR_COLUMNS)
+            )
+
+        columns_sql = ", ".join(FB_TURNOVER_INDICATOR_COLUMNS)
+
+        client.execute(
+            f"""
+            INSERT INTO default.fb_turnover_ind
+            ({columns_sql})
+            VALUES
+            """,
+            payload,
+        )
+
+        return len(payload)
+
+    def fetch_fb_turnover_use_rows(self, filters=None):
+        ensure_fb_turnover_use_table()
+
+        filters = filters or {}
+
+        client = get_clickhouse_client()
+
+        where = []
+        params = {}
+
+        if filters.get("nomenclature"):
+            where.append("nomenclature = %(nomenclature)s")
+            params["nomenclature"] = filters["nomenclature"]
+
+        if filters.get("warehouse_group"):
+            where.append("warehouse_group = %(warehouse_group)s")
+            params["warehouse_group"] = filters["warehouse_group"]
+
+        if filters.get("warehouse"):
+            where.append("warehouse = %(warehouse)s")
+            params["warehouse"] = filters["warehouse"]
+
+        if filters.get("quantity"):
+            where.append("quantity = %(quantity)s")
+            params["quantity"] = filters["quantity"]
+
+        if filters.get("date_start"):
+            where.append("date_start >= %(date_start)s")
+            params["date_start"] = filters["date_start"]
+
+        if filters.get("date_end"):
+            where.append("date_end <= %(date_end)s")
+            params["date_end"] = filters["date_end"]
+
+        where_sql = ""
+
+        if where:
+            where_sql = "WHERE " + " AND ".join(where)
+
+        columns_sql = ", ".join(FB_TURNOVER_USE_COLUMNS)
+
+        result = client.execute(
+            f"""
+            SELECT {columns_sql}
+            FROM default.fb_turnover_use
+            {where_sql}
+            ORDER BY date_end DESC, nomenclature, warehouse_group, warehouse, quantity
+            """,
+            params,
+        )
+
+        return [
+            dict(zip(FB_TURNOVER_USE_COLUMNS, row))
+            for row in result
+        ]
+
+    def fetch_fb_turnover_indicator_rows(self, filters=None):
+        ensure_fb_turnover_indicator_table()
+
+        filters = filters or {}
+
+        client = get_clickhouse_client()
+
+        where = []
+        params = {}
+
+        if filters.get("date_start"):
+            where.append("date_start >= %(date_start)s")
+            params["date_start"] = filters["date_start"]
+
+        if filters.get("date_end"):
+            where.append("date_start <= %(date_end)s")
+            params["date_end"] = filters["date_end"]
+
+        where_sql = ""
+
+        if where:
+            where_sql = "WHERE " + " AND ".join(where)
+
+        columns_sql = ", ".join(FB_TURNOVER_INDICATOR_COLUMNS)
+
+        result = client.execute(
+            f"""
+            SELECT {columns_sql}
+            FROM default.fb_turnover_ind
+            {where_sql}
+            ORDER BY date_start
+            """,
+            params,
+        )
+
+        return [
+            dict(zip(FB_TURNOVER_INDICATOR_COLUMNS, row))
+            for row in result
+        ]

@@ -159,3 +159,81 @@ class YdWordstatFor(models.Model):
 
     def __str__(self):
         return f"{self.phrase} ({self.year})"
+
+
+
+class FBPurchasesUse(models.Model):
+    quantity_1C = models.DecimalField(max_digits=15, decimal_places=0, blank=True, null=True)
+    revenue_1C = models.DecimalField(max_digits=20, decimal_places=2, blank=True, null=True)
+    VAT_1C = models.DecimalField(max_digits=20, decimal_places=2, blank=True, null=True)
+
+    nomenclature_code = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    date_draft = models.DateField("Дата", blank=True, null=True, db_index=True)
+    party_status = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    partner = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    nomenclature = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "fb_purchases_use"
+        verbose_name = "Purchase"
+        verbose_name_plural = "Purchases"
+
+    def __str__(self):
+        return self.nomenclature or f"Purchase {self.id}"
+
+
+class FBPurchasesUseIndicator(models.Model):
+    indicator = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    date_draft = models.DateField("Дата", blank=True, null=True, db_index=True)
+
+    class Meta:
+        db_table = "fb_purchases_ind"
+        verbose_name = "Purchase target value"
+        verbose_name_plural = "Purchase target values"
+
+    def __str__(self):
+        return str(self.indicator) if self.indicator is not None else f"Purchase target value {self.id}"
+    
+
+
+
+class TurnoverClear(models.Model):
+    date_stock = models.DateField("Остаток на дату")
+    date_start = models.DateField("Период с", db_index=True)
+    date_end = models.DateField("Период по", db_index=True)
+
+    warehouse_group = models.CharField("Группа по складу", max_length=255, blank=True, null=True, db_index=True)
+    warehouse = models.CharField("Склад", max_length=255, blank=True, null=True, db_index=True)
+    nomenclature = models.CharField("Номенклатура", max_length=255, blank=True, null=True, db_index=True)
+
+    quantity = models.CharField("Качество", max_length=255, blank=True, null=True)
+    price = models.DecimalField("Цена", max_digits=9, decimal_places=2, blank=True, null=True)
+    amount_day = models.IntegerField("Количество дней", blank=True, null=True)
+
+    middle_stock = models.DecimalField("Средний запас", max_digits=10, decimal_places=2, blank=True, null=True, db_index=True)
+    middle_rubstock = models.DecimalField("Средний запас (руб)", max_digits=12, decimal_places=2, blank=True, null=True, db_index=True)
+
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "fb_turnover_use"
+        verbose_name = "Turnover"
+        verbose_name_plural = "Turnover inventory"
+
+    def __str__(self):
+        return self.nomenclature or f"Turnover {self.id}"
+
+
+class TurnoverIndicator(models.Model):
+    indicator = models.IntegerField(blank=True, null=False)
+    date_start = models.DateField("Дата", blank=True, null=True, db_index=True)
+
+    class Meta:
+        db_table = "fb_turnover_ind"
+        verbose_name = "Turnover target value"
+        verbose_name_plural = "Turnover target values"
+
+    def __str__(self):
+        return str(self.indicator) if self.indicator is not None else f"Target value turnover {self.id}"

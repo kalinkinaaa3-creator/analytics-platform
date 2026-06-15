@@ -2,6 +2,7 @@ from dashboards.models import DashboardWidget, Dashboard
 from dashboards.cache.dashboard_cache import (
     delete_dashboard_cache,
     delete_dashboard_cache_for_user,
+    delete_dashboard_cache_patterns,
 )
 
 
@@ -25,6 +26,11 @@ def invalidate_dashboards_for_dataset(dataset_id: int):
                 dashboard_id=dashboard.id,
             )
 
+            delete_dashboard_cache_patterns(
+                user_id=dashboard.owner_id,
+                dashboard_id=dashboard.id,
+            )
+
     for dashboard_id in dashboard_ids:
         delete_dashboard_cache(dashboard_id)
 
@@ -38,6 +44,11 @@ def invalidate_dashboard_by_name(name: str):
 
         if dashboard.owner_id:
             delete_dashboard_cache_for_user(
+                user_id=dashboard.owner_id,
+                dashboard_id=dashboard.id,
+            )
+
+            delete_dashboard_cache_patterns(
                 user_id=dashboard.owner_id,
                 dashboard_id=dashboard.id,
             )

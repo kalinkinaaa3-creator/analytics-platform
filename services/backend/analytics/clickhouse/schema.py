@@ -143,3 +143,85 @@ def ensure_yd_wordstat_for_table():
         ENGINE = MergeTree()
         ORDER BY (feature, category, phrase, year, id)
     """)
+
+
+
+def ensure_fb_purchases_use_table():
+    client = get_clickhouse_client()
+
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS default.fb_purchases_use
+        (
+            id UInt64,
+            quantity_1C Nullable(Decimal(15, 0)),
+            revenue_1C Nullable(Decimal(20, 2)),
+            VAT_1C Nullable(Decimal(20, 2)),
+
+            nomenclature_code String,
+            date_draft Date,
+            party_status String,
+            partner String,
+            nomenclature String
+        )
+        ENGINE = MergeTree()
+        ORDER BY (date_draft, nomenclature_code, nomenclature, partner, id)
+    """)
+
+
+def ensure_fb_purchases_indicator_table():
+    client = get_clickhouse_client()
+
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS default.fb_purchases_ind
+        (
+            id UInt64,
+            indicator Nullable(Decimal(9, 2)),
+            date_draft Date
+        )
+        ENGINE = MergeTree()
+        ORDER BY (date_draft, id)
+    """)
+
+
+
+
+def ensure_fb_turnover_use_table():
+    client = get_clickhouse_client()
+
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS default.fb_turnover_use
+        (
+            id UInt64,
+
+            date_stock Date,
+            date_start Date,
+            date_end Date,
+
+            warehouse_group String,
+            warehouse String,
+            nomenclature String,
+            quantity String,
+
+            price Nullable(Decimal(9, 2)),
+            amount_day Nullable(Int32),
+            middle_stock Nullable(Decimal(10, 2)),
+            middle_rubstock Nullable(Decimal(12, 2))
+        )
+        ENGINE = MergeTree()
+        ORDER BY (date_end, date_start, nomenclature, warehouse_group, warehouse, id)
+    """)
+
+
+def ensure_fb_turnover_indicator_table():
+    client = get_clickhouse_client()
+
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS default.fb_turnover_ind
+        (
+            id UInt64,
+            indicator Int64,
+            date_start Date
+        )
+        ENGINE = MergeTree()
+        ORDER BY (date_start, id)
+    """)

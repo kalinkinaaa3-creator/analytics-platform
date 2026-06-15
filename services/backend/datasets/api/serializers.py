@@ -23,3 +23,13 @@ class FbProjectUploadSerializer(serializers.Serializer):
 
 class YdWordstatUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
+
+
+class FBPurchasesUploadSerializer(serializers.Serializer):
+    use_file = serializers.FileField()
+    indicator_file = serializers.FileField()
+
+
+class FBTurnoverUploadSerializer(serializers.Serializer):
+    turnover_file = serializers.FileField()
+    indicator_file = serializers.FileField()

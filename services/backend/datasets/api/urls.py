@@ -1,12 +1,16 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import DatasetViewSet
-from .views import DatasetRowViewSet
-from .views import FbProjectUploadView
-from .views import YdWordstatUploadView
 
 
+from .views import (
+    DatasetViewSet,
+    DatasetRowViewSet,
+    FbProjectUploadView,
+    YdWordstatUploadView,
+    FBPurchasesUploadView,
+    FBTurnoverUploadView,
+)
 
 
 router = DefaultRouter()
@@ -34,6 +38,16 @@ urlpatterns = [
     path(
         "yd-wordstat/upload/",
         YdWordstatUploadView.as_view(),
+    ),
+
+    path(
+        "fb-purchases/upload/",
+        FBPurchasesUploadView.as_view(),
+    ),
+
+    path(
+        "fb-turnover/upload/",
+        FBTurnoverUploadView.as_view(),
     ),
 
     path("", include(router.urls)),

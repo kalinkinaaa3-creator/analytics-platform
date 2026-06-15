@@ -11,13 +11,104 @@ import hashlib
 import json
 from analytics.services.fb_project_prepare import prepare_fb_project_gantt
 from analytics.services.yd_wordstat_prepare import prepare_yd_wordstat_table
+from analytics.services.fb_purchases_prepare import prepare_fb_purchases_dashboard
+from analytics.services.fb_turnover_prepare import prepare_fb_turnover_dashboard
+
+
+
+
+def get_dashboard_cache_timeout(dashboard: Dashboard) -> int:
+    timeouts = {
+        "Projects": 24 * 3600,    # 24 часа
+        "Wordstat": 24 * 3600,    # 24 часа
+        "Purchases": 24 * 3600,   # 24 часа
+        "Turnover": 24 * 3600,    # 24 часа
+    }
+
+    return timeouts.get(dashboard.name, 300)
+
+
+
+def normalize_filters_for_dashboard(dashboard: Dashboard, filters: dict | None = None) -> dict:
+    filters = filters or {}
+
+    if dashboard.name == "Projects":
+        keys = [
+            "project_name",
+            "project_type",
+            "department",
+            "deviation_project",
+            "project_manager",
+            "project_status",
+            "folder_lvl1",
+            "folder_lvl2",
+            "folder_lvl3",
+            "project_start",
+            "project_end",
+        ]
+
+    elif dashboard.name == "Wordstat":
+        keys = [
+            "feature",
+            "category",
+            "phrase",
+            "page",
+            "page_size",
+        ]
+
+    elif dashboard.name == "Purchases":
+        keys = [
+            "nomenclature_code",
+            "nomenclature",
+            "partner",
+            "date_start",
+            "date_end",
+        ]
+
+    elif dashboard.name == "Turnover":
+        keys = [
+            "nomenclature",
+            "warehouse_group",
+            "warehouse",
+            "quantity",
+            "date_start",
+            "date_end",
+        ]
+
+    else:
+        keys = sorted(filters.keys())
+
+    normalized = {}
+
+    for key in keys:
+        value = filters.get(key, "")
+
+        if value is None:
+            value = ""
+
+        normalized[key] = value
+
+    return normalized
+
+
+
+
 
 
 
 def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
+    queryset = Dashboard.objects.prefetch_related("widgets")
 
-    filters = filters or {}
+    if user is not None:
+        queryset = queryset.filter(owner=user)
+
+    dashboard = queryset.get(id=dashboard_id)
+
+    filters = normalize_filters_for_dashboard(
+        dashboard=dashboard,
+        filters=filters,
+    )
 
     filters_hash = hashlib.md5(
         json.dumps(filters, sort_keys=True, ensure_ascii=False).encode("utf-8")
@@ -33,15 +124,9 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
         )
 
     cached = cache.get(key)
-    if cached:
+    
+    if cached is not None:
         return cached
-
-    queryset = Dashboard.objects.prefetch_related("widgets")
-
-    if user is not None:
-        queryset = queryset.filter(owner=user)
-
-    dashboard = queryset.get(id=dashboard_id)
 
     repository = ClickHouseRepository()
 
@@ -101,6 +186,27 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
                 page_size=page_size,
             )
 
+        elif widget.type == "fb_purchases_dashboard":
+            rows = repository.fetch_fb_purchases_use_rows(filters=filters)
+            indicator_rows = repository.fetch_fb_purchases_indicator_rows(filters=filters)
+
+            widget_data["data"] = prepare_fb_purchases_dashboard(
+                rows=rows,
+                indicator_rows=indicator_rows,
+                filters=filters,
+            )
+
+        elif widget.type == "fb_turnover_dashboard":
+            rows = repository.fetch_fb_turnover_use_rows(filters=filters)
+            indicator_rows = repository.fetch_fb_turnover_indicator_rows(filters=filters)
+
+            widget_data["data"] = prepare_fb_turnover_dashboard(
+                rows=rows,
+                indicator_rows=indicator_rows,
+                filters=filters,
+            )
+
+
 
 
         widgets_data.append(widget_data)
@@ -114,6 +220,7 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
         "widgets": widgets_data,
     }
 
-    cache.set(key, result, timeout=300)
+    cache_timeout = get_dashboard_cache_timeout(dashboard)
+    cache.set(key, result, timeout=cache_timeout)
 
     return result
