@@ -23,7 +23,24 @@ from dashboards.cache.invalidation import invalidate_dashboard_by_name
 
 from rest_framework.parsers import MultiPartParser, FormParser
 
-from .serializers import FbProjectUploadSerializer
+from .serializers import (
+    FbProjectUploadSerializer,
+    YdWordstatUploadSerializer,
+)
+
+
+
+from datasets.services.yd_wordstat_loader import load_yd_wordstat_csv
+from analytics.services.yd_wordstat_sync import sync_yd_wordstat_to_clickhouse
+
+
+
+
+
+
+
+
+
 
 
 
@@ -75,4 +92,44 @@ class FbProjectUploadView(APIView):
             "status": "ok",
             "postgres_rows": postgres_count,
             "projects_count": projects_count,
+        })
+    
+
+
+
+class YdWordstatUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = YdWordstatUploadSerializer
+
+    def get_serializer(self, *args, **kwargs):
+        return self.serializer_class(*args, **kwargs)
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uploaded_file = serializer.validated_data["file"]
+
+        if not uploaded_file:
+            return Response(
+                {"error": "file is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
+            for chunk in uploaded_file.chunks():
+                temp_file.write(chunk)
+
+            temp_path = temp_file.name
+
+        postgres_count = load_yd_wordstat_csv(temp_path)
+        clickhouse_count = sync_yd_wordstat_to_clickhouse()
+
+        invalidate_dashboard_by_name("Wordstat")
+
+        return Response({
+            "status": "ok",
+            "postgres_rows": postgres_count,
+            "clickhouse_rows": clickhouse_count,
         })

@@ -26,6 +26,7 @@ class DashboardWidget(models.Model):
         ("table", "Table"),
         ("line_chart", "Line Chart"),
         ("fb_project_gantt", "FB Project Gantt"),
+        ("yd_wordstat_table", "YD Wordstat Table"),
     )
 
     dashboard = models.ForeignKey(

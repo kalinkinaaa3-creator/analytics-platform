@@ -94,3 +94,68 @@ class FbProject(models.Model):
 
     def __str__(self):
         return self.project_name or f"Проект {self.id}"
+
+
+
+
+class YdWordstatFor(models.Model):
+    feature = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    category = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    phrase = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+
+    year = models.IntegerField(blank=True, null=True, db_index=True)
+
+    month_1 = models.IntegerField(blank=True, null=True)
+    month_2 = models.IntegerField(blank=True, null=True)
+    month_3 = models.IntegerField(blank=True, null=True)
+    month_4 = models.IntegerField(blank=True, null=True)
+    month_5 = models.IntegerField(blank=True, null=True)
+    month_6 = models.IntegerField(blank=True, null=True)
+    month_7 = models.IntegerField(blank=True, null=True)
+    month_8 = models.IntegerField(blank=True, null=True)
+    month_9 = models.IntegerField(blank=True, null=True)
+    month_10 = models.IntegerField(blank=True, null=True)
+    month_11 = models.IntegerField(blank=True, null=True)
+    month_12 = models.IntegerField(blank=True, null=True)
+
+    total = models.IntegerField(blank=True, null=True)
+
+    average = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    growth = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+
+    monthS_1 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    monthS_2 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    monthS_3 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    monthS_4 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    monthS_5 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    monthS_6 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    monthS_7 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    monthS_8 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    monthS_9 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    monthS_10 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    monthS_11 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    monthS_12 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+
+    desktop = models.IntegerField(blank=True, null=True)
+    phone = models.IntegerField(blank=True, null=True)
+    tablet = models.IntegerField(blank=True, null=True)
+    other_device = models.IntegerField(blank=True, null=True)
+
+    ekb_macroregion = models.IntegerField(blank=True, null=True)
+    kras_macroregion = models.IntegerField(blank=True, null=True)
+    mos_macroregion = models.IntegerField(blank=True, null=True)
+    nign_macroregion = models.IntegerField(blank=True, null=True)
+    novos_macroregion = models.IntegerField(blank=True, null=True)
+    spb_macroregion = models.IntegerField(blank=True, null=True)
+    sng_macroregion = models.IntegerField(blank=True, null=True)
+    other_macroregion = models.IntegerField(blank=True, null=True)
+
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "yd_wordstat_for"
+        verbose_name = "YD Wordstat"
+        verbose_name_plural = "YD Wordstats"
+
+    def __str__(self):
+        return f"{self.phrase} ({self.year})"

@@ -19,3 +19,7 @@ class DatasetRowSerializer(serializers.ModelSerializer):
 
 class FbProjectUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
+
+
+class YdWordstatUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()

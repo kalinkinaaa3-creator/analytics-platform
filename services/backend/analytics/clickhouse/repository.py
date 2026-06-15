@@ -4,6 +4,7 @@ from analytics.clickhouse.client import get_clickhouse_client
 from analytics.clickhouse.schema import (
     ensure_dataset_rows_table,
     ensure_fb_project_table,
+    ensure_yd_wordstat_for_table,
 )
 from datetime import date, datetime
 
@@ -61,6 +62,57 @@ FB_PROJECT_DATE_COLUMNS = {
     "actual_start_subtask",
     "actual_end_subtask",
 }
+
+
+
+YD_WORDSTAT_COLUMNS = [
+    "id",
+    "feature",
+    "category",
+    "phrase",
+    "year",
+    "month_1",
+    "month_2",
+    "month_3",
+    "month_4",
+    "month_5",
+    "month_6",
+    "month_7",
+    "month_8",
+    "month_9",
+    "month_10",
+    "month_11",
+    "month_12",
+    "total",
+    "average",
+    "growth",
+    "monthS_1",
+    "monthS_2",
+    "monthS_3",
+    "monthS_4",
+    "monthS_5",
+    "monthS_6",
+    "monthS_7",
+    "monthS_8",
+    "monthS_9",
+    "monthS_10",
+    "monthS_11",
+    "monthS_12",
+    "desktop",
+    "phone",
+    "tablet",
+    "other_device",
+    "ekb_macroregion",
+    "kras_macroregion",
+    "mos_macroregion",
+    "nign_macroregion",
+    "novos_macroregion",
+    "spb_macroregion",
+    "sng_macroregion",
+    "other_macroregion",
+]
+
+
 
 
 
@@ -243,3 +295,102 @@ class ClickHouseRepository:
             )
 
         return rows
+
+
+
+
+
+
+    def truncate_yd_wordstat_for(self):
+        ensure_yd_wordstat_for_table()
+
+        client = get_clickhouse_client()
+
+        client.execute("""
+            TRUNCATE TABLE default.yd_wordstat_for
+        """)
+
+    def insert_yd_wordstat_rows(self, rows: list[dict]):
+        ensure_yd_wordstat_for_table()
+
+        client = get_clickhouse_client()
+
+        payload = []
+
+        for row in rows:
+            payload.append(
+                tuple(
+                    row.get(column)
+                    for column in YD_WORDSTAT_COLUMNS
+                )
+            )
+
+        if not payload:
+            return
+
+        columns_sql = ", ".join(YD_WORDSTAT_COLUMNS)
+
+        client.execute(
+            f"""
+            INSERT INTO default.yd_wordstat_for
+            ({columns_sql})
+            VALUES
+            """,
+            payload,
+        )
+
+    def fetch_yd_wordstat_rows(self, filters: dict | None = None):
+        ensure_yd_wordstat_for_table()
+
+        filters = filters or {}
+
+        client = get_clickhouse_client()
+
+        where = []
+        params = {}
+
+        list_filters = [
+            "feature",
+            "category",
+            "phrase",
+        ]
+
+        for field in list_filters:
+            value = filters.get(field)
+
+            if not value:
+                continue
+
+            if isinstance(value, str):
+                value = [value]
+
+            where.append(f"{field} IN %({field})s")
+            params[field] = tuple(value)
+
+        where_sql = ""
+
+        if where:
+            where_sql = "WHERE " + " AND ".join(where)
+
+        columns_sql = ", ".join(YD_WORDSTAT_COLUMNS)
+
+        result = client.execute(
+            f"""
+            SELECT {columns_sql}
+            FROM default.yd_wordstat_for
+            {where_sql}
+            ORDER BY category, feature, phrase, year
+            """,
+            params,
+        )
+
+        return [
+            dict(zip(YD_WORDSTAT_COLUMNS, item))
+            for item in result
+        ]
+
+
+
+
+
+

@@ -79,3 +79,67 @@ def ensure_fb_project_table():
         ENGINE = MergeTree()
         ORDER BY (folder_lvl1, department, project_name, id)
     """)
+
+
+
+
+def ensure_yd_wordstat_for_table():
+    client = get_clickhouse_client()
+
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS default.yd_wordstat_for
+        (
+            id UInt64,
+
+            feature String,
+            category String,
+            phrase String,
+            year Int64,
+
+            month_1 Nullable(Int64),
+            month_2 Nullable(Int64),
+            month_3 Nullable(Int64),
+            month_4 Nullable(Int64),
+            month_5 Nullable(Int64),
+            month_6 Nullable(Int64),
+            month_7 Nullable(Int64),
+            month_8 Nullable(Int64),
+            month_9 Nullable(Int64),
+            month_10 Nullable(Int64),
+            month_11 Nullable(Int64),
+            month_12 Nullable(Int64),
+
+            total Nullable(Int64),
+            average Nullable(Float64),
+            growth Nullable(Float64),
+
+            monthS_1 Nullable(Float64),
+            monthS_2 Nullable(Float64),
+            monthS_3 Nullable(Float64),
+            monthS_4 Nullable(Float64),
+            monthS_5 Nullable(Float64),
+            monthS_6 Nullable(Float64),
+            monthS_7 Nullable(Float64),
+            monthS_8 Nullable(Float64),
+            monthS_9 Nullable(Float64),
+            monthS_10 Nullable(Float64),
+            monthS_11 Nullable(Float64),
+            monthS_12 Nullable(Float64),
+
+            desktop Nullable(Int64),
+            phone Nullable(Int64),
+            tablet Nullable(Int64),
+            other_device Nullable(Int64),
+
+            ekb_macroregion Nullable(Int64),
+            kras_macroregion Nullable(Int64),
+            mos_macroregion Nullable(Int64),
+            nign_macroregion Nullable(Int64),
+            novos_macroregion Nullable(Int64),
+            spb_macroregion Nullable(Int64),
+            sng_macroregion Nullable(Int64),
+            other_macroregion Nullable(Int64)
+        )
+        ENGINE = MergeTree()
+        ORDER BY (feature, category, phrase, year, id)
+    """)

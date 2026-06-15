@@ -4,6 +4,9 @@ from rest_framework.routers import DefaultRouter
 from .views import DatasetViewSet
 from .views import DatasetRowViewSet
 from .views import FbProjectUploadView
+from .views import YdWordstatUploadView
+
+
 
 
 router = DefaultRouter()
@@ -27,5 +30,11 @@ urlpatterns = [
         "fb-project/upload/",
         FbProjectUploadView.as_view(),
     ),
+
+    path(
+        "yd-wordstat/upload/",
+        YdWordstatUploadView.as_view(),
+    ),
+
     path("", include(router.urls)),
 ]

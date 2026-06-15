@@ -10,6 +10,8 @@ from dashboards.services.charts import build_line_chart
 import hashlib
 import json
 from analytics.services.fb_project_prepare import prepare_fb_project_gantt
+from analytics.services.yd_wordstat_prepare import prepare_yd_wordstat_table
+
 
 
 def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
@@ -83,6 +85,23 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
                 rows=rows,
                 filters=filters,
             )
+
+        elif widget.type == "yd_wordstat_table":
+            page = int(filters.get("page", 1))
+            page_size = int(filters.get("page_size", 100))
+
+            rows = repository.fetch_yd_wordstat_rows(
+                filters=filters,
+            )
+
+            widget_data["data"] = prepare_yd_wordstat_table(
+                rows=rows,
+                filters=filters,
+                page=page,
+                page_size=page_size,
+            )
+
+
 
         widgets_data.append(widget_data)
 
