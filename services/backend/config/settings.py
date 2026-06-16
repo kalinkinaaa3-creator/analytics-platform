@@ -43,7 +43,26 @@ INSTALLED_APPS = [
     "datasets.apps.DatasetsConfig",
     "analytics",
     "dashboards",
+
+    "channels",
 ]
+
+ASGI_APPLICATION = "config.asgi.application"
+
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [
+                {
+                    "address": "redis://redis:6379/1",
+                }
+            ],
+        },
+    },
+}
+
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

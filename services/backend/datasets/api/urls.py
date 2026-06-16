@@ -20,6 +20,11 @@ from .views import (
     FBPurchasesExportView,
     FBTurnoverExportView,
     FBAccreceivExportView,
+
+    PlannedSalesUploadView,
+    PlanSalesUploadView,
+    PlannedSalesDirectoryUploadView,
+    PlannedSalesSavePlanView,
 )
 
 
@@ -85,6 +90,13 @@ urlpatterns = [
     path("fb-purchases/export/", FBPurchasesExportView.as_view()),
     path("fb-turnover/export/", FBTurnoverExportView.as_view()),
     path("fb-accreceiv/export/", FBAccreceivExportView.as_view()),
+
+    path("planned-sales/upload/", PlannedSalesUploadView.as_view()),
+    path("planned-sales/plan-upload/", PlanSalesUploadView.as_view()),
+    path("planned-sales/directory-upload/", PlannedSalesDirectoryUploadView.as_view()),
+    
+    path("planned-sales/save-plan/", PlannedSalesSavePlanView.as_view()),
+
 
     path("", include(router.urls)),
 ]

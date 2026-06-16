@@ -6,6 +6,7 @@ from rest_framework.viewsets import ModelViewSet
 from datasets.models import (
     Dataset,
     DatasetRow,
+    PlanSales,
 )
 
 
@@ -31,6 +32,9 @@ from .serializers import (
     FBTurnoverUploadSerializer,
     FBAccreceivUploadSerializer,
     IndicatorUploadSerializer,
+    PlannedSalesUploadSerializer,
+    PlanSalesUploadSerializer,
+    PlannedSalesDirectoryUploadSerializer,
 )
 
 
@@ -83,6 +87,16 @@ from analytics.services.excel_exports import (
     export_turnover_to_excel,
     export_accreceiv_to_excel,
 )
+
+
+from datasets.services.planned_sales_loader import (
+    load_planned_sales_csv,
+    load_plan_sales_csv,
+    load_planned_sales_directory_xlsx,
+)
+from analytics.services.planned_sales_sync import sync_planned_sales_to_clickhouse
+
+from dashboards.realtime import notify_dashboard_updated
 
 
 
@@ -465,3 +479,146 @@ class FBAccreceivExportView(APIView):
         accreceiv_list = group_accreceiv_monthly(rows)
 
         return export_accreceiv_to_excel(accreceiv_list)
+
+
+
+
+
+
+
+
+
+class PlannedSalesUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = PlannedSalesUploadSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uploaded_file = serializer.validated_data["file"]
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
+            for chunk in uploaded_file.chunks():
+                temp_file.write(chunk)
+            temp_path = temp_file.name
+
+        postgres_count = load_planned_sales_csv(temp_path)
+        clickhouse_result = sync_planned_sales_to_clickhouse()
+
+        invalidate_dashboard_by_name("PlannedSales")
+        notify_dashboard_updated("PlannedSales")
+
+        return Response({
+            "status": "ok",
+            "postgres": {
+                "planned_sales": postgres_count,
+            },
+            "clickhouse": clickhouse_result,
+        })
+
+
+class PlanSalesUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = PlanSalesUploadSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uploaded_file = serializer.validated_data["file"]
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
+            for chunk in uploaded_file.chunks():
+                temp_file.write(chunk)
+            temp_path = temp_file.name
+
+        postgres_count = load_plan_sales_csv(temp_path)
+        clickhouse_result = sync_planned_sales_to_clickhouse()
+
+        invalidate_dashboard_by_name("PlannedSales")
+        notify_dashboard_updated("PlannedSales")
+
+        return Response({
+            "status": "ok",
+            "postgres": {
+                "plan_sales": postgres_count,
+            },
+            "clickhouse": clickhouse_result,
+        })
+
+
+class PlannedSalesDirectoryUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = PlannedSalesDirectoryUploadSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uploaded_file = serializer.validated_data["file"]
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_file:
+            for chunk in uploaded_file.chunks():
+                temp_file.write(chunk)
+            temp_path = temp_file.name
+
+        postgres_count = load_planned_sales_directory_xlsx(temp_path)
+        clickhouse_result = sync_planned_sales_to_clickhouse()
+
+        invalidate_dashboard_by_name("PlannedSales")
+        notify_dashboard_updated("PlannedSales")
+
+        return Response({
+            "status": "ok",
+            "postgres": {
+                "planned_sales_directory": postgres_count,
+            },
+            "clickhouse": clickhouse_result,
+        })
+
+
+
+
+
+class PlannedSalesSavePlanView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        field = request.data.get("field")
+        value = request.data.get("value")
+        row_date = request.data.get("date")
+        id_directory = request.data.get("id_directory")
+
+        if field not in ("plan", "projection_s"):
+            return Response(
+                {"error": "field must be plan or projection_s"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not row_date or not id_directory:
+            return Response(
+                {"error": "date and id_directory are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        PlanSales.objects.update_or_create(
+            date=row_date,
+            id_directory=int(id_directory),
+            defaults={
+                field: value or 0,
+            },
+        )
+
+        clickhouse_result = sync_planned_sales_to_clickhouse()
+
+        invalidate_dashboard_by_name("PlannedSales")
+        notify_dashboard_updated("PlannedSales")
+
+        return Response({
+            "status": "ok",
+            "clickhouse": clickhouse_result,
+        })

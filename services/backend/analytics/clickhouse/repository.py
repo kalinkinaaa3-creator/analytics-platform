@@ -11,6 +11,9 @@ from analytics.clickhouse.schema import (
     ensure_fb_turnover_indicator_table,
     ensure_fb_accreceiv_use_table,
     ensure_fb_accreceiv_indicator_table,
+    ensure_planned_sales_table,
+    ensure_plan_sales_table,
+    ensure_planned_sales_directory_table,
 )
 from datetime import date, datetime
 
@@ -186,6 +189,46 @@ FB_ACCRECEIV_USE_COLUMNS = [
 FB_ACCRECEIV_INDICATOR_COLUMNS = [
     "id",
     "manager_name",
+]
+
+
+
+
+
+PLANNED_SALES_COLUMNS = [
+    "id",
+    "date",
+    "level1",
+    "level2",
+    "level3",
+    "fact",
+    "appg",
+    "appg_slice",
+    "id_directory",
+    "date_add",
+]
+
+
+PLAN_SALES_COLUMNS = [
+    "id",
+    "date",
+    "level1",
+    "level2",
+    "level3",
+    "plan",
+    "projection_s",
+    "id_directory",
+    "date_add",
+]
+
+
+PLANNED_SALES_DIRECTORY_COLUMNS = [
+    "id",
+    "level1",
+    "draft2",
+    "level2",
+    "draft3",
+    "level3",
 ]
 
 
@@ -960,5 +1003,206 @@ class ClickHouseRepository:
 
         return [
             dict(zip(FB_ACCRECEIV_INDICATOR_COLUMNS, row))
+            for row in result
+        ]
+
+
+
+
+
+
+
+
+    def truncate_planned_sales(self):
+        ensure_planned_sales_table()
+
+        client = get_clickhouse_client()
+
+        client.execute("""
+            TRUNCATE TABLE default.planned_sales
+        """)
+
+    def truncate_plan_sales(self):
+        ensure_plan_sales_table()
+
+        client = get_clickhouse_client()
+
+        client.execute("""
+            TRUNCATE TABLE default.plan_sales
+        """)
+
+    def truncate_planned_sales_directory(self):
+        ensure_planned_sales_directory_table()
+
+        client = get_clickhouse_client()
+
+        client.execute("""
+            TRUNCATE TABLE default.planned_sales_directory
+        """)
+
+    def insert_planned_sales_rows(self, rows):
+        ensure_planned_sales_table()
+
+        client = get_clickhouse_client()
+
+        if not rows:
+            return 0
+
+        payload = []
+
+        for row in rows:
+            payload.append(
+                tuple(row.get(col) for col in PLANNED_SALES_COLUMNS)
+            )
+
+        columns_sql = ", ".join(PLANNED_SALES_COLUMNS)
+
+        client.execute(
+            f"""
+            INSERT INTO default.planned_sales
+            ({columns_sql})
+            VALUES
+            """,
+            payload,
+        )
+
+        return len(payload)
+
+    def insert_plan_sales_rows(self, rows):
+        ensure_plan_sales_table()
+
+        client = get_clickhouse_client()
+
+        if not rows:
+            return 0
+
+        payload = []
+
+        for row in rows:
+            payload.append(
+                tuple(row.get(col) for col in PLAN_SALES_COLUMNS)
+            )
+
+        columns_sql = ", ".join(PLAN_SALES_COLUMNS)
+
+        client.execute(
+            f"""
+            INSERT INTO default.plan_sales
+            ({columns_sql})
+            VALUES
+            """,
+            payload,
+        )
+
+        return len(payload)
+
+    def insert_planned_sales_directory_rows(self, rows):
+        ensure_planned_sales_directory_table()
+
+        client = get_clickhouse_client()
+
+        if not rows:
+            return 0
+
+        payload = []
+
+        for row in rows:
+            payload.append(
+                tuple(row.get(col) for col in PLANNED_SALES_DIRECTORY_COLUMNS)
+            )
+
+        columns_sql = ", ".join(PLANNED_SALES_DIRECTORY_COLUMNS)
+
+        client.execute(
+            f"""
+            INSERT INTO default.planned_sales_directory
+            ({columns_sql})
+            VALUES
+            """,
+            payload,
+        )
+
+        return len(payload)
+
+
+
+    def fetch_planned_sales_rows(self, filters=None):
+        ensure_planned_sales_table()
+        ensure_plan_sales_table()
+
+        filters = filters or {}
+
+        client = get_clickhouse_client()
+
+        where = []
+        params = {}
+
+        if filters.get("date_start"):
+            where.append("ps.date >= %(date_start)s")
+            params["date_start"] = filters["date_start"]
+
+        if filters.get("date_end"):
+            where.append("ps.date <= %(date_end)s")
+            params["date_end"] = filters["date_end"]
+
+        where_sql = ""
+
+        if where:
+            where_sql = "WHERE " + " AND ".join(where)
+
+        result = client.execute(
+            f"""
+            SELECT
+                ps.date,
+                ps.level1,
+                ps.level2,
+                ps.level3,
+                ps.fact,
+                ps.appg,
+                ps.appg_slice,
+                ps.id_directory,
+                pls.plan,
+                pls.projection_s
+            FROM default.planned_sales AS ps
+            LEFT JOIN default.plan_sales AS pls
+                ON ps.date = pls.date
+               AND ps.id_directory = pls.id_directory
+            {where_sql}
+            ORDER BY ps.date, ps.id_directory
+            """,
+            params,
+        )
+
+        columns = [
+            "date",
+            "level1",
+            "level2",
+            "level3",
+            "fact",
+            "appg",
+            "appg_slice",
+            "id_directory",
+            "plan",
+            "projection_s",
+        ]
+
+        return [
+            dict(zip(columns, row))
+            for row in result
+        ]
+
+    def fetch_planned_sales_dates(self):
+        ensure_planned_sales_table()
+
+        client = get_clickhouse_client()
+
+        result = client.execute("""
+            SELECT DISTINCT date
+            FROM default.planned_sales
+            ORDER BY date
+        """)
+
+        return [
+            row[0].strftime("%Y-%m-01")
             for row in result
         ]

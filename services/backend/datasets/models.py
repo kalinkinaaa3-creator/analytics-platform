@@ -286,3 +286,61 @@ class AccreceivIndicator(models.Model):
 
     def __str__(self):
         return self.manager_name or f"Account receivable manager {self.id}"
+
+
+
+
+
+
+
+
+class PlannedSales(models.Model):
+    date = models.DateField("Дата", null=False, blank=False, db_index=True)
+    level1 = models.CharField("Уровень 1", max_length=255, blank=True, null=True, db_index=True)
+    level2 = models.CharField("Уровень 2", max_length=255, blank=True, null=True, db_index=True)
+    level3 = models.CharField("Уровень 3", max_length=255, blank=True, null=True, db_index=True)
+    fact = models.DecimalField("Факт", max_digits=12, decimal_places=0, blank=True, null=True)
+    appg = models.DecimalField("АППГ", max_digits=12, decimal_places=0, blank=True, null=True)
+    appg_slice = models.DecimalField("АППГ в срезе", max_digits=12, decimal_places=0, blank=True, null=True)
+    id_directory = models.IntegerField("id", blank=True, null=True)
+    date_add = models.DateTimeField("Дата добавления", auto_now_add=True)
+
+    class Meta:
+        db_table = "planned_sales"
+        verbose_name = "Planned sale"
+        verbose_name_plural = "Planned sales"
+        indexes = [
+            models.Index(fields=["date", "id_directory"], name="idx_planned_sales_key"),
+        ]
+
+
+class PlanSales(models.Model):
+    date = models.DateField("Дата", null=False, blank=False, db_index=True)
+    level1 = models.CharField("Уровень 1", max_length=255, blank=True, null=True, db_index=True)
+    level2 = models.CharField("Уровень 2", max_length=255, blank=True, null=True, db_index=True)
+    level3 = models.CharField("Уровень 3", max_length=255, blank=True, null=True, db_index=True)
+    plan = models.DecimalField("План", max_digits=12, decimal_places=0, blank=True, null=True)
+    projection_s = models.DecimalField("Проекция", max_digits=12, decimal_places=0, blank=True, null=True)
+    id_directory = models.IntegerField("id", blank=True, null=True)
+    date_add = models.DateTimeField("Дата добавления", auto_now_add=True)
+
+    class Meta:
+        db_table = "plan_sales"
+        verbose_name = "Planned sale target value"
+        verbose_name_plural = "Planned sale target values"
+        indexes = [
+            models.Index(fields=["date", "id_directory"], name="idx_plan_sales_key"),
+        ]
+
+
+class PlannedSalesDirectory(models.Model):
+    level1 = models.CharField("Уровень 1", max_length=255, blank=True, null=True, db_index=True)
+    draft2 = models.CharField("Исходник 2", max_length=255, blank=True, null=True, db_index=True)
+    level2 = models.CharField("Уровень 2", max_length=255, blank=True, null=True, db_index=True)
+    draft3 = models.CharField("Исходник 3", max_length=255, blank=True, null=True, db_index=True)
+    level3 = models.CharField("Уровень 3", max_length=255, blank=True, null=True, db_index=True)
+
+    class Meta:
+        db_table = "planned_sales_directory"
+        verbose_name = "Planned sale directory"
+        verbose_name_plural = "Planned sales directory"

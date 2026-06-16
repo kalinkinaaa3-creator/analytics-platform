@@ -39,3 +39,15 @@ class FBAccreceivUploadSerializer(serializers.Serializer):
 
 class IndicatorUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
+
+
+class PlannedSalesUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+
+class PlanSalesUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+
+class PlannedSalesDirectoryUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()

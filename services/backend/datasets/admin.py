@@ -12,6 +12,9 @@ from .models import (
     TurnoverIndicator,
     AccreceivUse,
     AccreceivIndicator,
+    PlannedSales,
+    PlanSales,
+    PlannedSalesDirectory,
 )
 
 
@@ -31,3 +34,8 @@ admin.site.register(TurnoverIndicator)
 
 admin.site.register(AccreceivUse)
 admin.site.register(AccreceivIndicator)
+
+
+admin.site.register(PlannedSales)
+admin.site.register(PlanSales)
+admin.site.register(PlannedSalesDirectory)

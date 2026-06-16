@@ -271,3 +271,76 @@ def ensure_fb_accreceiv_indicator_table():
         ENGINE = MergeTree()
         ORDER BY (manager_name, id)
     """)
+
+
+
+
+
+
+
+def ensure_planned_sales_table():
+    client = get_clickhouse_client()
+
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS default.planned_sales
+        (
+            id UInt64,
+            date Date,
+
+            level1 String,
+            level2 String,
+            level3 String,
+
+            fact Nullable(Decimal(12, 0)),
+            appg Nullable(Decimal(12, 0)),
+            appg_slice Nullable(Decimal(12, 0)),
+
+            id_directory Int64,
+            date_add DateTime
+        )
+        ENGINE = MergeTree()
+        ORDER BY (date, id_directory, id)
+    """)
+
+
+def ensure_plan_sales_table():
+    client = get_clickhouse_client()
+
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS default.plan_sales
+        (
+            id UInt64,
+            date Date,
+
+            level1 String,
+            level2 String,
+            level3 String,
+
+            plan Nullable(Decimal(12, 0)),
+            projection_s Nullable(Decimal(12, 0)),
+
+            id_directory Int64,
+            date_add DateTime
+        )
+        ENGINE = MergeTree()
+        ORDER BY (date, id_directory, id)
+    """)
+
+
+def ensure_planned_sales_directory_table():
+    client = get_clickhouse_client()
+
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS default.planned_sales_directory
+        (
+            id UInt64,
+
+            level1 String,
+            draft2 String,
+            level2 String,
+            draft3 String,
+            level3 String
+        )
+        ENGINE = MergeTree()
+        ORDER BY (level1, level2, level3, id)
+    """)
