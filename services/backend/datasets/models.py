@@ -220,7 +220,7 @@ class TurnoverClear(models.Model):
     class Meta:
         db_table = "fb_turnover_use"
         verbose_name = "Turnover"
-        verbose_name_plural = "Turnover inventory"
+        verbose_name_plural = "Turnover inventories"
 
     def __str__(self):
         return self.nomenclature or f"Turnover {self.id}"
@@ -237,3 +237,52 @@ class TurnoverIndicator(models.Model):
 
     def __str__(self):
         return str(self.indicator) if self.indicator is not None else f"Target value turnover {self.id}"
+
+
+
+
+
+class AccreceivUse(models.Model):
+    date_start = models.DateField("Дата начала", db_index=True)
+    date_end = models.DateField("Дата окончания", db_index=True)
+
+    partner = models.CharField("Контрагент", max_length=255, blank=True, null=True, db_index=True)
+    contract_partner = models.CharField("Договор контрагента", max_length=255, blank=True, null=True, db_index=True)
+    manager_name = models.CharField("ФИО инициатора", max_length=255, blank=True, null=True, db_index=True)
+
+    mutual_instock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    mutual_comstock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    mutual_spenstock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    mutual_finstock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, db_index=True)
+
+    initial_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    coming_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    spending_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, db_index=True)
+    final_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "fb_accreceiv_use"
+        verbose_name = "Account receivable"
+        verbose_name_plural = "Accounts receivable"
+
+    def __str__(self):
+        return self.partner or f"Account receivable {self.id}"
+
+
+class AccreceivIndicator(models.Model):
+    manager_name = models.CharField(
+        "ФИО инициатора",
+        max_length=255,
+        blank=True,
+        null=False,
+    )
+
+    class Meta:
+        db_table = "fb_accreceiv_ind"
+        verbose_name = "Account receivable manager"
+        verbose_name_plural = "Account receivable managers"
+
+    def __str__(self):
+        return self.manager_name or f"Account receivable manager {self.id}"

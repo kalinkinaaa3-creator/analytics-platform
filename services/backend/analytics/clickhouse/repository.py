@@ -9,6 +9,8 @@ from analytics.clickhouse.schema import (
     ensure_fb_purchases_indicator_table,
     ensure_fb_turnover_use_table,
     ensure_fb_turnover_indicator_table,
+    ensure_fb_accreceiv_use_table,
+    ensure_fb_accreceiv_indicator_table,
 )
 from datetime import date, datetime
 
@@ -160,6 +162,33 @@ FB_TURNOVER_INDICATOR_COLUMNS = [
     "indicator",
     "date_start",
 ]
+
+
+
+FB_ACCRECEIV_USE_COLUMNS = [
+    "id",
+    "date_start",
+    "date_end",
+    "partner",
+    "contract_partner",
+    "manager_name",
+    "mutual_instock",
+    "mutual_comstock",
+    "mutual_spenstock",
+    "mutual_finstock",
+    "initial_stock",
+    "coming_stock",
+    "spending_stock",
+    "final_stock",
+]
+
+
+FB_ACCRECEIV_INDICATOR_COLUMNS = [
+    "id",
+    "manager_name",
+]
+
+
 
 
 
@@ -782,5 +811,154 @@ class ClickHouseRepository:
 
         return [
             dict(zip(FB_TURNOVER_INDICATOR_COLUMNS, row))
+            for row in result
+        ]
+
+
+
+
+    def truncate_fb_accreceiv_use(self):
+        ensure_fb_accreceiv_use_table()
+
+        client = get_clickhouse_client()
+
+        client.execute("""
+            TRUNCATE TABLE default.fb_accreceiv_use
+        """)
+
+    def truncate_fb_accreceiv_indicator(self):
+        ensure_fb_accreceiv_indicator_table()
+
+        client = get_clickhouse_client()
+
+        client.execute("""
+            TRUNCATE TABLE default.fb_accreceiv_ind
+        """)
+
+    def insert_fb_accreceiv_use_rows(self, rows):
+        ensure_fb_accreceiv_use_table()
+
+        client = get_clickhouse_client()
+
+        if not rows:
+            return 0
+
+        payload = []
+
+        for row in rows:
+            payload.append(
+                tuple(row.get(col) for col in FB_ACCRECEIV_USE_COLUMNS)
+            )
+
+        columns_sql = ", ".join(FB_ACCRECEIV_USE_COLUMNS)
+
+        client.execute(
+            f"""
+            INSERT INTO default.fb_accreceiv_use
+            ({columns_sql})
+            VALUES
+            """,
+            payload,
+        )
+
+        return len(payload)
+
+    def insert_fb_accreceiv_indicator_rows(self, rows):
+        ensure_fb_accreceiv_indicator_table()
+
+        client = get_clickhouse_client()
+
+        if not rows:
+            return 0
+
+        payload = []
+
+        for row in rows:
+            payload.append(
+                tuple(row.get(col) for col in FB_ACCRECEIV_INDICATOR_COLUMNS)
+            )
+
+        columns_sql = ", ".join(FB_ACCRECEIV_INDICATOR_COLUMNS)
+
+        client.execute(
+            f"""
+            INSERT INTO default.fb_accreceiv_ind
+            ({columns_sql})
+            VALUES
+            """,
+            payload,
+        )
+
+        return len(payload)
+
+    def fetch_fb_accreceiv_use_rows(self, filters=None):
+        ensure_fb_accreceiv_use_table()
+
+        filters = filters or {}
+
+        client = get_clickhouse_client()
+
+        where = []
+        params = {}
+
+        if filters.get("partner"):
+            where.append("partner = %(partner)s")
+            params["partner"] = filters["partner"]
+
+        if filters.get("contract_partner"):
+            where.append("contract_partner = %(contract_partner)s")
+            params["contract_partner"] = filters["contract_partner"]
+
+        if filters.get("manager_name"):
+            where.append("manager_name = %(manager_name)s")
+            params["manager_name"] = filters["manager_name"]
+
+        if filters.get("date_start"):
+            where.append("date_start >= %(date_start)s")
+            params["date_start"] = filters["date_start"]
+
+        if filters.get("date_end"):
+            where.append("date_start <= %(date_end)s")
+            params["date_end"] = filters["date_end"]
+
+        where_sql = ""
+
+        if where:
+            where_sql = "WHERE " + " AND ".join(where)
+
+        columns_sql = ", ".join(FB_ACCRECEIV_USE_COLUMNS)
+
+        result = client.execute(
+            f"""
+            SELECT {columns_sql}
+            FROM default.fb_accreceiv_use
+            {where_sql}
+            ORDER BY date_start DESC, partner, contract_partner, manager_name
+            """,
+            params,
+        )
+
+        return [
+            dict(zip(FB_ACCRECEIV_USE_COLUMNS, row))
+            for row in result
+        ]
+
+    def fetch_fb_accreceiv_indicator_rows(self, filters=None):
+        ensure_fb_accreceiv_indicator_table()
+
+        client = get_clickhouse_client()
+
+        columns_sql = ", ".join(FB_ACCRECEIV_INDICATOR_COLUMNS)
+
+        result = client.execute(
+            f"""
+            SELECT {columns_sql}
+            FROM default.fb_accreceiv_ind
+            ORDER BY manager_name
+            """
+        )
+
+        return [
+            dict(zip(FB_ACCRECEIV_INDICATOR_COLUMNS, row))
             for row in result
         ]

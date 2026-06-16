@@ -10,6 +10,8 @@ from .models import (
     FBPurchasesUseIndicator,
     TurnoverClear,
     TurnoverIndicator,
+    AccreceivUse,
+    AccreceivIndicator,
 )
 
 
@@ -26,3 +28,6 @@ admin.site.register(FBPurchasesUseIndicator)
 
 admin.site.register(TurnoverClear)
 admin.site.register(TurnoverIndicator)
+
+admin.site.register(AccreceivUse)
+admin.site.register(AccreceivIndicator)

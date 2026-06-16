@@ -225,3 +225,49 @@ def ensure_fb_turnover_indicator_table():
         ENGINE = MergeTree()
         ORDER BY (date_start, id)
     """)
+
+
+
+
+def ensure_fb_accreceiv_use_table():
+    client = get_clickhouse_client()
+
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS default.fb_accreceiv_use
+        (
+            id UInt64,
+
+            date_start Date,
+            date_end Date,
+
+            partner String,
+            contract_partner String,
+            manager_name String,
+
+            mutual_instock Nullable(Decimal(12, 2)),
+            mutual_comstock Nullable(Decimal(12, 2)),
+            mutual_spenstock Nullable(Decimal(12, 2)),
+            mutual_finstock Nullable(Decimal(12, 2)),
+
+            initial_stock Nullable(Decimal(12, 2)),
+            coming_stock Nullable(Decimal(12, 2)),
+            spending_stock Nullable(Decimal(12, 2)),
+            final_stock Nullable(Decimal(12, 2))
+        )
+        ENGINE = MergeTree()
+        ORDER BY (date_start, date_end, partner, contract_partner, manager_name, id)
+    """)
+
+
+def ensure_fb_accreceiv_indicator_table():
+    client = get_clickhouse_client()
+
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS default.fb_accreceiv_ind
+        (
+            id UInt64,
+            manager_name String
+        )
+        ENGINE = MergeTree()
+        ORDER BY (manager_name, id)
+    """)

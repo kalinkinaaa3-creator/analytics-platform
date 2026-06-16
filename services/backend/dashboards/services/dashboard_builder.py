@@ -13,6 +13,7 @@ from analytics.services.fb_project_prepare import prepare_fb_project_gantt
 from analytics.services.yd_wordstat_prepare import prepare_yd_wordstat_table
 from analytics.services.fb_purchases_prepare import prepare_fb_purchases_dashboard
 from analytics.services.fb_turnover_prepare import prepare_fb_turnover_dashboard
+from analytics.services.fb_accreceiv_prepare import prepare_fb_accreceiv_dashboard
 
 
 
@@ -23,6 +24,7 @@ def get_dashboard_cache_timeout(dashboard: Dashboard) -> int:
         "Wordstat": 24 * 3600,    # 24 часа
         "Purchases": 24 * 3600,   # 24 часа
         "Turnover": 24 * 3600,    # 24 часа
+        "Accreceiv": 24 * 3600,   # 24 часа
     }
 
     return timeouts.get(dashboard.name, 300)
@@ -75,6 +77,16 @@ def normalize_filters_for_dashboard(dashboard: Dashboard, filters: dict | None =
             "date_end",
         ]
 
+    elif dashboard.name == "Accreceiv":
+        keys = [
+            "partner",
+            "contract_partner",
+            "manager_name",
+            "date_start",
+            "date_end",
+        ]
+
+
     else:
         keys = sorted(filters.keys())
 
@@ -93,6 +105,16 @@ def normalize_filters_for_dashboard(dashboard: Dashboard, filters: dict | None =
 
 
 
+def clean_runtime_filters(filters: dict | None = None) -> dict:
+    filters = filters or {}
+
+    return {
+        key: value
+        for key, value in filters.items()
+        if value not in ("", None, [], ())
+    }
+
+
 
 
 
@@ -105,13 +127,15 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
     dashboard = queryset.get(id=dashboard_id)
 
-    filters = normalize_filters_for_dashboard(
+    cache_filters = normalize_filters_for_dashboard(
         dashboard=dashboard,
         filters=filters,
     )
 
+    runtime_filters = clean_runtime_filters(cache_filters)
+
     filters_hash = hashlib.md5(
-        json.dumps(filters, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        json.dumps(cache_filters, sort_keys=True, ensure_ascii=False).encode("utf-8")
     ).hexdigest()
 
     if user is not None:
@@ -163,49 +187,58 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
         elif widget.type == "fb_project_gantt":
             rows = repository.fetch_fb_project_rows(
-                filters=filters,
+                filters=runtime_filters,
             )
 
             widget_data["data"] = prepare_fb_project_gantt(
                 rows=rows,
-                filters=filters,
+                filters=runtime_filters,
             )
 
         elif widget.type == "yd_wordstat_table":
-            page = int(filters.get("page", 1))
-            page_size = int(filters.get("page_size", 100))
+            page = int(runtime_filters.get("page", 1))
+            page_size = int(runtime_filters.get("page_size", 100))
 
             rows = repository.fetch_yd_wordstat_rows(
-                filters=filters,
+                filters=runtime_filters,
             )
 
             widget_data["data"] = prepare_yd_wordstat_table(
                 rows=rows,
-                filters=filters,
+                filters=runtime_filters,
                 page=page,
                 page_size=page_size,
             )
 
         elif widget.type == "fb_purchases_dashboard":
-            rows = repository.fetch_fb_purchases_use_rows(filters=filters)
-            indicator_rows = repository.fetch_fb_purchases_indicator_rows(filters=filters)
+            rows = repository.fetch_fb_purchases_use_rows(filters=runtime_filters)
+            indicator_rows = repository.fetch_fb_purchases_indicator_rows(filters=runtime_filters)
 
             widget_data["data"] = prepare_fb_purchases_dashboard(
                 rows=rows,
                 indicator_rows=indicator_rows,
-                filters=filters,
+                filters=runtime_filters,
             )
 
         elif widget.type == "fb_turnover_dashboard":
-            rows = repository.fetch_fb_turnover_use_rows(filters=filters)
-            indicator_rows = repository.fetch_fb_turnover_indicator_rows(filters=filters)
+            rows = repository.fetch_fb_turnover_use_rows(filters=runtime_filters)
+            indicator_rows = repository.fetch_fb_turnover_indicator_rows(filters=runtime_filters)
 
             widget_data["data"] = prepare_fb_turnover_dashboard(
                 rows=rows,
                 indicator_rows=indicator_rows,
-                filters=filters,
+                filters=runtime_filters,
             )
 
+        elif widget.type == "fb_accreceiv_dashboard":
+            rows = repository.fetch_fb_accreceiv_use_rows(filters=runtime_filters)
+            indicator_rows = repository.fetch_fb_accreceiv_indicator_rows(filters=runtime_filters)
+
+            widget_data["data"] = prepare_fb_accreceiv_dashboard(
+                rows=rows,
+                indicator_rows=indicator_rows,
+                filters=runtime_filters,
+            )
 
 
 

@@ -8,3 +8,5 @@ django-redis
 clickhouse-driver
 djangorestframework-simplejwt
 python-dateutil
+openpyxl
+pandas
