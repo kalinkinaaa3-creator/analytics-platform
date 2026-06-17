@@ -15,6 +15,11 @@ from .models import (
     PlannedSales,
     PlanSales,
     PlannedSalesDirectory,
+    DashSales,
+    FBPurchasesRaw,
+    TurnoverRaw,
+    AccreceivRaw,
+
 )
 
 
@@ -39,3 +44,8 @@ admin.site.register(AccreceivIndicator)
 admin.site.register(PlannedSales)
 admin.site.register(PlanSales)
 admin.site.register(PlannedSalesDirectory)
+
+admin.site.register(DashSales)
+admin.site.register(FBPurchasesRaw)
+admin.site.register(TurnoverRaw)
+admin.site.register(AccreceivRaw)

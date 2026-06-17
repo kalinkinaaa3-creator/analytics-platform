@@ -25,6 +25,13 @@ from .views import (
     PlanSalesUploadView,
     PlannedSalesDirectoryUploadView,
     PlannedSalesSavePlanView,
+
+    FbProjectApiLoadView,
+    PlannedSalesApiLoadView,
+    FBPurchasesApiLoadView,
+    FBTurnoverApiLoadView,
+    FBAccreceivApiLoadView,
+
 )
 
 
@@ -96,6 +103,13 @@ urlpatterns = [
     path("planned-sales/directory-upload/", PlannedSalesDirectoryUploadView.as_view()),
     
     path("planned-sales/save-plan/", PlannedSalesSavePlanView.as_view()),
+
+
+    path("fb-project/load-from-api/", FbProjectApiLoadView.as_view()),
+    path("planned-sales/load-from-api/", PlannedSalesApiLoadView.as_view()),
+    path("fb-purchases/load-from-api/", FBPurchasesApiLoadView.as_view()),
+    path("fb-turnover/load-from-api/", FBTurnoverApiLoadView.as_view()),
+    path("fb-accreceiv/load-from-api/", FBAccreceivApiLoadView.as_view()),
 
 
     path("", include(router.urls)),

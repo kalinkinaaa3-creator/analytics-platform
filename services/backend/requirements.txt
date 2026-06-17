@@ -12,3 +12,4 @@ openpyxl
 pandas
 channels==4.3.2
 channels-redis==4.3.0
+requests

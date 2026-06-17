@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/6.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
+import os
 
 from pathlib import Path
 
@@ -25,7 +26,7 @@ SECRET_KEY = 'django-insecure-b=6(-85kdoj9p27ej1%w*%st^))e2opopsk9h24hb%2gm2qju6
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -187,4 +188,183 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+}
+
+
+
+
+
+
+FB_PROJECT_API_URL = os.getenv("FB_PROJECT_API_URL")
+FB_PROJECT_API_USERNAME = os.getenv("FB_PROJECT_API_USERNAME", "")
+FB_PROJECT_API_PASSWORD = os.getenv("FB_PROJECT_API_PASSWORD", "")
+FB_PROJECT_API_TIMEOUT = int(os.getenv("FB_PROJECT_API_TIMEOUT", "120"))
+
+
+PLANNED_SALES_API_URL = os.getenv("PLANNED_SALES_API_URL", "")
+PLANNED_SALES_API_USERNAME = os.getenv("PLANNED_SALES_API_USERNAME", "")
+PLANNED_SALES_API_PASSWORD = os.getenv("PLANNED_SALES_API_PASSWORD", "")
+PLANNED_SALES_API_TIMEOUT = int(os.getenv("PLANNED_SALES_API_TIMEOUT", "300"))
+
+
+FB_PURCHASES_API_URL = os.getenv("FB_PURCHASES_API_URL", "")
+FB_PURCHASES_API_USERNAME = os.getenv("FB_PURCHASES_API_USERNAME", "")
+FB_PURCHASES_API_PASSWORD = os.getenv("FB_PURCHASES_API_PASSWORD", "")
+FB_PURCHASES_API_TIMEOUT = int(os.getenv("FB_PURCHASES_API_TIMEOUT", "300"))
+
+
+FB_TURNOVER_API_URL = os.getenv("FB_TURNOVER_API_URL", "")
+FB_TURNOVER_API_USERNAME = os.getenv("FB_TURNOVER_API_USERNAME", "")
+FB_TURNOVER_API_PASSWORD = os.getenv("FB_TURNOVER_API_PASSWORD", "")
+FB_TURNOVER_API_TIMEOUT = int(os.getenv("FB_TURNOVER_API_TIMEOUT", "300"))
+
+
+FB_ACCRECEIV_API_URL = os.getenv("FB_ACCRECEIV_API_URL", "")
+FB_ACCRECEIV_API_USERNAME = os.getenv("FB_ACCRECEIV_API_USERNAME", "")
+FB_ACCRECEIV_API_PASSWORD = os.getenv("FB_ACCRECEIV_API_PASSWORD", "")
+FB_ACCRECEIV_API_TIMEOUT = int(os.getenv("FB_ACCRECEIV_API_TIMEOUT", "300"))
+
+
+
+
+BITRIX_WEBHOOK_URL = os.getenv("BITRIX_WEBHOOK_URL", "")
+BITRIX_NOTIFY_USER_ID = os.getenv("BITRIX_NOTIFY_USER_ID", "")
+ENABLE_BITRIX_NOTIFICATIONS = os.getenv("ENABLE_BITRIX_NOTIFICATIONS", "false").lower() == "true"
+
+
+
+
+
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
+
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+
+    "formatters": {
+        "standard": {
+            "format": "[{asctime}] {levelname} {name}: {message}",
+            "style": "{",
+        },
+    },
+
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "standard",
+        },
+
+        "app_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "app.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
+        "fb_project_api_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "fb_project_api.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
+        "planned_sales_api_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "planned_sales_api.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
+        "fb_purchases_api_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "fb_purchases_api.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
+        "fb_turnover_api_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "fb_turnover_api.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
+        "fb_accreceiv_api_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "fb_accreceiv_api.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
+    },
+
+    "loggers": {
+        "django": {
+            "handlers": ["console", "app_file"],
+            "level": "INFO",
+            "propagate": True,
+        },
+
+        "analytics": {
+            "handlers": ["console", "app_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "dashboards": {
+            "handlers": ["console", "app_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "datasets": {
+            "handlers": ["console", "app_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "external_api.fb_project": {
+            "handlers": ["console", "fb_project_api_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "external_api.planned_sales": {
+            "handlers": ["console", "planned_sales_api_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "external_api.fb_purchases": {
+            "handlers": ["console", "fb_purchases_api_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "external_api.fb_turnover": {
+            "handlers": ["console", "fb_turnover_api_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "external_api.fb_accreceiv": {
+            "handlers": ["console", "fb_accreceiv_api_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+    },
 }

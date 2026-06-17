@@ -33,6 +33,8 @@ services:
     build: ./services/backend
     container_name: analytics-django
     command: uvicorn config.asgi:application --host 0.0.0.0 --port 8000
+    env_file:
+      - .env
     volumes:
       - ./services/backend:/app
     ports:
@@ -42,7 +44,93 @@ services:
       - redis
       - clickhouse
 
+
+  airflow-init:
+    image: apache/airflow:2.10.5
+    container_name: analytics-airflow-init
+    env_file:
+      - .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: analytics_airflow_secret
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - airflow-postgres
+    command: >
+      bash -c "
+      airflow db migrate &&
+      airflow users create
+      --username admin
+      --firstname Admin
+      --lastname User
+      --role Admin
+      --email admin@example.com
+      --password admin
+      "
+
+  airflow-webserver:
+    image: apache/airflow:2.10.5
+    container_name: analytics-airflow-webserver
+    restart: always
+    env_file:
+      - .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: analytics_airflow_secret
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8080:8080"
+    depends_on:
+      - airflow-postgres
+    command: webserver
+
+  airflow-scheduler:
+    image: apache/airflow:2.10.5
+    container_name: analytics-airflow-scheduler
+    restart: always
+    env_file:
+      - .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: analytics_airflow_secret
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - airflow-postgres
+      - airflow-webserver
+    command: scheduler
+
+  airflow-postgres:
+    image: postgres:16
+    container_name: analytics-airflow-postgres
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+
+
+
 volumes:
   postgres_data:
   clickhouse_data:
+  airflow_postgres_data:
 

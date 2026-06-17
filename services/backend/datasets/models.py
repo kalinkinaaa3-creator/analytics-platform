@@ -344,3 +344,170 @@ class PlannedSalesDirectory(models.Model):
         db_table = "planned_sales_directory"
         verbose_name = "Planned sale directory"
         verbose_name_plural = "Planned sales directory"
+
+
+
+
+
+class DashSales(models.Model):
+    criterion = models.CharField(max_length=2, db_index=True)
+    date = models.DateField(db_index=True)
+
+    partner = models.CharField(max_length=600, blank=True, null=True, db_index=True)
+    partner_code = models.IntegerField(blank=True, null=True)
+    partner_inn = models.CharField(max_length=255, blank=True, null=True)
+
+    macrosegment = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    segment = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    manager = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+
+    old_branch = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    old_branch_group = models.CharField(max_length=255, blank=True, null=True)
+
+    macroregion = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    region_group = models.CharField(max_length=255, blank=True, null=True)
+    region = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+
+    consignee = models.CharField(max_length=600, blank=True, null=True)
+
+    nom_view = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    nom_category = models.CharField(max_length=255, blank=True, null=True)
+    nom_group = models.CharField(max_length=255, blank=True, null=True)
+    nom = models.CharField(max_length=600, blank=True, null=True, db_index=True)
+    nom_code = models.IntegerField(blank=True, null=True, db_index=True)
+
+    type_doc = models.CharField(max_length=600, blank=True, null=True)
+
+    quantity = models.DecimalField(max_digits=15, decimal_places=0, blank=True, null=True)
+    cost = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    weight_total = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    revenue = models.DecimalField(max_digits=20, decimal_places=2, blank=True, null=True)
+
+    con_segment = models.CharField(max_length=255, blank=True, null=True)
+    con_manager = models.CharField(max_length=255, blank=True, null=True)
+    con_branch = models.CharField(max_length=255, blank=True, null=True)
+    con_branch_group = models.CharField(max_length=255, blank=True, null=True)
+    con_inn = models.CharField(max_length=255, blank=True, null=True)
+    con_region = models.CharField(max_length=255, blank=True, null=True)
+
+    nom_hier_code = models.IntegerField(blank=True, null=True)
+    nom_hier = models.CharField(max_length=255, blank=True, null=True)
+
+    contract_initiator = models.CharField(max_length=255, blank=True, null=True)
+    contract_project = models.CharField(max_length=255, blank=True, null=True)
+    contract_fullname = models.CharField(max_length=255, blank=True, null=True)
+    contract_industry = models.CharField(max_length=255, blank=True, null=True)
+
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "dash_sales"
+        indexes = [
+            models.Index(fields=["date"], name="idx_dash_sales_date"),
+            models.Index(fields=["date", "partner"], name="idx_dash_sales_date_partner"),
+            models.Index(fields=["date", "nom"], name="idx_dash_sales_date_nom"),
+        ]
+
+
+
+
+class FBPurchasesRaw(models.Model):
+    date_1C = models.DateField(db_index=True)
+
+    quantity_1C_110 = models.DecimalField(max_digits=15, decimal_places=0, blank=True, null=True)
+    revenue_1C_110 = models.DecimalField(max_digits=20, decimal_places=2, blank=True, null=True)
+    VAT_1C_110 = models.DecimalField(max_digits=20, decimal_places=2, blank=True, null=True)
+
+    quantity_1C_112 = models.DecimalField(max_digits=15, decimal_places=0, blank=True, null=True)
+    revenue_1C_112 = models.DecimalField(max_digits=20, decimal_places=2, blank=True, null=True)
+    VAT_1C_112 = models.DecimalField(max_digits=20, decimal_places=2, blank=True, null=True)
+
+    quantity_1C_100753 = models.DecimalField(max_digits=15, decimal_places=0, blank=True, null=True)
+    revenue_1C_100753 = models.DecimalField(max_digits=20, decimal_places=2, blank=True, null=True)
+    VAT_1C_100753 = models.DecimalField(max_digits=20, decimal_places=2, blank=True, null=True)
+
+    date_draft = models.DateField(db_index=True)
+
+    party_status = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    partner = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    nomenclature = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "fb_purchases_raw"
+        verbose_name = "Purchases raw"
+        verbose_name_plural = "Purchases raw"
+        indexes = [
+            models.Index(fields=["date_1C"], name="idx_fb_purch_raw_date_1c"),
+            models.Index(fields=["date_draft"], name="idx_fb_purch_raw_draft"),
+        ]
+
+
+
+class TurnoverRaw(models.Model):
+    date_stock = models.DateField(db_index=True)
+    date_start = models.DateField(db_index=True)
+    date_end = models.DateField(db_index=True)
+
+    warehouse_group = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    warehouse = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    nomenclature = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+
+    quantity = models.CharField(max_length=255, blank=True, null=True)
+    price = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    amount_day = models.IntegerField(blank=True, null=True)
+
+    middle_stock = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, db_index=True)
+    middle_rubstock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, db_index=True)
+
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "fb_turnover_raw"
+        verbose_name = "Turnover raw"
+        verbose_name_plural = "Turnover raw"
+        indexes = [
+            models.Index(fields=["date_stock"], name="idx_turn_raw_stock"),
+            models.Index(fields=["date_start"], name="idx_turn_raw_start"),
+            models.Index(fields=["date_end"], name="idx_turn_raw_end"),
+        ]
+
+    def __str__(self):
+        return self.nomenclature or f"Turnover raw {self.id}"
+
+
+
+
+class AccreceivRaw(models.Model):
+    date_start = models.DateField(db_index=True)
+    date_end = models.DateField(db_index=True)
+
+    partner = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    contract_partner = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    manager_name = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+
+    mutual_instock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    mutual_comstock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    mutual_spenstock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    mutual_finstock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, db_index=True)
+
+    initial_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    coming_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    spending_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, db_index=True)
+    final_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "fb_accreceiv_raw"
+        verbose_name = "Account receivable raw"
+        verbose_name_plural = "Accounts receivable raw"
+        indexes = [
+            models.Index(fields=["date_start"], name="idx_accr_raw_start"),
+            models.Index(fields=["date_end"], name="idx_accr_raw_end"),
+            models.Index(fields=["manager_name"], name="idx_accr_raw_manager"),
+        ]
+
+    def __str__(self):
+        return self.partner or f"Account receivable raw {self.id}"

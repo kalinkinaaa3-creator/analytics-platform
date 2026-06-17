@@ -99,7 +99,13 @@ from analytics.services.planned_sales_sync import sync_planned_sales_to_clickhou
 from dashboards.realtime import notify_dashboard_updated
 
 
+from datasets.api.permissions import HasInternalApiKey
 
+from analytics.services.fb_project_api_pipeline import run_fb_project_api_pipeline
+from analytics.services.planned_sales_api_pipeline import run_planned_sales_api_pipeline
+from analytics.services.fb_purchases_api_pipeline import run_fb_purchases_api_pipeline
+from analytics.services.fb_turnover_api_pipeline import run_fb_turnover_api_pipeline
+from analytics.services.fb_accreceiv_api_pipeline import run_fb_accreceiv_api_pipeline
 
 
 
@@ -622,3 +628,55 @@ class PlannedSalesSavePlanView(APIView):
             "status": "ok",
             "clickhouse": clickhouse_result,
         })
+    
+
+
+
+
+class FbProjectApiLoadView(APIView):
+    authentication_classes = []
+    permission_classes = [HasInternalApiKey]
+
+    def post(self, request):
+        result = run_fb_project_api_pipeline()
+        return Response(result)
+    
+
+class PlannedSalesApiLoadView(APIView):
+    authentication_classes = []
+    permission_classes = [HasInternalApiKey]
+
+    def post(self, request):
+        result = run_planned_sales_api_pipeline()
+
+        return Response(result)
+    
+
+class FBPurchasesApiLoadView(APIView):
+    authentication_classes = []
+    permission_classes = [HasInternalApiKey]
+
+    def post(self, request):
+        result = run_fb_purchases_api_pipeline()
+
+        return Response(result)
+    
+
+class FBTurnoverApiLoadView(APIView):
+    authentication_classes = []
+    permission_classes = [HasInternalApiKey]
+
+    def post(self, request):
+        result = run_fb_turnover_api_pipeline()
+
+        return Response(result)
+    
+
+class FBAccreceivApiLoadView(APIView):
+    authentication_classes = []
+    permission_classes = [HasInternalApiKey]
+
+    def post(self, request):
+        result = run_fb_accreceiv_api_pipeline()
+
+        return Response(result)
