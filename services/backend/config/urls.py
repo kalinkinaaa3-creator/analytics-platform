@@ -3,15 +3,16 @@ from django.urls import include, path
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
     TokenRefreshView,
 )
+from dashboards.api.auth_views import LoggingTokenObtainPairView
+
 
 
 urlpatterns = [
     path("admin/", admin.site.urls),
 
-    path("api/token/", TokenObtainPairView.as_view()),
+    path("api/token/", LoggingTokenObtainPairView.as_view()),
     path("api/token/refresh/", TokenRefreshView.as_view()),
 
     # API V1 - ЧЁТКАЯ СЕГМЕНТАЦИЯ

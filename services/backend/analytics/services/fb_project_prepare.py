@@ -667,6 +667,60 @@ def build_projects_tree(project_tasks: list[dict], months_list: list[dict]):
 
 
 
+
+
+def apply_project_filters(rows: list[dict], filters: dict) -> list[dict]:
+    start_date = datetime.strptime(filters["project_start"], "%Y-%m-%d").date()
+    end_date = datetime.strptime(filters["project_end"], "%Y-%m-%d").date()
+
+    filtered = []
+
+    for row in rows:
+        if filters["deviation_project"] and row.get("deviation_project") != filters["deviation_project"]:
+            continue
+
+        if filters["department"] and row.get("department") != filters["department"]:
+            continue
+
+        if filters["project_type"] and row.get("project_type") != filters["project_type"]:
+            continue
+
+        if filters["project_name"] and row.get("project_name") != filters["project_name"]:
+            continue
+
+        if filters["project_manager"] and row.get("project_manager") != filters["project_manager"]:
+            continue
+
+        if filters["project_status"] and row.get("project_status") != filters["project_status"]:
+            continue
+
+        if filters["folder_lvl1"] and row.get("folder_lvl1") != filters["folder_lvl1"]:
+            continue
+
+        if filters["folder_lvl2"] and row.get("folder_lvl2") != filters["folder_lvl2"]:
+            continue
+
+        if filters["folder_lvl3"] and row.get("folder_lvl3") != filters["folder_lvl3"]:
+            continue
+
+        row_start = _to_date_or_none(row.get("start_date"))
+        row_end = _to_date_or_none(row.get("end_date"))
+
+        if row_start and row_start < start_date:
+            continue
+
+        if row_end and row_end > end_date:
+            continue
+
+        filtered.append(row)
+
+    return filtered
+
+
+
+
+
+
 def prepare_fb_project_gantt(
     rows: list[dict] | None = None,
     filters: dict | None = None,
@@ -692,6 +746,11 @@ def prepare_fb_project_gantt(
         rows = prepare_fb_project_rows()
 
     project_tasks = assign_knot_fields(rows)
+
+    project_tasks = apply_project_filters(
+        rows=project_tasks,
+        filters=filters,
+    )
 
     projects_tree, global_min, global_max, today_offset = build_projects_tree(
         project_tasks,

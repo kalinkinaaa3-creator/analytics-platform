@@ -1,3 +1,4 @@
+from datetime import date
 from django.core.cache import cache
 
 from analytics.clickhouse.repository import ClickHouseRepository
@@ -16,6 +17,10 @@ from analytics.services.fb_turnover_prepare import prepare_fb_turnover_dashboard
 from analytics.services.fb_accreceiv_prepare import prepare_fb_accreceiv_dashboard
 
 from analytics.services.planned_sales_prepare import prepare_planned_sales_dashboard
+
+
+from rest_framework.exceptions import PermissionDenied
+from dashboards.services.access import user_can_view_dashboard
 
 
 
@@ -132,10 +137,10 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
     queryset = Dashboard.objects.prefetch_related("widgets")
 
-    if user is not None:
-        queryset = queryset.filter(owner=user)
-
     dashboard = queryset.get(id=dashboard_id)
+
+    if user is not None and not user_can_view_dashboard(user, dashboard):
+        raise PermissionDenied("Нет доступа к этому дашборду")
 
     cache_filters = normalize_filters_for_dashboard(
         dashboard=dashboard,
@@ -196,9 +201,7 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
             )
 
         elif widget.type == "fb_project_gantt":
-            rows = repository.fetch_fb_project_rows(
-                filters=runtime_filters,
-            )
+            rows = repository.fetch_fb_project_rows()
 
             widget_data["data"] = prepare_fb_project_gantt(
                 rows=rows,
@@ -252,6 +255,9 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
         elif widget.type == "planned_sales_dashboard":
             selected_date = runtime_filters.get("date")
+
+            if not selected_date:
+                selected_date = date.today().replace(day=1).strftime("%Y-%m-01")
 
             if selected_date:
                 date_start = f"{selected_date[:4]}-01-01"

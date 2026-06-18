@@ -13,6 +13,8 @@ import os
 
 from pathlib import Path
 
+from datetime import timedelta
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -46,6 +48,8 @@ INSTALLED_APPS = [
     "dashboards",
 
     "channels",
+
+    "corsheaders",
 ]
 
 ASGI_APPLICATION = "config.asgi.application"
@@ -66,6 +70,7 @@ CHANNEL_LAYERS = {
 
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
 
@@ -136,7 +141,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "Europe/Moscow"
 
 USE_I18N = True
 
@@ -190,6 +195,21 @@ REST_FRAMEWORK = {
     ),
 }
 
+
+
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+
+
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=365),
+}
 
 
 
@@ -309,6 +329,24 @@ LOGGING = {
             "encoding": "utf-8",
         },
 
+        "process_kill_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "process_kill.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
+        "table_health_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "table_health.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
     },
 
     "loggers": {
@@ -362,6 +400,18 @@ LOGGING = {
 
         "external_api.fb_accreceiv": {
             "handlers": ["console", "fb_accreceiv_api_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "maintenance.process_kill": {
+            "handlers": ["console", "process_kill_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "maintenance.table_health": {
+            "handlers": ["console", "table_health_file"],
             "level": "INFO",
             "propagate": False,
         },

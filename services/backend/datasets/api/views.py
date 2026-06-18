@@ -112,6 +112,7 @@ from analytics.services.fb_accreceiv_api_pipeline import run_fb_accreceiv_api_pi
 
 
 
+
 class DatasetViewSet(ModelViewSet):
     queryset = Dataset.objects.all()
     serializer_class = DatasetSerializer
@@ -680,3 +681,31 @@ class FBAccreceivApiLoadView(APIView):
         result = run_fb_accreceiv_api_pipeline()
 
         return Response(result)
+    
+
+
+
+class TableHealthCheckView(APIView):
+    authentication_classes = []
+    permission_classes = [HasInternalApiKey]
+
+    def post(self, request):
+        call_command("check_table_health")
+
+        return Response({
+            "status": "ok",
+            "command": "check_table_health",
+        })
+
+
+class ProcessKillView(APIView):
+    authentication_classes = []
+    permission_classes = [HasInternalApiKey]
+
+    def post(self, request):
+        call_command("kill_long_running_processes")
+
+        return Response({
+            "status": "ok",
+            "command": "kill_long_running_processes",
+        })

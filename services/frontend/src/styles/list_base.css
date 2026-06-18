@@ -1,0 +1,378 @@
+
+body {
+    font-family: 'Helvetica', sans-serif;
+    margin: 0;
+    background: #f4f4f4;
+}
+
+#root {
+    min-height: 100vh;
+}
+
+.app-shell {
+    display: flex;
+    height: 100vh;
+    background: #f4f4f4;
+}
+
+/* Sidebar - полностью скрыт по умолчанию */
+.sidebar {
+    width: 0px; /* Полностью скрыт */
+    background: linear-gradient(to bottom, #e8e8e8, #dfe0d4);
+    display: flex;
+    flex-direction: column;
+    transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    overflow: hidden;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+    z-index: 1000;
+    position: relative;
+}
+
+.sidebar.open { 
+    width: 250px; 
+}
+
+/* Всплывающая кнопка ТОЛЬКО в левом верхнем углу */
+.sidebar-toggle-btn {
+    position: fixed;
+    top: 5px;
+    left: 5px;
+    width: 50px;
+    height: 30px;
+    background: linear-gradient(145deg, 
+        rgba(208, 208, 208, 0.75),  /* 85% прозрачность */
+        rgba(189, 189, 189, 0.65)   /* 75% прозрачность */
+    );
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    z-index: 1001;
+    box-shadow: 
+        0 8px 25px rgba(0,0,0,0.3),
+        inset 2px 2px 5px rgba(255,255,255,0.5),
+        inset -2px -2px 5px rgba(0,0,0,0.1);
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.sidebar-toggle-btn:hover {
+    background: linear-gradient(145deg, 
+        rgba(208, 208, 208, 0.75),  /* 85% прозрачность */
+        rgba(189, 189, 189, 0.65)   /* 75% прозрачность */
+    );
+    box-shadow: 
+        0 12px 35px rgba(0,0,0,0.4),
+        inset 2px 2px 8px rgba(255,255,255,0.6),
+        inset -2px -2px 8px rgba(0,0,0,0.15);
+}
+
+.sidebar-toggle-btn:active {
+    transform: scale(0.95);
+}
+
+
+/* Toggle button внутри сайдбара */
+.toggle-btn {
+    cursor: pointer;
+    font-size: 18px;
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 12px;
+    background: linear-gradient(145deg, #d0d0d0, #bdbdbd);
+    border: none;
+    outline: none;
+    box-shadow: inset 2px 2px 5px rgba(255,255,255,0.5), inset -2px -2px 5px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+	height: 40px;
+}
+.toggle-btn:hover { 
+    background: linear-gradient(145deg, #c8cec5, #a0a699);
+    color: #fff;
+}
+
+.sections-container { 
+    flex: 1; 
+    overflow-y: auto; 
+    padding: 10px 0; 
+}
+
+/* Section titles */
+.section { margin-top: 10px; }
+.section-title {
+    font-weight: bold;
+    margin: 10px 0 5px 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.section-title span.arrow {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 8px;
+    border-radius: 3px;
+    position: relative;
+}
+.section-title span.arrow::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 6px;
+    height: 6px;
+    border-right: 2px solid #414c38;
+    border-bottom: 2px solid #414c38;
+    transform: translate(-50%, -50%) rotate(45deg);
+    transition: border-color 0.3s ease, transform 0.3s ease;
+}
+.section-title:hover span.arrow::before {
+    border-color: #c8cec5;
+}
+.section-title.collapsed span.arrow::before {
+    transform: translate(-50%, -50%) rotate(-225deg);
+}
+
+/* Links */
+.section a {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    text-decoration: none;
+    color: #000;
+    border-radius: 5px;
+    white-space: nowrap;
+    transition: all 0.3s ease;
+    margin: 2px 10px;
+}
+.section a.active {
+    background: linear-gradient(145deg, #a0a699, #c8cec5);
+    font-weight: bold;
+    box-shadow: inset 1px 1px 3px rgba(255,255,255,0.3), inset -1px -1px 3px rgba(0,0,0,0.1);
+}
+.section a:hover {
+    background: linear-gradient(145deg, #c8cec5, #a0a699);
+    color: #000;
+    transform: scale(1.02);
+}
+
+/* Submenu */
+.submenu {
+    max-height: 1000px;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+.submenu.collapsed { 
+    max-height: 0; 
+}
+
+/* User info */
+.user-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    background: linear-gradient(145deg, #d0d0d0, #bdbdbd);
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+/* Logout button */
+.logout-btn {
+    display: block;
+    width: 90%;
+    margin: 10px auto 20px auto;
+    padding: 10px;
+    background: linear-gradient(145deg, #414c38, #2b3225);
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+}
+.logout-btn:hover { 
+    background: linear-gradient(145deg, #c0392b, #e74c3c);
+    transform: scale(1.02);
+}
+
+/* Content area */
+.content { 
+    flex: 1; 
+    padding: 10px; 
+    overflow-y: auto; 
+    background: #f8f8f8; 
+}
+
+/* Анимация для кнопки */
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% { transform: translateY(-50%) scale(1); }
+    40% { transform: translateY(-50%) scale(1.1); }
+    60% { transform: translateY(-50%) scale(1.05); }
+}
+
+
+
+
+
+/* box-card */
+/*
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #242424;
+    color: #fff;
+    font-family: Arial, sans-serif;
+    perspective: 1000px;
+}
+*/
+
+.container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transform-style: preserve-3d;
+	height: 80vh;
+}
+
+.box-card {
+    width: 300px;
+    height: 300px;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 1s ease;
+    cursor: pointer;
+    animation: rotate3d 8s infinite linear;
+	color: #fff;
+}
+
+.face {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 4rem;
+    font-weight: bold;
+    backface-visibility: visible;
+    border-radius: 12px;
+    background: linear-gradient(145deg, #2a2a2a, #383838);
+    border: 2px solid #646cff;
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.face::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+    top: -100%;
+    left: -100%;
+    transition: all 0.5s ease;
+    transform: translateZ(20px);
+}
+
+.face::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        135deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.05) 50%,
+        transparent 100%
+    );
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.face:hover::before {
+    top: 100%;
+    left: 100%;
+}
+
+.face:hover::after {
+    opacity: 1;
+}
+
+.front {
+    transform: translateZ(150px);
+    border-color: #ae8f14;
+}
+
+.back {
+    transform: translateZ(-150px) rotateY(180deg);
+    border-color: #b14be4;
+}
+
+.right {
+    transform: translateX(150px) rotateY(90deg);
+    border-color: #ea6535;
+}
+
+.left {
+    transform: translateX(-150px) rotateY(-90deg);
+    border-color: #ff7940;
+}
+
+.top {
+    transform: translateY(-150px) rotateX(90deg);
+    border-color: #767ed7;
+}
+
+.bottom {
+    transform: translateY(150px) rotateX(-90deg);
+    border-color: #4dcec6;
+}
+
+@keyframes rotate3d {
+    0% {
+        transform: rotateX(0) rotateY(0);
+    }
+    25% {
+        transform: rotateX(90deg) rotateY(90deg);
+    }
+    50% {
+        transform: rotateX(180deg) rotateY(180deg);
+    }
+    75% {
+        transform: rotateX(270deg) rotateY(270deg);
+    }
+    100% {
+        transform: rotateX(360deg) rotateY(360deg);
+    }
+}
+
+@media (max-width: 768px) {
+    .box-card {
+        width: 150px;
+        height: 150px;
+    }
+    
+    .front { transform: translateZ(75px); }
+    .back { transform: translateZ(-75px) rotateY(180deg); }
+    .right { transform: translateX(75px) rotateY(90deg); }
+    .left { transform: translateX(-75px) rotateY(-90deg); }
+    .top { transform: translateY(-75px) rotateX(90deg); }
+    .bottom { transform: translateY(75px) rotateX(-90deg); }
+}

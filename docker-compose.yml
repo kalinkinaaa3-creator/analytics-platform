@@ -7,6 +7,8 @@ services:
       POSTGRES_DB: analytics
       POSTGRES_USER: analytics
       POSTGRES_PASSWORD: analytics
+      TZ: Europe/Moscow
+      PGTZ: Europe/Moscow
     ports:
       - "5432:5432"
     volumes:
@@ -21,6 +23,8 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:latest
     container_name: analytics-clickhouse
+    environment:
+      TZ: Europe/Moscow
     ports:
       - "8123:8123"
       - "9000:9000"
@@ -35,6 +39,8 @@ services:
     command: uvicorn config.asgi:application --host 0.0.0.0 --port 8000
     env_file:
       - .env
+    environment:
+      TZ: Europe/Moscow
     volumes:
       - ./services/backend:/app
     ports:
@@ -55,6 +61,9 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__WEBSERVER__SECRET_KEY: analytics_airflow_secret
+      TZ: Europe/Moscow
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: Europe/Moscow
+      AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE: Europe/Moscow
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
@@ -85,6 +94,9 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__WEBSERVER__SECRET_KEY: analytics_airflow_secret
+      TZ: Europe/Moscow
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: Europe/Moscow
+      AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE: Europe/Moscow
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
@@ -107,6 +119,9 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__WEBSERVER__SECRET_KEY: analytics_airflow_secret
+      TZ: Europe/Moscow
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: Europe/Moscow
+      AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE: Europe/Moscow
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
@@ -124,10 +139,26 @@ services:
       POSTGRES_DB: airflow
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
+      TZ: Europe/Moscow
+      PGTZ: Europe/Moscow
     volumes:
       - airflow_postgres_data:/var/lib/postgresql/data
 
 
+  frontend:
+    build: ./services/frontend
+    container_name: analytics-frontend
+    volumes:
+      - ./services/frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000/api
+    depends_on:
+      - django
+
+      
 
 volumes:
   postgres_data:

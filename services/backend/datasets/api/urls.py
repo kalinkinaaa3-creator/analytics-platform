@@ -31,6 +31,8 @@ from .views import (
     FBPurchasesApiLoadView,
     FBTurnoverApiLoadView,
     FBAccreceivApiLoadView,
+    TableHealthCheckView,
+    ProcessKillView,
 
 )
 
@@ -111,6 +113,8 @@ urlpatterns = [
     path("fb-turnover/load-from-api/", FBTurnoverApiLoadView.as_view()),
     path("fb-accreceiv/load-from-api/", FBAccreceivApiLoadView.as_view()),
 
+    path("maintenance/table-health/", TableHealthCheckView.as_view()),
+    path("maintenance/process-kill/", ProcessKillView.as_view()),
 
     path("", include(router.urls)),
 ]
