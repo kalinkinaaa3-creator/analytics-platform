@@ -1138,11 +1138,11 @@ class ClickHouseRepository:
         params = {}
 
         if filters.get("date_start"):
-            where.append("ps.date >= %(date_start)s")
+            where.append("date >= %(date_start)s")
             params["date_start"] = filters["date_start"]
 
         if filters.get("date_end"):
-            where.append("ps.date <= %(date_end)s")
+            where.append("date <= %(date_end)s")
             params["date_end"] = filters["date_end"]
 
         where_sql = ""
@@ -1153,22 +1153,59 @@ class ClickHouseRepository:
         result = client.execute(
             f"""
             SELECT
-                ps.date,
-                ps.level1,
-                ps.level2,
-                ps.level3,
-                ps.fact,
-                ps.appg,
-                ps.appg_slice,
-                ps.id_directory,
-                pls.plan,
-                pls.projection_s
-            FROM default.planned_sales AS ps
-            LEFT JOIN default.plan_sales AS pls
-                ON ps.date = pls.date
-               AND ps.id_directory = pls.id_directory
+                date,
+                level1,
+                level2,
+                level3,
+                fact,
+                appg,
+                appg_slice,
+                id_directory,
+                plan,
+                projection_s
+            FROM
+            (
+                SELECT
+                    ps.date AS date,
+                    ps.level1 AS level1,
+                    ps.level2 AS level2,
+                    ps.level3 AS level3,
+                    ps.fact AS fact,
+                    ps.appg AS appg,
+                    ps.appg_slice AS appg_slice,
+                    ps.id_directory AS id_directory,
+                    pls.plan AS plan,
+                    pls.projection_s AS projection_s
+                FROM default.planned_sales AS ps
+                LEFT JOIN default.plan_sales AS pls
+                    ON ps.date = pls.date
+                AND ps.id_directory = pls.id_directory
+                WHERE toYear(ps.date) = toYear(today())
+
+                UNION ALL
+
+                SELECT
+                    pls.date AS date,
+                    pls.level1 AS level1,
+                    pls.level2 AS level2,
+                    pls.level3 AS level3,
+                    NULL AS fact,
+                    NULL AS appg,
+                    NULL AS appg_slice,
+                    pls.id_directory AS id_directory,
+                    pls.plan AS plan,
+                    pls.projection_s AS projection_s
+                FROM default.plan_sales AS pls
+                WHERE (pls.date, pls.id_directory) NOT IN (
+                    SELECT
+                        ps.date,
+                        ps.id_directory
+                    FROM default.planned_sales AS ps
+                    WHERE toYear(ps.date) = toYear(today())
+                )
+            ) AS t
             {where_sql}
-            ORDER BY ps.date, ps.id_directory
+            ORDER BY date, id_directory
             """,
             params,
         )
@@ -1192,13 +1229,15 @@ class ClickHouseRepository:
         ]
 
     def fetch_planned_sales_dates(self):
-        ensure_planned_sales_table()
+        ensure_plan_sales_table()
 
         client = get_clickhouse_client()
 
         result = client.execute("""
             SELECT DISTINCT date
-            FROM default.planned_sales
+            FROM default.plan_sales
+            WHERE date >= toStartOfYear(today())
+            AND date <= toDate(concat(toString(toYear(today())), '-12-01'))
             ORDER BY date
         """)
 

@@ -614,6 +614,8 @@ def build_date_range(selected_date_str):
     return result
 
 
+
+
 def prepare_planned_sales_dashboard(rows, filters=None, available_dates=None):
     filters = filters or {}
 
@@ -623,7 +625,21 @@ def prepare_planned_sales_dashboard(rows, filters=None, available_dates=None):
 
     period_labels = get_period_labels(date_range)
 
-    sales_tree = build_planned_sales_tree(rows)
+    date_set = set(date_range)
+
+    filtered_rows = []
+    for row in rows:
+        row_date = row.get("date")
+
+        if hasattr(row_date, "strftime"):
+            row_date = row_date.strftime("%Y-%m-01")
+        else:
+            row_date = str(row_date)[:7] + "-01"
+
+        if row_date in date_set:
+            filtered_rows.append(row)
+
+    sales_tree = build_planned_sales_tree(filtered_rows)
 
     indicators = get_performance_indicators(
         sales_tree,
@@ -631,7 +647,7 @@ def prepare_planned_sales_dashboard(rows, filters=None, available_dates=None):
         selected_date,
     )
 
-    level2_month_agg = aggregate_level2_month(rows)
+    level2_month_agg = aggregate_level2_month(filtered_rows)
 
     return {
         "filters": {

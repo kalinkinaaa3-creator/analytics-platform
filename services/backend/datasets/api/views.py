@@ -20,6 +20,7 @@ from analytics.services.fb_project_sync import sync_fb_project_to_clickhouse
 
 from dashboards.cache.invalidation import invalidate_dashboard_by_name
 
+from dashboards.models import DashboardAccess, Dashboard
 
 from rest_framework.parsers import MultiPartParser, FormParser
 
@@ -590,7 +591,6 @@ class PlannedSalesDirectoryUploadView(APIView):
 
 
 
-
 class PlannedSalesSavePlanView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -599,6 +599,29 @@ class PlannedSalesSavePlanView(APIView):
         value = request.data.get("value")
         row_date = request.data.get("date")
         id_directory = request.data.get("id_directory")
+
+        dashboard = Dashboard.objects.filter(name="PlannedSales").first()
+
+        if not dashboard:
+            return Response(
+                {"error": "PlannedSales dashboard not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        can_edit = DashboardAccess.objects.filter(
+            user=request.user,
+            dashboard=dashboard,
+            can_edit=True,
+        ).exists()
+
+        if not can_edit:
+            return Response(
+                {"error": "No edit permission"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if field == "projection":
+            field = "projection_s"
 
         if field not in ("plan", "projection_s"):
             return Response(

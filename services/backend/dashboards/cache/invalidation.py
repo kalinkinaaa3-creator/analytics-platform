@@ -26,14 +26,14 @@ def invalidate_dashboards_for_dataset(dataset_id: int):
                 dashboard_id=dashboard.id,
             )
 
-            delete_dashboard_cache_patterns(
-                user_id=dashboard.owner_id,
-                dashboard_id=dashboard.id,
-            )
+        delete_dashboard_cache_patterns(
+            dashboard_id=dashboard.id,
+            user_id=dashboard.owner_id,
+        )
 
     for dashboard_id in dashboard_ids:
         delete_dashboard_cache(dashboard_id)
-
+        delete_dashboard_cache_patterns(dashboard_id=dashboard_id)
 
 
 def invalidate_dashboard_by_name(name: str):
@@ -48,7 +48,7 @@ def invalidate_dashboard_by_name(name: str):
                 dashboard_id=dashboard.id,
             )
 
-            delete_dashboard_cache_patterns(
-                user_id=dashboard.owner_id,
-                dashboard_id=dashboard.id,
-            )
+        delete_dashboard_cache_patterns(
+            dashboard_id=dashboard.id,
+            user_id=dashboard.owner_id,
+        )

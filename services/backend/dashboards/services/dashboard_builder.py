@@ -3,7 +3,7 @@ from django.core.cache import cache
 
 from analytics.clickhouse.repository import ClickHouseRepository
 
-from dashboards.models import Dashboard
+from dashboards.models import Dashboard, DashboardAccess
 from dashboards.cache.dashboard_cache import dashboard_cache_key
 from dashboards.services.tables import build_table
 from dashboards.services.charts import build_line_chart
@@ -295,11 +295,21 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
         widgets_data.append(widget_data)
 
+    can_edit = False
+
+    if user is not None:
+        can_edit = DashboardAccess.objects.filter(
+            user=user,
+            dashboard=dashboard,
+            can_edit=True,
+        ).exists()
+
     result = {
         "dashboard": {
             "id": dashboard.id,
             "name": dashboard.name,
             "owner": dashboard.owner_id,
+            "can_edit": can_edit,
         },
         "widgets": widgets_data,
     }

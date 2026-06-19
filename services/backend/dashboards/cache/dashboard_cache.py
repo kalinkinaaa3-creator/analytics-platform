@@ -39,9 +39,14 @@ def delete_dashboard_cache(dashboard_id: int):
     cache.delete(key)
 
 
-def delete_dashboard_cache_patterns(user_id: int, dashboard_id: int):
+def delete_dashboard_cache_patterns(dashboard_id: int, user_id: int | None = None):
+    if user_id:
+        cache.delete_pattern(
+            f"*dashboard:user:{user_id}:dashboard:{dashboard_id}:filters:*"
+        )
+
     cache.delete_pattern(
-        f"*dashboard:user:{user_id}:dashboard:{dashboard_id}:filters:*"
+        f"*dashboard:user:*:dashboard:{dashboard_id}:filters:*"
     )
 
     cache.delete_pattern(
