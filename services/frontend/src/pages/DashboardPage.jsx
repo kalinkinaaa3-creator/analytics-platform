@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, Navigate, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { DashboardRenderer } from "../dashboards/DashboardRenderer";
@@ -23,6 +23,7 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const filtersKey = searchParams.toString();
+  const loadDashboardRef = useRef(null);
 
   const loadDashboard = useCallback(
     async ({ showSpinner = true } = {}) => {
@@ -50,48 +51,91 @@ export function DashboardPage() {
   );
 
   useEffect(() => {
+    loadDashboardRef.current = loadDashboard;
+  }, [loadDashboard]);
+
+  useEffect(() => {
     loadDashboard({ showSpinner: true });
   }, [loadDashboard]);
 
   useEffect(() => {
-    const wsUrl = buildDashboardWsUrl();
-    
-    const access = localStorage.getItem("access");
+    let socket = null;
+    let reconnectTimer = null;
+    let stopped = false;
+    let reconnectAttempt = 0;
 
-    if (!access) {
-      console.warn("Dashboard WebSocket skipped: no access token");
-      return;
+    function connect() {
+      const access = localStorage.getItem("access");
+
+      if (!access) {
+        console.warn("Dashboard WebSocket skipped: no access token");
+        return;
+      }
+
+      const wsUrl = buildDashboardWsUrl();
+      socket = new WebSocket(`${wsUrl}?token=${encodeURIComponent(access)}`);
+
+      socket.onopen = () => {
+        reconnectAttempt = 0;
+        console.log("Dashboard WebSocket connected");
+      };
+
+      socket.onmessage = (event) => {
+        let message = null;
+
+        try {
+          message = JSON.parse(event.data);
+        } catch (error) {
+          console.error("Dashboard WebSocket invalid message:", error);
+          return;
+        }
+
+        if (
+          message.type === "dashboard_updated" &&
+          message.dashboard === "PlannedSales"
+        ) {
+          loadDashboardRef.current?.({ showSpinner: false });
+        }
+      };
+
+      socket.onerror = (error) => {
+        console.error("Dashboard WebSocket error:", error);
+      };
+
+      socket.onclose = (event) => {
+        console.log("Dashboard WebSocket closed:", event.code, event.reason);
+
+        if (stopped) {
+          return;
+        }
+
+        const delay = Math.min(30000, 1000 * 2 ** reconnectAttempt);
+        reconnectAttempt += 1;
+
+        reconnectTimer = setTimeout(() => {
+          connect();
+        }, delay);
+      };
     }
 
-    const socket = new WebSocket(`${wsUrl}?token=${access}`);
-
-    socket.onopen = () => {
-      console.log("Dashboard WebSocket connected");
-    };
-
-    socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-
-      if (
-        message.type === "dashboard_updated" &&
-        message.dashboard === "PlannedSales"
-      ) {
-        loadDashboard({ showSpinner: false });
-      }
-    };
-
-    socket.onerror = (error) => {
-      console.error("Dashboard WebSocket error:", error);
-    };
-
-    socket.onclose = (event) => {
-      console.log("Dashboard WebSocket closed:", event.code, event.reason);
-    };
+    connect();
 
     return () => {
-      socket.close();
+      stopped = true;
+
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+
+      if (
+        socket &&
+        (socket.readyState === WebSocket.OPEN ||
+          socket.readyState === WebSocket.CONNECTING)
+      ) {
+        socket.close(1000, "component unmounted");
+      }
     };
-  }, [loadDashboard]);
+  }, []);
 
   function handleFiltersChange(filters) {
     const nextParams = new URLSearchParams(searchParams);

@@ -160,8 +160,34 @@ services:
 
       
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: analytics-pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      TZ: Europe/Moscow
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+  clickhouse-ui:
+    image: ghcr.io/caioricciuti/ch-ui:latest
+    container_name: analytics-clickhouse-ui
+    restart: always
+    ports:
+      - "5521:5521"
+    depends_on:
+      - clickhouse
+
+
 volumes:
   postgres_data:
   clickhouse_data:
   airflow_postgres_data:
+  pgadmin_data:
 

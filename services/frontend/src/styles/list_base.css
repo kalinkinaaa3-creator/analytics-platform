@@ -1,22 +1,15 @@
-
-body {
-    font-family: 'Helvetica', sans-serif;
-    margin: 0;
-    background: #f4f4f4;
-}
-
-#root {
-    min-height: 100vh;
-}
-
 .app-shell {
     display: flex;
     height: 100vh;
     background: #f4f4f4;
+    font-family: 'Helvetica', sans-serif;
+    margin: 0;
+    background: #f4f4f4;
+    min-height: 100vh;
 }
 
 /* Sidebar - полностью скрыт по умолчанию */
-.sidebar {
+.app-shell .sidebar {
     width: 0px; /* Полностью скрыт */
     background: linear-gradient(to bottom, #e8e8e8, #dfe0d4);
     display: flex;
@@ -28,12 +21,12 @@ body {
     position: relative;
 }
 
-.sidebar.open { 
+.app-shell .sidebar.open { 
     width: 250px; 
 }
 
 /* Всплывающая кнопка ТОЛЬКО в левом верхнем углу */
-.sidebar-toggle-btn {
+.app-shell .sidebar-toggle-btn {
     position: fixed;
     top: 5px;
     left: 5px;
@@ -58,7 +51,7 @@ body {
     font-size: 20px;
 }
 
-.sidebar-toggle-btn:hover {
+.app-shell .sidebar-toggle-btn:hover {
     background: linear-gradient(145deg, 
         rgba(208, 208, 208, 0.75),  /* 85% прозрачность */
         rgba(189, 189, 189, 0.65)   /* 75% прозрачность */
@@ -69,13 +62,13 @@ body {
         inset -2px -2px 8px rgba(0,0,0,0.15);
 }
 
-.sidebar-toggle-btn:active {
+.app-shell .sidebar-toggle-btn:active {
     transform: scale(0.95);
 }
 
 
 /* Toggle button внутри сайдбара */
-.toggle-btn {
+.app-shell .toggle-btn {
     cursor: pointer;
     font-size: 18px;
     display: block;
@@ -90,20 +83,20 @@ body {
     flex-shrink: 0;
 	height: 40px;
 }
-.toggle-btn:hover { 
+.app-shell .toggle-btn:hover { 
     background: linear-gradient(145deg, #c8cec5, #a0a699);
     color: #fff;
 }
 
-.sections-container { 
+.app-shell .sections-container { 
     flex: 1; 
     overflow-y: auto; 
     padding: 10px 0; 
 }
 
 /* Section titles */
-.section { margin-top: 10px; }
-.section-title {
+.app-shell .section { margin-top: 10px; }
+.app-shell .section-title {
     font-weight: bold;
     margin: 10px 0 5px 0;
     cursor: pointer;
@@ -113,7 +106,7 @@ body {
     user-select: none;
 }
 
-.section-title span.arrow {
+.app-shell .section-title span.arrow {
     display: inline-block;
     width: 14px;
     height: 14px;
@@ -121,7 +114,7 @@ body {
     border-radius: 3px;
     position: relative;
 }
-.section-title span.arrow::before {
+.app-shell .section-title span.arrow::before {
     content: '';
     position: absolute;
     top: 50%;
@@ -133,15 +126,15 @@ body {
     transform: translate(-50%, -50%) rotate(45deg);
     transition: border-color 0.3s ease, transform 0.3s ease;
 }
-.section-title:hover span.arrow::before {
+.app-shell .section-title:hover span.arrow::before {
     border-color: #c8cec5;
 }
-.section-title.collapsed span.arrow::before {
+.app-shell .section-title.collapsed span.arrow::before {
     transform: translate(-50%, -50%) rotate(-225deg);
 }
 
 /* Links */
-.section a {
+.app-shell .section a {
     display: flex;
     align-items: center;
     padding: 8px 12px;
@@ -152,29 +145,29 @@ body {
     transition: all 0.3s ease;
     margin: 2px 10px;
 }
-.section a.active {
+.app-shell .section a.active {
     background: linear-gradient(145deg, #a0a699, #c8cec5);
     font-weight: bold;
     box-shadow: inset 1px 1px 3px rgba(255,255,255,0.3), inset -1px -1px 3px rgba(0,0,0,0.1);
 }
-.section a:hover {
+.app-shell .section a:hover {
     background: linear-gradient(145deg, #c8cec5, #a0a699);
     color: #000;
     transform: scale(1.02);
 }
 
 /* Submenu */
-.submenu {
+.app-shell .submenu {
     max-height: 1000px;
     overflow: hidden;
     transition: max-height 0.3s ease;
 }
-.submenu.collapsed { 
+.app-shell .submenu.collapsed { 
     max-height: 0; 
 }
 
 /* User info */
-.user-info {
+.app-shell .user-info {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -185,7 +178,7 @@ body {
 }
 
 /* Logout button */
-.logout-btn {
+.app-shell .logout-btn {
     display: block;
     width: 90%;
     margin: 10px auto 20px auto;
@@ -200,13 +193,13 @@ body {
     transition: all 0.3s ease;
     flex-shrink: 0;
 }
-.logout-btn:hover { 
+.app-shell .logout-btn:hover { 
     background: linear-gradient(145deg, #c0392b, #e74c3c);
     transform: scale(1.02);
 }
 
 /* Content area */
-.content { 
+.app-shell .content { 
     flex: 1; 
     padding: 10px; 
     overflow-y: auto; 
@@ -244,7 +237,7 @@ body {
 }
 */
 
-.container {
+.app-shell .container {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -252,7 +245,7 @@ body {
 	height: 80vh;
 }
 
-.box-card {
+.app-shell .box-card {
     width: 300px;
     height: 300px;
     position: relative;
@@ -263,7 +256,7 @@ body {
 	color: #fff;
 }
 
-.face {
+.app-shell .face {
     position: absolute;
     width: 100%;
     height: 100%;
@@ -280,7 +273,7 @@ body {
     overflow: hidden;
 }
 
-.face::before {
+.app-shell .face::before {
     content: '';
     position: absolute;
     width: 100%;
@@ -292,7 +285,7 @@ body {
     transform: translateZ(20px);
 }
 
-.face::after {
+.app-shell .face::after {
     content: '';
     position: absolute;
     inset: 0;
@@ -306,41 +299,41 @@ body {
     transition: opacity 0.3s ease;
 }
 
-.face:hover::before {
+.app-shell .face:hover::before {
     top: 100%;
     left: 100%;
 }
 
-.face:hover::after {
+.app-shell .face:hover::after {
     opacity: 1;
 }
 
-.front {
+.app-shell .front {
     transform: translateZ(150px);
     border-color: #ae8f14;
 }
 
-.back {
+.app-shell .back {
     transform: translateZ(-150px) rotateY(180deg);
     border-color: #b14be4;
 }
 
-.right {
+.app-shell .right {
     transform: translateX(150px) rotateY(90deg);
     border-color: #ea6535;
 }
 
-.left {
+.app-shell .left {
     transform: translateX(-150px) rotateY(-90deg);
     border-color: #ff7940;
 }
 
-.top {
+.app-shell .top {
     transform: translateY(-150px) rotateX(90deg);
     border-color: #767ed7;
 }
 
-.bottom {
+.app-shell .bottom {
     transform: translateY(150px) rotateX(-90deg);
     border-color: #4dcec6;
 }
@@ -364,15 +357,15 @@ body {
 }
 
 @media (max-width: 768px) {
-    .box-card {
+    .app-shell .box-card {
         width: 150px;
         height: 150px;
     }
     
-    .front { transform: translateZ(75px); }
-    .back { transform: translateZ(-75px) rotateY(180deg); }
-    .right { transform: translateX(75px) rotateY(90deg); }
-    .left { transform: translateX(-75px) rotateY(-90deg); }
-    .top { transform: translateY(-75px) rotateX(90deg); }
-    .bottom { transform: translateY(75px) rotateX(-90deg); }
+    .app-shell .front { transform: translateZ(75px); }
+    .app-shell .back { transform: translateZ(-75px) rotateY(180deg); }
+    .app-shell .right { transform: translateX(75px) rotateY(90deg); }
+    .app-shell .left { transform: translateX(-75px) rotateY(-90deg); }
+    .app-shell .top { transform: translateY(-75px) rotateX(90deg); }
+    .app-shell .bottom { transform: translateY(75px) rotateX(-90deg); }
 }

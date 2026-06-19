@@ -1,7 +1,7 @@
 import { useState } from "react";
+import "./planned_sales.css";
 import { api } from "../../api/client";
 import { formatInt, normalizeValue, unformatNumber } from "./formatters";
-import "./planned_sales.css";
 import { PlannedSalesCharts } from "./PlannedSalesCharts";
 
 
@@ -219,7 +219,7 @@ export function PlannedSalesDashboard({ data, dashboard, onFiltersChange }) {
 
 
   return (
-    <div>
+    <div className="planned-sales-dashboard">
       <h2>План/Факт продаж</h2>
 
       <form id="filterForm">

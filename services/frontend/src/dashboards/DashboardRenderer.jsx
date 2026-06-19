@@ -1,5 +1,6 @@
 import { PlannedSalesDashboard } from "./plannedSales/PlannedSalesDashboard";
-import "./plannedSales/planned_sales.css";
+import { ProjectGanttDashboard } from "./projects/ProjectGanttDashboard";
+import "./spinner.css";
 
 function GlobalSpinner() {
   return (
@@ -27,6 +28,17 @@ export function DashboardRenderer({ data, loading, onFiltersChange }) {
         if (widget.type === "planned_sales_dashboard") {
           return (
             <PlannedSalesDashboard
+              key={widget.id}
+              data={widget.data}
+              dashboard={data.dashboard}
+              onFiltersChange={onFiltersChange}
+            />
+          );
+        }
+
+        if (widget.type === "fb_project_gantt") {
+          return (
+            <ProjectGanttDashboard
               key={widget.id}
               data={widget.data}
               dashboard={data.dashboard}

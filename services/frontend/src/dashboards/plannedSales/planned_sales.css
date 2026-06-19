@@ -1,11 +1,11 @@
 /* ОБЩЕЕ */
-body {
+.planned-sales-dashboard {
     font-family: Helvetica, sans-serif;
 }
 
 
 /* ФИЛЬТРЫ */
-#filterForm {
+.planned-sales-dashboard #filterForm {
     flex-wrap: wrap;
     gap: 14px;
     border: 1px solid #ccc;
@@ -16,13 +16,13 @@ body {
     margin-bottom: 0.5rem;
 }
 
-.filter {
+.planned-sales-dashboard .filter {
   flex-basis: 120px;
   display: flex;
   flex-direction: column;
 }
 
-.filter label {
+.planned-sales-dashboard .filter label {
   display: block;
   font-size: 14px;
   margin-bottom: 1px;
@@ -31,13 +31,13 @@ body {
   text-align: center;
 }
 
-.filter--no-label::before {
+.planned-sales-dashboard .filter--no-label::before {
   display: block;
   min-height: 18px;
   margin-bottom: 4px;
 }
 
-.filters-reset {
+.planned-sales-dashboard .filters-reset {
   margin-left: auto;
   border-radius: 4px;
   height: 44px;
@@ -48,13 +48,13 @@ body {
   transition: all 0.3s ease;
 }
 
-.filters-reset:hover {
+.planned-sales-dashboard .filters-reset:hover {
   color: black;
   border: #c8cec5;
   background: linear-gradient(90deg, #a0a699, #c8cec5);
 }
 
-.filters-export {
+.planned-sales-dashboard .filters-export {
   border-radius: 4px;
   height: 44px;
   cursor: pointer;
@@ -64,7 +64,7 @@ body {
   transition: all 0.3s ease;
 }
 
-.filters-export:hover {
+.planned-sales-dashboard .filters-export:hover {
   color: black;
   border: #c8cec5;
   background: linear-gradient(90deg, #a0a699, #c8cec5);
@@ -72,29 +72,29 @@ body {
 
 /* ===== MULTI-SELECT ===== */
 
-.filter .multi-select {
+.planned-sales-dashboard .filter .multi-select {
   width: 100%;
   position: relative;
   min-height: 24px;
 }
 
 /* Верхняя панель */
-.filter .top-bar {
+.planned-sales-dashboard .filter .top-bar {
 	display: none;
 }
 
-.filter .top-bar:focus-within {
+.planned-sales-dashboard .filter .top-bar:focus-within {
   border-color: #6c6c5a;
   box-shadow: 0 0 0 1px #a0a699;
 }
 
-.filter .selected-items {
+.planned-sales-dashboard .filter .selected-items {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
 }
 
-.filter .tag {
+.planned-sales-dashboard .filter .tag {
   background: #4d5747;
   color: #fff;
   padding: 2px 6px;
@@ -104,7 +104,7 @@ body {
   align-items: center;
 }
 
-.filter .tag button {
+.planned-sales-dashboard .filter .tag button {
   background: none;
   border: none;
   color: white;
@@ -113,7 +113,7 @@ body {
   font-size: 12px;
 }
 
-.filter input[type="text"] {
+.planned-sales-dashboard .filter input[type="text"] {
   border: none;
   outline: none;
   flex: 1;
@@ -124,7 +124,7 @@ body {
 
 /* ===== ПЕРЕДЕЛАННЫЙ DROPDOWN → КНОПКИ ===== */
 
-.filter .dropdown {
+.planned-sales-dashboard .filter .dropdown {
   position: static;           /* убираем absolute */
   display: block !important;  /* всегда виден */
   border: none;
@@ -136,20 +136,20 @@ body {
 }
 
 /* контейнер кнопок */
-#options_date {
+.planned-sales-dashboard #options_date {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
 /* каждая кнопка */
-.filter .dropdown-item {
+.planned-sales-dashboard .filter .dropdown-item {
   flex: 1 1 0;   /* растягиваются равномерно */
   min-width: 0;  /* важно! убирает переполнение */
 }
 
 /* label как кнопка */
-.filter .dropdown-item label {
+.planned-sales-dashboard .filter .dropdown-item label {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -165,17 +165,17 @@ body {
 }
 
 /* hover */
-.filter .dropdown-item label:hover {
+.planned-sales-dashboard .filter .dropdown-item label:hover {
   background: #f0f3f7;
 }
 
 /* скрываем radio */
-.filter .dropdown-item input[type="radio"] {
+.planned-sales-dashboard .filter .dropdown-item input[type="radio"] {
   display: none;
 }
 
 /* активная кнопка */
-.filter .dropdown-item input[type="radio"]:checked + span {
+.planned-sales-dashboard .filter .dropdown-item input[type="radio"]:checked + span {
   display: block;
   width: 100%;
   background: linear-gradient(90deg, #6c6c5a, #4e4e43);
@@ -185,7 +185,7 @@ body {
 }
 
 
-#filter_date_list {
+.planned-sales-dashboard #filter_date_list {
   position: absolute;
   opacity: 0;
   pointer-events: none;
@@ -197,27 +197,27 @@ body {
 
 @media (max-width: 768px) {
 
-  #filterForm {
+  .planned-sales-dashboard #filterForm {
     gap: 10px 8px;
     padding: 12px;
   }
 
-  .filter {
+  .planned-sales-dashboard .filter {
     flex-basis: 100%;
   }
 
-  .filters-reset {
+  .planned-sales-dashboard .filters-reset {
     margin-left: 0;
     margin-top: 8px;
     width: 100%;
   }
 
   /* 2 кнопки в ряд */
-  .filter .dropdown-item {
+  .planned-sales-dashboard .filter .dropdown-item {
     flex: 1 1 calc(50% - 6px);
   }
 
-  .filter .tag {
+  .planned-sales-dashboard .filter .tag {
     font-size: 10px;
   }
 }
@@ -230,7 +230,7 @@ body {
 
 /* === ТАБЛИЦА === */
 /* === ЕДИНЫЙ scroll-контейнер === */
-.gantt-table-wrapper {
+.planned-sales-dashboard .gantt-table-wrapper {
   width: 100%;
   /* height: 70vh; */
   overflow: auto;
@@ -240,12 +240,12 @@ body {
 }
 
 /* УБИРАЕМ scroll отсюда */
-.table-scroll {
+.planned-sales-dashboard .table-scroll {
   width: max-content;
 }
 
 /* === Таблица === */
-table {
+.planned-sales-dashboard table {
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;           /* фиксированная ширина колонок */
@@ -254,7 +254,7 @@ table {
 }
 
 /* === Ячейки === */
-th, td {
+.planned-sales-dashboard th, .planned-sales-dashboard td {
   border: 1px solid #aca5a5;
   min-width: auto;
   width: auto;
@@ -269,7 +269,7 @@ th, td {
 
 /* === ФИКС ПЕРВОГО СТОЛБЦА === */
 /* === ФИКС ПЕРВОГО СТОЛБЦА "НАПРАВЛЕНИЕ" === */
-td.sticky-col {
+.planned-sales-dashboard td.sticky-col {
   position: sticky;
   left: 0;
   z-index: 5;
@@ -281,7 +281,7 @@ td.sticky-col {
 }
 
 /* ШАПКА sticky-колонки - многоуровневая фиксация */
-th.sticky-col {
+.planned-sales-dashboard th.sticky-col {
   position: sticky !important;
   left: 0 !important;
   /* ДИНАМИЧЕСКАЯ фиксация по top */
@@ -295,34 +295,34 @@ th.sticky-col {
 }
 
 /* Увеличиваем z-index для углового элемента */
-thead tr.header-row th.sticky-col {
+.planned-sales-dashboard thead tr.header-row th.sticky-col {
   top: 0 !important;
   z-index: 30 !important;
   background: #eee !important;
 }
 
 /* === Заголовки === */
-thead tr.trend-row th {
+.planned-sales-dashboard thead tr.trend-row th {
   position: sticky;
   top: 0 !important;     /* Фиксируется на самом верху */
   z-index: 20 !important;
 }
 
 /* ВТОРАЯ строка шапки (детали) */
-thead tr.header-row th {
+.planned-sales-dashboard thead tr.header-row th {
   /*position: sticky; */
   /*top: 30px !important; */
   /*z-index: 15 !important; */
 }
 
 /* === Тень у второго столбца === */
-td:nth-child(2),
-th:nth-child(2) {
+.planned-sales-dashboard td:nth-child(2),
+.planned-sales-dashboard th:nth-child(2) {
   position: relative;
 }
 
-td:nth-child(2)::after,
-th:nth-child(2)::after {
+.planned-sales-dashboard td:nth-child(2)::after,
+.planned-sales-dashboard th:nth-child(2)::after {
   content: "";
   position: absolute;
   top: 0;
@@ -334,61 +334,61 @@ th:nth-child(2)::after {
 }
 
 /* Остальные стили без изменений */
-.group-month { background: #e7e6e1; }
-.group-quarter { background: #eae5d2; }
-.group-year { background: #dedcd4; }
+.planned-sales-dashboard .group-month { background: #e7e6e1; }
+.planned-sales-dashboard .group-quarter { background: #eae5d2; }
+.planned-sales-dashboard .group-year { background: #dedcd4; }
 
-td:not(.sticky-col) {
+.planned-sales-dashboard td:not(.sticky-col) {
   text-align: right;
   padding-right: 4px;
 }
 
-td:hover {
+.planned-sales-dashboard td:hover {
   filter: brightness(1.1);
   transform: scale(1.02);
   box-shadow: 0 2px 6px rgba(0,0,0,0.25);
 }
 
-th.b-thick, td.b-thick {
+.planned-sales-dashboard th.b-thick, td.b-thick {
   border-left: 3px solid #666;
 }
 
-.summary-row td {
+.planned-sales-dashboard .summary-row td {
   font-weight: bold;
   background-color: #e7e6e1;
 }
 
-tr.summary-row.level2 td {
+.planned-sales-dashboard tr.summary-row.level2 td {
 	background-color: white;
 }
 
-tr.level3 td {
+.planned-sales-dashboard tr.level3 td {
 	background-color: #f5f5f5;
 	font-weight: normal;
 }
 
-.level2 td.sticky-col { padding-left: 22px; }
-.level3 td.sticky-col { padding-left: 52px; background-color: #f5f5f5; font-style: italic; font-weight: normal;}
+.planned-sales-dashboard .level2 td.sticky-col { padding-left: 22px; }
+.planned-sales-dashboard .level3 td.sticky-col { padding-left: 52px; background-color: #f5f5f5; font-style: italic; font-weight: normal;}
 
-tr.summary-row.level2 td.sticky-col {
+.planned-sales-dashboard tr.summary-row.level2 td.sticky-col {
     padding-left: 22px; /* или любое другое значение */
     font-weight: bold;  /* например, чтобы визуально выделить */
     /*background-color: #f0f0f0;  необязательно, если нужен цветной фон */
 	background-color: white;
 }
 
-tr.summary-row.grand td {
+.planned-sales-dashboard tr.summary-row.grand td {
   border-bottom: 4px double #000;
   background-color: #324552;
   color: white;
 }
 
 /* Горизонтальная тень ПОД второй строкой шапки */
-thead tr.header-row {
+.planned-sales-dashboard thead tr.header-row {
   position: relative;
 }
 
-thead tr.header-row::after {
+.planned-sales-dashboard thead tr.header-row::after {
   content: "";
   position: absolute;
   bottom: -2px;       /* Смещение вниз */
@@ -407,36 +407,36 @@ thead tr.header-row::after {
 }
 
 /* УГОЛОК sticky-колонки в шапке - САМЫЙ ВЫСОКИЙ */
-thead tr.trend-row th.sticky-col,
-thead tr.header-row th.sticky-col {
+.planned-sales-dashboard thead tr.trend-row th.sticky-col,
+.planned-sales-dashboard thead tr.header-row th.sticky-col {
   z-index: 30 !important;
 }
 
-.italics {
+.planned-sales-dashboard .italics {
   font-style: italic;
   color: #635f5f;
 }
 
 
 
-:root {
+.planned-sales-dashboard {
   --first-col: 120px;
   --cols-in-group: 13;
   --col-width: calc((95vw - var(--first-col)) / var(--cols-in-group));
 }
-.group-month,
-.group-quarter,
-.group-year {
+.planned-sales-dashboard .group-month,
+.planned-sales-dashboard .group-quarter,
+.planned-sales-dashboard .group-year {
   min-width: var(--col-width);
   max-width: var(--col-width);
 }
 
-th.group-month,
-th.group-quarter,
-th.group-year {
+.planned-sales-dashboard th.group-month,
+.planned-sales-dashboard th.group-quarter,
+.planned-sales-dashboard th.group-year {
   width: var(--col-width);
 }
-th, td {
+.planned-sales-dashboard th, .planned-sales-dashboard td {
   font-size: clamp(10px, 0.7vw, 14px);
   white-space: nowrap;
 }
@@ -448,33 +448,33 @@ th, td {
 
 /* ИНПУТ */
 
-.col-plan {
+.planned-sales-dashboard .col-plan {
   width: 100px;
   min-width: 100px;
   max-width: 100px;
   padding: 0 4px;
 }
-.col-plan input {
+.planned-sales-dashboard .col-plan input {
   width: 100%;
   box-sizing: border-box;
 }
-.col-projection {
+.planned-sales-dashboard .col-projection {
   width: 100px;
   min-width: 100px;
   max-width: 100px;
   padding: 0 4px;
 }
-.col-projection input {
+.planned-sales-dashboard .col-projection input {
   width: 100%;
   box-sizing: border-box;
 }
-input[type="text"]::-webkit-outer-spin-button,
-input[type="text"]::-webkit-inner-spin-button {
+.planned-sales-dashboard input[type="text"]::-webkit-outer-spin-button,
+.planned-sales-dashboard input[type="text"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-input[type="text"] {
+.planned-sales-dashboard input[type="text"] {
   -moz-appearance: textfield;
   appearance: textfield;
   text-align: right;
@@ -483,14 +483,14 @@ input[type="text"] {
 
 
 /* КРУЖОЧКИ */
-.percent-cell {
+.planned-sales-dashboard .percent-cell {
     white-space: nowrap;        /* Чтобы кружок и текст были на одной линии */
 	position: relative;
 	padding-left: 40px !important;
 	text-align: right;
 }
 
-.percent-dot {
+.planned-sales-dashboard .percent-dot {
     display: inline-block;      /* Без flex */
     width: 15px;                /* Диаметр кружка */
     height: 15px;
@@ -508,7 +508,7 @@ input[type="text"] {
 
 
 /* СПИНЕР */
-.global-spinner-overlay {
+.planned-sales-dashboard .global-spinner-overlay {
     position: fixed;
     top: 0;
     left: 0;
@@ -524,15 +524,15 @@ input[type="text"] {
     transition: opacity 0.3s ease;
 }
 
-.global-spinner-overlay.show {
+.planned-sales-dashboard .global-spinner-overlay.show {
     opacity: 1;
 }
 
-.global-spinner-overlay.hidden {
+.planned-sales-dashboard .global-spinner-overlay.hidden {
     display: none;
 }
 
-.spinner-container {
+.planned-sales-dashboard .spinner-container {
     text-align: center;
     padding: 40px;
     background: white;
@@ -540,7 +540,7 @@ input[type="text"] {
     box-shadow: 0 10px 30px rgba(0,0,0,0.2);
 }
 
-.infinite-spinner {
+.planned-sales-dashboard .infinite-spinner {
     width: 50px;
     height: 50px;
     border: 4px solid #f3f3f3;
@@ -555,7 +555,7 @@ input[type="text"] {
     100% { transform: rotate(360deg); }
 }
 
-.spinner-text {
+.planned-sales-dashboard .spinner-text {
     font-size: 16px;
     color: #333;
     font-weight: 500;
@@ -569,17 +569,17 @@ input[type="text"] {
 
 /* КАРТОЧКИ */
 
-#indicators-container {
+.planned-sales-dashboard #indicators-container {
   margin-bottom: 0.5rem;
 }
 
-.indicators-grid {
+.planned-sales-dashboard .indicators-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
   gap: 0.5rem;
 }
 
-.indicators-group {
+.planned-sales-dashboard .indicators-group {
   background: #fafafa;
   border-radius: 12px;
   padding: 0.7rem;
@@ -589,7 +589,7 @@ input[type="text"] {
   flex-direction: column;
 }
 
-.indicators-group h3 {
+.planned-sales-dashboard .indicators-group h3 {
   margin: 0 0 0.5rem 0;
   color: #2c3e50;
   font-size: 14px;
@@ -597,13 +597,13 @@ input[type="text"] {
   text-align: center;
 }
 
-.indicators-row {
+.planned-sales-dashboard .indicators-row {
   display: flex;
   gap: 0.3rem;
   width: 100%;
 }
 
-.indicator-card {
+.planned-sales-dashboard .indicator-card {
   background: white;
   padding: 0.5rem;
   border-radius: 8px;
@@ -614,12 +614,12 @@ input[type="text"] {
   min-width: 0;
 }
 
-.indicator-card:hover {
+.planned-sales-dashboard .indicator-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 16px rgba(0,0,0,0.15);
 }
 
-.indicator-card .title {
+.planned-sales-dashboard .indicator-card .title {
   font-size: 0.85rem;
   color: #6c757d;
   margin-bottom: 0.5rem;
@@ -629,7 +629,7 @@ input[type="text"] {
   text-overflow: ellipsis;
 }
 
-.indicator-card .value.pct {
+.planned-sales-dashboard .indicator-card .value.pct {
   font-size: 1.2rem;
   font-weight: 700;
   color: #2c3e50;
@@ -640,12 +640,12 @@ input[type="text"] {
 
 /* === ГРАФИКИ === */
 
-#charts-scroll-container {
+.planned-sales-dashboard #charts-scroll-container {
     width: 100%;
     overflow: hidden;
 }
 
-#charts-container {
+.planned-sales-dashboard #charts-container {
     display: flex;
     flex-direction: row;
     gap: 0.5rem;
@@ -658,7 +658,7 @@ input[type="text"] {
     color: #6c757d;
 }
 
-.chart-block {
+.planned-sales-dashboard .chart-block {
     flex: 1 1 0;   
     min-width: 0; 
     background: #fff;
@@ -671,19 +671,18 @@ input[type="text"] {
 	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
-.chart-block:hover {
+.planned-sales-dashboard .chart-block:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 16px rgba(0,0,0,0.15);
 }
 
-.chart-block canvas {
+.planned-sales-dashboard .chart-block canvas {
     width: 100%;
 	height: 200px;
 	display: block;
 }
 
-
-#toast {
+.planned-sales-dashboard #toast {
   position: fixed;
   bottom: 20px;
   right: 20px;

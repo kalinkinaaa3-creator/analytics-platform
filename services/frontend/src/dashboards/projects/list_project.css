@@ -1,0 +1,328 @@
+/* ОБЩЕЕ */
+.project-gantt-dashboard {
+    font-family: Helvetica, sans-serif;
+}
+
+.project-gantt-dashboard #head	{
+visibility: hidden; 
+opacity: 0;        
+}
+
+.project-gantt-dashboard #head.visible  {
+visibility: visible;
+opacity: 1;
+}
+
+
+/* ФИЛЬТРЫ */
+.project-gantt-dashboard #filterForm {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 15px;
+    background-color: #fafafa;
+    position: relative;
+	margin-bottom: 20px;
+}
+
+.project-gantt-dashboard .filter {
+  flex-basis: 120px;          /* ширину берём из модификатора */
+  display: flex;
+  flex-direction: column;
+}
+
+.project-gantt-dashboard .filter label {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+  font-weight: bold;
+  min-height: 18px;
+  text-align: center;
+}
+
+.project-gantt-dashboard .filter input,
+.project-gantt-dashboard .filter select {
+  width: 100%;
+  box-sizing: border-box;
+  height: 24px;
+}
+
+.project-gantt-dashboard .filter--no-label::before {
+  display: block;
+  min-height: 18px;
+  margin-bottom: 4px;
+}
+
+.project-gantt-dashboard .filters-reset {
+  margin-left: auto;    /* кнопка «Очистить» уезжает вправо в третьей строке */
+  border-radius: 4px;
+  height: 44px;
+  cursor: pointer;
+  background: #4d5747;
+  color: white;
+  border: #4d5747;
+  transition: all 0.3s ease;
+  background: linear-gradient(90deg, #6c6c5a, #4e4e43);
+}
+
+.project-gantt-dashboard .filters-reset:hover {
+  color: black;
+  border: #c8cec5;
+  filter: brightness(1);
+  background: linear-gradient(90deg, #a0a699, #c8cec5);
+}
+
+@media (max-width: 768px) {
+  .project-gantt-dashboard #filterForm {
+    gap: 10px 8px;  /* меньше отступов на мобильных */
+    padding: 12px;
+  }
+  
+  .project-gantt-dashboard .filter {
+    flex-basis: 100%;  /* на мобилках каждый фильтр в новую строку */
+  }
+  
+  .project-gantt-dashboard .filters-reset {
+    margin-left: 0;    /* кнопка не уезжает вправо */
+    margin-top: 8px;
+    width: 100%;
+  }
+}
+/* КОНЕЦ ФИЛЬТРОВ */
+
+
+
+
+/* ТАБЛИЦА */
+/* === Контейнер таблицы === */
+.project-gantt-dashboard .gantt-table-wrapper {
+    width: 100%;
+    max-width: 100%;
+    position: relative;
+	overflow-x: auto;   
+	overflow-y: auto;
+	height: 70vh;
+}
+
+/* === Таблица === */
+.project-gantt-dashboard #head {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 100%;
+    table-layout: fixed; /* чтобы ширины колонок работали */
+}
+
+/* === Шапка таблицы === */
+.project-gantt-dashboard #head thead th:nth-child(-n+6) {
+    font-size: 14px;
+    font-weight: bold;
+    height: 32px;
+    padding: 4px 8px;
+    text-align: left;
+    background-color: #f5f5f5;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border-bottom: 1px solid #ccc;
+    border-right: 1px solid #ccc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+/* === Текст ячеек === */
+.project-gantt-dashboard #projectsTableBody td {
+    font-size: 12px;
+    height: 32px;
+    padding: 0 8px;
+    vertical-align: middle;
+    box-sizing: border-box;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+
+
+/* === Первые 6 столбцов с настраиваемой шириной === */
+.project-gantt-dashboard #head th:nth-child(1),
+.project-gantt-dashboard #head td:nth-child(1) { width: 500px; }
+.project-gantt-dashboard #head th:nth-child(2),
+.project-gantt-dashboard #head td:nth-child(2) { width: 150px; }
+.project-gantt-dashboard #head th:nth-child(3),
+.project-gantt-dashboard #head td:nth-child(3) { width: 120px; }
+.project-gantt-dashboard #head th:nth-child(4),
+.project-gantt-dashboard #head td:nth-child(4) { width: 80px; }
+.project-gantt-dashboard #head th:nth-child(5),
+.project-gantt-dashboard #head td:nth-child(5) { width: 100px; }
+.project-gantt-dashboard #head th:nth-child(6),
+.project-gantt-dashboard #head td:nth-child(6) { width: 100px; }
+
+/* === Границы === */
+.project-gantt-dashboard #head td, .project-gantt-dashboard #head th {
+    border-bottom: 1px solid #ccc;
+}
+
+/* Толстые границы для проектов */
+.project-gantt-dashboard #projectsTableBody .node-row td,
+.project-gantt-dashboard #projectsTableBody tr[class^="fact-row"] td {
+    border-top: 1px solid #666;
+    border-bottom: 1px solid #666;
+}
+
+
+/* Менее жирные границы для узлов и задач */
+.project-gantt-dashboard #projectsTableBody tr[class^="child-of-"] td {
+    border-top: 1px solid #aaa;
+    border-bottom: 1px solid #aaa;
+}
+
+
+/* === Первый столбец === */
+.project-gantt-dashboard #projectsTableBody .node-row > td:first-child {
+    background-color: #f5f5f5; /* совпадает с шапкой */
+}
+
+/* === Вертикальные границы между первыми 6 столбцами === */
+.project-gantt-dashboard #head td:nth-child(-n+6),
+.project-gantt-dashboard #head th:nth-child(-n+6) {
+    border-right: 1px solid #ccc;
+}
+
+/* === Ширина колонок по месяцам === */
+.project-gantt-dashboard .month-col {
+    width: 62px !important;
+	position: relative; 
+	box-sizing: border-box;
+    font-size: 12px;
+    font-weight: bold;
+    height: 32px;
+    padding: 4px 8px;
+    text-align: left;
+    background-color: #f5f5f5;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    outline: 1px solid #ccc;
+}
+
+/* === Стили для Gantt bar === */
+.project-gantt-dashboard .gantt-bar {
+    background: linear-gradient(90deg, #6c6c5a, #4e4e43);
+    border-radius: 4px;
+    transition: all 0.3s ease; /* плавный переход */
+    box-shadow: 1px 1px 4px rgba(0,0,0,0.3);
+    position: absolute; /* чтобы scale работал корректно */
+    top: 0;
+    height: 32px;
+}
+
+.project-gantt-dashboard .gantt-bar-fact {
+    background: linear-gradient(90deg, #f5e77f, #f7e978);
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    box-shadow: 1px 1px 4px rgba(0,0,0,0.3);
+    position: absolute;
+    top: 0;
+    height: 32px;
+}
+
+/* === Наведение на бары === */
+.project-gantt-dashboard .gantt-bar:hover {
+    transform: scale(1.05, 1.5); /* ширина и высота */
+    filter: brightness(1.2);
+    z-index: 9;
+}
+
+.project-gantt-dashboard .gantt-bar-fact:hover {
+    transform: scale(1.05, 1.5);
+    filter: brightness(1.15);
+    z-index: 9;
+}
+
+
+.project-gantt-dashboard .tooltip {
+    position: relative;
+    cursor: pointer;
+}
+
+
+/* === Столбец Тип === */
+.project-gantt-dashboard #projectsTableBody td:nth-child(4) {
+    text-align: center;
+}
+
+.project-gantt-dashboard #projectsTableBody td.type-plan { background-color: #6c6c5a; color: white; }
+.project-gantt-dashboard #projectsTableBody td.type-fact { background-color: #f7e978; }
+
+/* === Закрепление первого столбца === */
+.project-gantt-dashboard #projectsTableBody td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 11;
+	top: 0;
+    background-color: #fdfcfc;
+}
+
+.project-gantt-dashboard #head th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 13 !important;
+	top: 0;
+    background-color: #e8e8e8 !important;
+}
+
+/* === Тень при скролле на закрепленный первый столбец === */
+.project-gantt-dashboard #projectsTableBody td:first-child::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 4px;
+    height: 100%;
+    box-shadow: 2px 0 6px rgba(0,0,0,0.2);
+    pointer-events: none;
+}
+
+.project-gantt-dashboard .today-line {
+    pointer-events: none; 
+	position:absolute; 
+	top:0; 
+	width:2px; 
+	height:100%; 
+	background:red; 
+	z-index:8;
+}
+
+
+
+
+
+
+/* === Адаптивность === */
+@media (max-width: 1200px) {
+    .project-gantt-dashboard #head th, #head td { font-size: 11px; }
+    .project-gantt-dashboard #head td:nth-child(1) { width: 200px; }
+    .project-gantt-dashboard #head td:nth-child(2) { width: 120px; }
+}
+
+@media (max-width: 768px) {
+    .project-gantt-dashboard #head th, #head td { font-size: 10px; }
+    .project-gantt-dashboard #head td:nth-child(1) { width: 150px; }
+    .project-gantt-dashboard #head td:nth-child(2) { width: 100px; }
+    .project-gantt-dashboard .month-col { width: 50px !important; }
+}
+
+
+
+
+
+
+
