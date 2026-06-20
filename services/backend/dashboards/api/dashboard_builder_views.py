@@ -19,6 +19,51 @@ class DashboardBuilderView(APIView):
 
         return dashboard
 
+    def _normalize_filters(self, filters):
+        filters = filters or {}
+        normalized = {}
+
+        for key, value in filters.items():
+            if value in ("", None, [], ()):
+                continue
+
+            if isinstance(value, tuple):
+                value = list(value)
+
+            if isinstance(value, list):
+                clean_values = [
+                    item
+                    for item in value
+                    if item not in ("", None)
+                ]
+
+                if clean_values:
+                    normalized[key] = clean_values
+
+                continue
+
+            normalized[key] = value
+
+        return normalized
+
+    def _get_filters_from_query_params(self, request):
+        filters = {}
+
+        for key in request.query_params.keys():
+            values = request.query_params.getlist(key)
+
+            if len(values) > 1:
+                filters[key] = values
+            elif values:
+                filters[key] = values[0]
+
+        return self._normalize_filters(filters)
+
+    def _get_filters_from_body(self, request):
+        filters = request.data or {}
+
+        return self._normalize_filters(filters)
+
     def _build_response(self, request, dashboard_slug, filters):
         dashboard = self._get_dashboard(dashboard_slug)
 
@@ -38,15 +83,7 @@ class DashboardBuilderView(APIView):
         return Response(result)
 
     def get(self, request, dashboard_slug):
-        filters = {}
-
-        for key in request.query_params.keys():
-            values = request.query_params.getlist(key)
-
-            if len(values) > 1:
-                filters[key] = values
-            elif values:
-                filters[key] = values[0]
+        filters = self._get_filters_from_query_params(request)
 
         return self._build_response(
             request=request,
@@ -55,7 +92,7 @@ class DashboardBuilderView(APIView):
         )
 
     def post(self, request, dashboard_slug):
-        filters = request.data or {}
+        filters = self._get_filters_from_body(request)
 
         return self._build_response(
             request=request,

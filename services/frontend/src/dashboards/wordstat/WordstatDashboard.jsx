@@ -1,12 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import "./wordstat.css";
+import "../spinner.css";
 
 const FILTERS = [
   ["feature", "Категории"],
   ["category", "Подкатегории"],
   ["phrase", "Запросы"],
 ];
+
+function GlobalSpinner() {
+  return (
+    <div className="global-spinner-overlay show">
+      <div className="spinner-container">
+        <div className="infinite-spinner"></div>
+        <div className="spinner-text">Загрузка данных...</div>
+      </div>
+    </div>
+  );
+}
 
 const MONTH_FIELDS = [
   "month_1",
@@ -65,28 +77,30 @@ const QUARTER_FIELDS = [
 
 function normalizeList(value) {
   if (!value) return [];
-  if (Array.isArray(value)) return value;
-  return [value];
+
+  if (Array.isArray(value)) {
+    return value.filter((item) => item !== "" && item !== null && item !== undefined);
+  }
+
+  return [value].filter((item) => item !== "" && item !== null && item !== undefined);
 }
 
-function buildParams(filters, page = null) {
-  const params = new URLSearchParams();
+function buildPayload(filters, page = null) {
+  const payload = {};
 
   Object.entries(filters || {}).forEach(([key, value]) => {
     const values = normalizeList(value);
 
-    values.forEach((item) => {
-      if (item) {
-        params.append(key, item);
-      }
-    });
+    if (values.length > 0) {
+      payload[key] = values;
+    }
   });
 
   if (page) {
-    params.set("page", String(page));
+    payload.page = page;
   }
 
-  return params;
+  return payload;
 }
 
 function getCellColor(row, field, index) {
@@ -143,17 +157,20 @@ function MultiSelect({
   const [search, setSearch] = useState("");
   const [pending, setPending] = useState(false);
 
-  const selectedSet = useMemo(() => new Set(selected), [selected]);
+  const safeOptions = options || [];
+  const safeSelected = selected || [];
+
+  const selectedSet = useMemo(() => new Set(safeSelected), [safeSelected]);
 
   const visibleOptions = useMemo(() => {
     const q = search.trim().toLowerCase();
 
-    if (!q) return options;
+    if (!q) return safeOptions;
 
-    return options.filter((item) =>
+    return safeOptions.filter((item) =>
       String(item).toLowerCase().includes(q)
     );
-  }, [options, search]);
+  }, [safeOptions, search]);
 
   const allVisibleSelected =
     visibleOptions.length > 0 &&
@@ -188,26 +205,26 @@ function MultiSelect({
 
   function toggleItem(item) {
     if (selectedSet.has(item)) {
-      updateSelected(selected.filter((value) => value !== item));
+      updateSelected(safeSelected.filter((value) => value !== item));
       return;
     }
 
-    updateSelected([...selected, item]);
+    updateSelected([...safeSelected, item]);
   }
 
   function toggleAllVisible() {
     if (allVisibleSelected) {
       updateSelected(
-        selected.filter((item) => !visibleOptions.includes(item))
+        safeSelected.filter((item) => !visibleOptions.includes(item))
       );
       return;
     }
 
-    updateSelected(Array.from(new Set([...selected, ...visibleOptions])));
+    updateSelected(Array.from(new Set([...safeSelected, ...visibleOptions])));
   }
 
   function removeItem(item) {
-    updateSelected(selected.filter((value) => value !== item));
+    updateSelected(safeSelected.filter((value) => value !== item));
   }
 
   function handleInputKeyDown(event) {
@@ -220,23 +237,23 @@ function MultiSelect({
     if (!value) return;
 
     if (!selectedSet.has(value)) {
-      updateSelected([...selected, value]);
+      updateSelected([...safeSelected, value]);
     }
 
     setSearch("");
   }
 
   function renderSelectedTags() {
-    if (selected.length === 0) return null;
+    if (safeSelected.length === 0) return null;
 
-    if (selected.length > 1) {
+    if (safeSelected.length > 1) {
       return <div className="tag">...</div>;
     }
 
     return (
       <div className="tag">
-        {selected[0]}
-        <button type="button" onClick={() => removeItem(selected[0])}>
+        {safeSelected[0]}
+        <button type="button" onClick={() => removeItem(safeSelected[0])}>
           ×
         </button>
       </div>
@@ -462,25 +479,28 @@ function WordstatHeader() {
   );
 }
 
-export function WordstatDashboard({ data, onFiltersChange }) {
+export function WordstatDashboard({ data }) {
   const wrapperRef = useRef(null);
 
   const [rows, setRows] = useState(data?.rows || []);
   const [pagination, setPagination] = useState(data?.pagination || {});
+  const [filterValues, setFilterValues] = useState(data?.filter_values || {});
+
   const [localFilters, setLocalFilters] = useState({
     feature: normalizeList(data?.filters?.feature),
     category: normalizeList(data?.filters?.category),
     phrase: normalizeList(data?.filters?.phrase),
   });
 
+  const [isApplyingFilters, setIsApplyingFilters] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-
-  const filterValues = data?.filter_values || {};
 
   useEffect(() => {
     setRows(data?.rows || []);
     setPagination(data?.pagination || {});
+    setFilterValues(data?.filter_values || {});
+
     setLocalFilters({
       feature: normalizeList(data?.filters?.feature),
       category: normalizeList(data?.filters?.category),
@@ -497,12 +517,43 @@ export function WordstatDashboard({ data, onFiltersChange }) {
     [localFilters]
   );
 
-  function applyFilters() {
-    if (onFiltersChange) {
-      onFiltersChange({
-        ...currentFilters,
-        page: "",
-      });
+  async function fetchWordstat(nextFilters, page = 1, append = false) {
+    const payload = buildPayload(nextFilters, page);
+
+    const response = await api.post(
+      "/v1/dashboards/builder/wordstat/",
+      payload
+    );
+
+    const widget = response.data?.widgets?.find(
+      (item) => item.type === "yd_wordstat_table"
+    );
+
+    const nextData = widget?.data;
+
+    if (!nextData) return;
+
+    if (append) {
+      setRows((prev) => [...prev, ...(nextData.rows || [])]);
+    } else {
+      setRows(nextData.rows || []);
+
+      if (wrapperRef.current) {
+        wrapperRef.current.scrollTop = 0;
+      }
+    }
+
+    setPagination(nextData.pagination || {});
+    setFilterValues(nextData.filter_values || {});
+  }
+
+  async function applyFilters() {
+    setIsApplyingFilters(true);
+
+    try {
+      await fetchWordstat(currentFilters, 1, false);
+    } finally {
+      setIsApplyingFilters(false);
     }
   }
 
@@ -513,27 +564,25 @@ export function WordstatDashboard({ data, onFiltersChange }) {
     }));
   }
 
-  function resetFilters() {
+  async function resetFilters() {
     const next = {
       feature: [],
       category: [],
       phrase: [],
-      page: "",
     };
 
-    setLocalFilters({
-      feature: [],
-      category: [],
-      phrase: [],
-    });
+    setLocalFilters(next);
+    setIsApplyingFilters(true);
 
-    if (onFiltersChange) {
-      onFiltersChange(next);
+    try {
+      await fetchWordstat(next, 1, false);
+    } finally {
+      setIsApplyingFilters(false);
     }
   }
 
   async function loadNextPage() {
-    if (isLoadingMore || !pagination?.has_next) return;
+    if (isLoadingMore || isApplyingFilters || !pagination?.has_next) return;
 
     const nextPage = pagination.next_page;
 
@@ -542,22 +591,7 @@ export function WordstatDashboard({ data, onFiltersChange }) {
     setIsLoadingMore(true);
 
     try {
-      const params = buildParams(currentFilters, nextPage);
-
-      const response = await api.get(
-        `/v1/dashboards/builder/wordstat/?${params.toString()}`
-      );
-
-      const widget = response.data?.widgets?.find(
-        (item) => item.type === "yd_wordstat_table"
-      );
-
-      const nextData = widget?.data;
-
-      if (!nextData) return;
-
-      setRows((prev) => [...prev, ...(nextData.rows || [])]);
-      setPagination(nextData.pagination || {});
+      await fetchWordstat(currentFilters, nextPage, true);
     } finally {
       setIsLoadingMore(false);
     }
@@ -566,9 +600,7 @@ export function WordstatDashboard({ data, onFiltersChange }) {
   function handleScroll(event) {
     const element = event.currentTarget;
 
-    const scrollBottom =
-      element.scrollTop + element.clientHeight;
-
+    const scrollBottom = element.scrollTop + element.clientHeight;
     const threshold = element.scrollHeight - 80;
 
     if (scrollBottom >= threshold) {
@@ -580,12 +612,15 @@ export function WordstatDashboard({ data, onFiltersChange }) {
     setIsExporting(true);
 
     try {
-      const params = buildParams(currentFilters);
-      const url = `/v1/datasets/yd-wordstat/export/?${params.toString()}`;
+      const payload = buildPayload(currentFilters);
 
-      const response = await api.get(url, {
-        responseType: "blob",
-      });
+      const response = await api.post(
+        "/v1/datasets/yd-wordstat/export/",
+        payload,
+        {
+          responseType: "blob",
+        }
+      );
 
       const blobUrl = window.URL.createObjectURL(response.data);
       const link = document.createElement("a");
@@ -634,6 +669,7 @@ export function WordstatDashboard({ data, onFiltersChange }) {
           id="resetFilters"
           className="filters-reset"
           onClick={resetFilters}
+          disabled={isApplyingFilters}
         >
           Очистить
         </button>
@@ -661,6 +697,7 @@ export function WordstatDashboard({ data, onFiltersChange }) {
           <div id="infiniteSpinner" className="infinite-spinner"></div>
         )}
       </div>
+      {isApplyingFilters && <GlobalSpinner />}
     </div>
   );
 }

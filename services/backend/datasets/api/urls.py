@@ -33,7 +33,9 @@ from .views import (
     FBAccreceivApiLoadView,
     TableHealthCheckView,
     ProcessKillView,
-
+    PublicFBTurnoverExportView, 
+    PublicFBAccreceivExportView,
+    PublicFBPurchasesExportView,
 )
 
 
@@ -99,6 +101,21 @@ urlpatterns = [
     path("fb-purchases/export/", FBPurchasesExportView.as_view()),
     path("fb-turnover/export/", FBTurnoverExportView.as_view()),
     path("fb-accreceiv/export/", FBAccreceivExportView.as_view()),
+
+    path(
+        "public-group/<uuid:token>/fb-turnover/export/",
+        PublicFBTurnoverExportView.as_view(),
+    ),
+    path(
+        "public-group/<uuid:token>/fb-accreceiv/export/",
+        PublicFBAccreceivExportView.as_view(),
+    ),
+    path(
+        "public-group/<uuid:token>/fb-purchases/export/",
+        PublicFBAccreceivExportView.as_view(),
+    ),
+
+
 
     path("planned-sales/upload/", PlannedSalesUploadView.as_view()),
     path("planned-sales/plan-upload/", PlanSalesUploadView.as_view()),

@@ -481,11 +481,23 @@ class ClickHouseRepository:
         for field in list_filters:
             value = filters.get(field)
 
-            if not value:
+            if value in ("", None, [], ()):
                 continue
 
             if isinstance(value, str):
                 value = [value]
+
+            if isinstance(value, tuple):
+                value = list(value)
+
+            value = [
+                str(item)
+                for item in value
+                if item not in ("", None)
+            ]
+
+            if not value:
+                continue
 
             where.append(f"{field} IN %({field})s")
             params[field] = tuple(value)
@@ -761,6 +773,7 @@ class ClickHouseRepository:
 
         return len(payload)
 
+
     def fetch_fb_turnover_use_rows(self, filters=None):
         ensure_fb_turnover_use_table()
 
@@ -771,21 +784,36 @@ class ClickHouseRepository:
         where = []
         params = {}
 
-        if filters.get("nomenclature"):
-            where.append("nomenclature = %(nomenclature)s")
-            params["nomenclature"] = filters["nomenclature"]
+        list_filters = [
+            "nomenclature",
+            "warehouse_group",
+            "warehouse",
+            "quantity",
+        ]
 
-        if filters.get("warehouse_group"):
-            where.append("warehouse_group = %(warehouse_group)s")
-            params["warehouse_group"] = filters["warehouse_group"]
+        for field in list_filters:
+            value = filters.get(field)
 
-        if filters.get("warehouse"):
-            where.append("warehouse = %(warehouse)s")
-            params["warehouse"] = filters["warehouse"]
+            if value in ("", None, [], ()):
+                continue
 
-        if filters.get("quantity"):
-            where.append("quantity = %(quantity)s")
-            params["quantity"] = filters["quantity"]
+            if isinstance(value, str):
+                value = [value]
+
+            if isinstance(value, tuple):
+                value = list(value)
+
+            value = [
+                str(item)
+                for item in value
+                if item not in ("", None)
+            ]
+
+            if not value:
+                continue
+
+            where.append(f"{field} IN %({field})s")
+            params[field] = tuple(value)
 
         if filters.get("date_start"):
             where.append("date_start >= %(date_start)s")
@@ -856,7 +884,6 @@ class ClickHouseRepository:
             dict(zip(FB_TURNOVER_INDICATOR_COLUMNS, row))
             for row in result
         ]
-
 
 
 
@@ -934,6 +961,7 @@ class ClickHouseRepository:
 
         return len(payload)
 
+
     def fetch_fb_accreceiv_use_rows(self, filters=None):
         ensure_fb_accreceiv_use_table()
 
@@ -944,17 +972,35 @@ class ClickHouseRepository:
         where = []
         params = {}
 
-        if filters.get("partner"):
-            where.append("partner = %(partner)s")
-            params["partner"] = filters["partner"]
+        list_filters = [
+            "partner",
+            "contract_partner",
+            "manager_name",
+        ]
 
-        if filters.get("contract_partner"):
-            where.append("contract_partner = %(contract_partner)s")
-            params["contract_partner"] = filters["contract_partner"]
+        for field in list_filters:
+            value = filters.get(field)
 
-        if filters.get("manager_name"):
-            where.append("manager_name = %(manager_name)s")
-            params["manager_name"] = filters["manager_name"]
+            if value in ("", None, [], ()):
+                continue
+
+            if isinstance(value, str):
+                value = [value]
+
+            if isinstance(value, tuple):
+                value = list(value)
+
+            value = [
+                str(item)
+                for item in value
+                if item not in ("", None)
+            ]
+
+            if not value:
+                continue
+
+            where.append(f"{field} IN %({field})s")
+            params[field] = tuple(value)
 
         if filters.get("date_start"):
             where.append("date_start >= %(date_start)s")
@@ -989,7 +1035,36 @@ class ClickHouseRepository:
     def fetch_fb_accreceiv_indicator_rows(self, filters=None):
         ensure_fb_accreceiv_indicator_table()
 
+        filters = filters or {}
+
         client = get_clickhouse_client()
+
+        where = []
+        params = {}
+
+        value = filters.get("manager_name")
+
+        if value not in ("", None, [], ()):
+            if isinstance(value, str):
+                value = [value]
+
+            if isinstance(value, tuple):
+                value = list(value)
+
+            value = [
+                str(item)
+                for item in value
+                if item not in ("", None)
+            ]
+
+            if value:
+                where.append("manager_name IN %(manager_name)s")
+                params["manager_name"] = tuple(value)
+
+        where_sql = ""
+
+        if where:
+            where_sql = "WHERE " + " AND ".join(where)
 
         columns_sql = ", ".join(FB_ACCRECEIV_INDICATOR_COLUMNS)
 
@@ -997,15 +1072,16 @@ class ClickHouseRepository:
             f"""
             SELECT {columns_sql}
             FROM default.fb_accreceiv_ind
+            {where_sql}
             ORDER BY manager_name
-            """
+            """,
+            params,
         )
 
         return [
             dict(zip(FB_ACCRECEIV_INDICATOR_COLUMNS, row))
             for row in result
         ]
-
 
 
 

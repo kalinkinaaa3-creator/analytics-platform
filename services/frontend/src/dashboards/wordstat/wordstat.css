@@ -168,7 +168,7 @@
   outline: none;
   flex: 1;
   min-width: 60px;
-  height: 20px;
+  /* height: 20px; */
   font-size: 13px;
 }
 
@@ -181,7 +181,7 @@
   border-radius: 6px;
   border: 1px solid #ccc;
   margin-top: 4px;
-  max-height: 220px;
+  max-height: 400px;
   overflow-y: auto;
   display: none;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);

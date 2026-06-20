@@ -1,0 +1,898 @@
+/* ОБЩЕЕ */
+.turnover {
+  font-family: Helvetica, sans-serif;
+	overflow-x: hidden;
+}
+
+
+/* ФИЛЬТРЫ */
+.turnover #filterForm {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 15px;
+    background-color: #fafafa;
+    position: relative;
+	margin-bottom: 20px;
+}
+
+.turnover .filter {
+  flex-basis: 120px;          /* ширину берём из модификатора */
+  display: flex;
+  flex-direction: column;
+}
+
+.turnover .filter label {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+  font-weight: bold;
+  min-height: 18px;
+  text-align: center;
+}
+
+/*
+.filter input,
+.filter select {
+  width: 100%;
+  box-sizing: border-box;
+  height: 24px;
+}
+*/
+
+.turnover .filter--no-label::before {
+  display: block;
+  min-height: 18px;
+  margin-bottom: 4px;
+}
+
+.turnover .filters-reset {
+  margin-left: auto;    /* кнопка «Очистить» уезжает вправо в третьей строке */
+  border-radius: 4px;
+  height: 44px;
+  cursor: pointer;
+  background: #4d5747;
+  color: white;
+  border: #4d5747;
+  transition: all 0.3s ease;
+  background: linear-gradient(90deg, #6c6c5a, #4e4e43);
+}
+
+.turnover .filters-reset:hover {
+  color: black;
+  border: #c8cec5;
+  filter: brightness(1);
+  background: linear-gradient(90deg, #a0a699, #c8cec5);
+}
+
+.turnover .filters-export {
+  border-radius: 4px;
+  height: 44px;
+  cursor: pointer;
+  background: #4d5747;
+  color: white;
+  border: #4d5747;
+  transition: all 0.3s ease;
+  background: linear-gradient(90deg, #6c6c5a, #4e4e43);
+}
+
+.turnover .filters-export:hover {
+  color: black;
+  border: #c8cec5;
+  filter: brightness(1);
+  background: linear-gradient(90deg, #a0a699, #c8cec5);
+}
+
+
+@media (max-width: 768px) {
+  .turnover #filterForm {
+    gap: 10px 8px;  /* меньше отступов на мобильных */
+    padding: 12px;
+  }
+  
+  .turnover .filter {
+    flex-basis: 100%;  /* на мобилках каждый фильтр в новую строку */
+  }
+  
+  .turnover .filters-reset {
+    margin-left: 0;    /* кнопка не уезжает вправо */
+    margin-top: 8px;
+    width: 100%;
+  }
+}
+
+
+
+
+
+
+
+
+
+@media (max-width: 768px) {
+  .turnover #filterForm {
+    gap: 10px 8px;  /* меньше отступов на мобильных */
+    padding: 12px;
+  }
+  
+  .turnover .filter {
+    flex-basis: 100%;  /* на мобилках каждый фильтр в новую строку */
+  }
+  
+  .turnover .filters-reset {
+    margin-left: 0;    /* кнопка не уезжает вправо */
+    margin-top: 8px;
+    width: 100%;
+  }
+}
+
+.turnover #date_start_filter,
+.turnover #date_end_filter {
+  min-height: 20px;
+}
+
+
+
+
+
+
+
+
+/* ===== MULTI-SELECT ВНУТРИ ФИЛЬТРОВ ===== */
+
+.turnover .filter .multi-select {
+  width: 100%;
+  position: relative;
+}
+
+/* Верхняя панель (как input/select раньше) */
+.turnover .filter .top-bar {
+  border: 1px solid #000;
+  border-radius: 2px;
+  background: #fff;
+  min-height: 24px;
+  padding: 2px 6px;
+
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+
+  box-sizing: border-box;
+}
+
+/* Фокус как у input */
+.turnover .filter .top-bar:focus-within {
+  border-color: #6c6c5a;
+  box-shadow: 0 0 0 1px #a0a699;
+}
+
+/* Контейнер выбранных */
+.turnover .filter .selected-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* Теги */
+.turnover .filter .tag {
+  background: #4d5747;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+}
+
+/* Крестик */
+.turnover .filter .tag button {
+  background: none;
+  border: none;
+  color: white;
+  margin-left: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* Input внутри */
+.turnover .filter input[type="text"] {
+  border: none;
+  outline: none;
+  flex: 1;
+  min-width: 60px;
+  /* height: 20px; */
+  font-size: 13px;
+}
+
+/* ===== DROPDOWN ===== */
+
+.turnover .filter .dropdown {
+  position: absolute;
+  width: 100%;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  margin-top: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+  display: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 100;
+}
+
+/* Показ (будешь через JS добавлять класс) */
+.turnover .filter .multi-select.open .dropdown {
+  display: block;
+}
+
+/* Элемент */
+.turnover .filter .dropdown-item {
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+/* Hover */
+.turnover .filter .dropdown-item:hover {
+  background: #f0f3f7;
+}
+
+/* Label внутри */
+.turnover .filter .dropdown-item label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-weight: normal;
+  text-align: left;
+}
+
+/* Select all */
+.turnover .filter .select-all {
+  border-bottom: 1px solid #eee;
+  font-weight: bold;
+  background: #fafafa;
+}
+
+/* Чекбоксы аккуратнее */
+.turnover .filter input[type="checkbox"] {
+  transform: scale(0.9);
+  cursor: pointer;
+}
+
+/* ===== АДАПТАЦИЯ ПОД ТВОЮ СЕТКУ ===== */
+
+/* чтобы высота была как у select */
+.turnover .filter .multi-select {
+  min-height: 24px;
+}
+
+/* фикс чтобы dropdown не ломал layout */
+.turnover .filter {
+  position: relative;
+}
+
+/* ===== MOBILE ===== */
+
+@media (max-width: 768px) {
+
+  .turnover .filter .dropdown {
+    max-height: 180px;
+  }
+
+  .turnover .filter .tag {
+    font-size: 10px;
+  }
+
+}
+
+
+
+/* КОНЕЦ ФИЛЬТРОВ */
+
+
+
+
+
+
+
+
+
+
+
+/* ========== ИНДИКАТОРЫ ========== */
+
+.turnover .indicators-container {
+  display: flex;
+  gap: 16px;
+  font-family: Helvetica, sans-serif;
+  margin-bottom: 20px;
+}
+
+/* Колонки */
+.turnover .indicators-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+
+/* Карточка индикатора */
+.turnover .indicator-card {
+  background-color: #f8f9fa;  /* светлый фон */
+  border: 1px solid #ddd;     /* рамка */
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+/* Эффект при наведении */
+.turnover .indicator-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Левая и правая колонки: карточки равной высоты */
+.turnover .indicators-column .indicator-card {
+  flex: 1;
+}
+
+/* Центральная карточка (Отклонение) — по высоте равна двум карточкам боковых колонок */
+.turnover .indicators-center .indicator-card {
+  flex: 2;
+}
+
+/* Заголовок карточки */
+.turnover .indicator-card .title {
+  font-size: 16px;
+  color: #555;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+/* Значение */
+.turnover .indicator-card .value {
+  font-size: 28px;
+  font-weight: bold;
+  color: #222;
+}
+
+.turnover .title-deviation {
+  font-size: 22px !important;
+}
+
+.turnover .indicator-card .value.deviation.red {
+    color: #d60000;
+}
+
+.turnover .deviation-number {
+  font-size: 30px !important;
+}
+
+
+
+
+
+
+
+
+
+/* ========== ДЛЯ ТАБЛИЦЫ ========== */
+.turnover .purchases-table-wrapper {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    margin-top: 20px;
+    border-radius: 8px;           /* скругленные углы для обертки */
+    overflow-y: auto;
+    position: relative;
+    font-size: 12px;              /* размер шрифта */
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.turnover #purchasesTable {
+    width: 100%;
+    border-collapse: separate;      /* отдельные границы для скруглений */
+    border-spacing: 0;              /* убираем щели между ячейками */
+    border-radius: 8px;             /* скругляем углы таблицы */
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    background: white;              /* фон основной таблицы */
+    font-size: 12px;
+	border-collapse: collapse;
+}
+
+/* Заголовки */
+.turnover .purchases-table-wrapper th {
+    background: #eee;               /* фон заголовков */
+    color: #000;                    /* текст черный */
+    padding: 12px 8px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    border: 1px solid #ddd;         /* границы */
+    border-bottom: 2px solid #ccc;  /* выделяем нижнюю границу */
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+/* Скругляем углы заголовков */
+.turnover .purchases-table-wrapper th:first-child {
+    border-top-left-radius: 8px;
+    border-left: 1px solid #ddd;
+}
+.turnover .purchases-table-wrapper th:last-child {
+    border-top-right-radius: 8px;
+    border-right: 1px solid #ddd;
+}
+
+/* Ячейки таблицы */
+.turnover .purchases-table-wrapper td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #ddd;
+    border-left: 1px solid #ddd;
+    border-right: 1px solid #ddd;
+    background: white;               /* фон обычных ячеек */
+    font-size: 12px;
+}
+
+/* Нижние углы таблицы */
+.turnover .purchases-table-wrapper tr:last-child td:first-child {
+    border-bottom-left-radius: 8px;
+}
+.turnover .purchases-table-wrapper tr:last-child td:last-child {
+    border-bottom-right-radius: 8px;
+}
+
+
+.turnover .purchases-table-wrapper .number {
+    text-align: right;
+    font-family: sans-serif, monospace; /* фиксированная ширина */
+    white-space: nowrap; /* чтобы числа не переносились */
+}
+
+/* Hover эффект */
+.turnover .purchases-table-wrapper tr:hover td {
+    background-color: #f8f9fa;      /* подсветка при наведении */
+}
+
+
+
+
+
+.turnover .global-spinner-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.turnover .global-spinner-overlay.show {
+    opacity: 1;
+}
+
+.turnover .global-spinner-overlay.hidden {
+    display: none;
+}
+
+.turnover .spinner-container {
+    text-align: center;
+    padding: 40px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.turnover .infinite-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 15px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.turnover .spinner-text {
+    font-size: 16px;
+    color: #333;
+    font-weight: 500;
+}
+
+
+
+.turnover .positive { 
+	color: red !important; 
+}
+/* .negative { color: #307672; } */
+
+
+
+
+
+/* ========== ГРАФИК ========== */
+
+.turnover .chart {
+  width: 100%;
+  height: 400px;  /* высота графика */
+  position: relative;
+  font-family: sans-serif;
+  background: #f8f9fa;  /* фон для видимости */
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.turnover .chart-title {
+  position: relative;           /* чтобы легенда можно было позиционировать внутри */
+  text-align: center;           /* название по центру */
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.turnover .chart-title-text {
+  display: inline-block;        /* центрируем текст по горизонтали */
+  max-width: 70%;              /* оставляем место справа для легенды */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; 
+}
+
+.turnover .chart-body {
+  position: relative;
+  height: 280px;
+  margin-left: 60px;
+  margin-right: 20px;
+  border-left: 2px solid #666;
+  border-bottom: 2px solid #666;
+  width: calc(100% - 80px); /* точная ширина без смещения */
+}
+
+/* ТОЧКИ */
+.turnover .point {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  z-index: 10;
+  transform: translate(-50%, -50%);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease; /* плавный hover */
+  cursor: pointer;
+}
+
+.turnover .point.fact { background: #7f4a88; }
+.turnover .point.plan { background: #307672; }
+
+/* Hover эффект для точек */
+.turnover .point:hover {
+  transform: translate(-50%, -50%) scale(1.3) !important; /* увеличиваем */
+  filter: brightness(1.2);                      /* делаем цвет ярче */
+  box-shadow: 0 4px 10px rgba(0,0,0,0.35);    /* добавляем тень */
+}
+
+/* Y GRID */
+.turnover .y-tick {
+  position: absolute;
+  left: 0;                 
+  bottom: calc(var(--y, 0) * 100%);
+  width: 100%;             
+  height: 1px;
+  background: #ddd;
+}
+
+.turnover .y-tick span {
+  position: absolute;
+  right: 100%;          
+  margin-right: 8px;    
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #000000;
+  font-weight: 500;
+  min-width: 45px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* X ОСЬ */
+.turnover .x-axis {
+  position: absolute;
+  bottom: -20px;
+  left: 0;              
+  width: 100%;           
+  height: 25px;
+}
+
+.turnover .x-axis span {
+  position: absolute;
+  left: calc(var(--left) * 100%);
+  transform: translateX(-50%); 
+  font-size: 12px;
+  color: #000000;
+  font-weight: 500;
+  bottom: 0;
+  white-space: nowrap;
+}
+
+/* ===== SVG ЛИНИИ ===== */
+.turnover .chart-lines {
+  position: absolute;
+  inset: 0;              
+  width: 100%;
+  height: 100%;
+  pointer-events: none;   
+  z-index: 1;             
+}
+
+.turnover .chart-lines line {
+  fill: none;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.turnover .chart-lines line.fact { stroke: #7f4a88; }
+.turnover .chart-lines line.plan { stroke: #307672; }
+
+
+/* Линии */
+.turnover .line {
+  fill: none;
+  stroke-width: 3;
+  /* filter: url(#glow); */
+  vector-effect: non-scaling-stroke;
+  filter:
+    drop-shadow(0 0 10px rgba(255,255,255,0.7))
+    drop-shadow(0 0 4px rgba(0,0,0,0.6));
+}
+
+/* Цвета */
+.turnover .fact-line {
+  stroke: #7f4a88;
+}
+
+.turnover .plan-line {
+  stroke: #307672;
+}
+
+/* Заливка */
+.turnover .fact-area {
+  fill: url(#factGradient);
+}
+
+.turnover .plan-area {
+  fill: url(#planGradient);
+}
+
+
+
+
+
+
+
+
+
+.turnover .chart-legend {
+  position: absolute;
+  right: 0;                     /* приклеиваем к правому краю заголовка */
+  top: 50%;
+  transform: translateY(-50%);  /* вертикально по центру */
+  display: flex;
+  gap: 15px;
+  font-size: 14px;
+  font-weight: normal;
+  color: #333;
+  flex-wrap: wrap;              /* если не помещается, переносим строки */
+  max-width: 28%;               /* ограничиваем ширину, чтобы не налезала на текст */
+  justify-content: flex-end; 
+}
+
+.turnover .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: sans-serif;
+  cursor: default;
+}
+
+.turnover .legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transition: transform 0.2s ease, filter 0.2s ease; /* плавное увеличение и изменение цвета */
+}
+
+.turnover .legend-dot.fact { 
+  background: #7f4a88; 
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.turnover .legend-dot.plan { 
+  background: #307672; 
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* Hover эффект */
+.turnover .legend-dot:hover {
+  transform: scale(1.3);               /* немного увеличиваем кружок */
+  filter: brightness(1.2);             /* делаем цвет ярче */
+  cursor: pointer;                     /* курсор меняется на pointer */
+}
+
+
+/* Tooltip для точек */
+.turnover .chart-tooltip {
+  position: absolute;
+  pointer-events: none;      /* чтобы не мешал мыши */
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: sans-serif;
+  white-space: nowrap;
+  z-index: 100;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+
+
+/* ========== ДЛЯ ТАБЛИЦЫ С ГРУППИРОВКАМИ ========== */
+
+
+.turnover #purchasesTreeTable {
+    width: 100%;
+    border-spacing: 0;              /* убираем щели между ячейками */
+    border-radius: 8px;             /* скругляем углы таблицы */
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    background: white;              /* фон основной таблицы */
+    font-size: 12px;
+	border-collapse: collapse;
+}
+
+
+/* Месяцы всегда видимы */
+.turnover .month-row {
+  display: table-row;   /* месяцы видны по умолчанию */
+  cursor: pointer;      /* курсор для клика */
+  font-weight: bold;
+}
+
+/* Коды/группы и детали скрыты по умолчанию */
+.turnover .code-row.collapsed,
+.turnover .detail-row.collapsed {
+  display: none;
+}
+
+/* Коды/группы видимы, если класс collapsed убран */
+.turnover .code-row {
+  display: table-row;
+  cursor: pointer;      /* курсор для клика */
+}
+
+/* Детали видимы, если класс collapsed убран */
+.turnover .detail-row {
+  display: table-row;
+}
+
+/* Кнопки [+]/[-] */
+.turnover .toggle-sign {
+  cursor: pointer;
+  margin-right: 5px;
+  font-weight: bold;
+}
+
+.turnover #global-toggle {
+    cursor: pointer;
+}
+
+
+
+
+/* ===== СООБЩЕНИЯ "НЕТ ДАННЫХ" ===== */
+.turnover .no-data-overlay {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    color: #888;
+    font-size: 18px;
+    font-weight: 500;
+    background: #f8f9fa;
+    border: 2px dashed #dee2e6;
+    border-radius: 12px;
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.turnover .no-data-row {
+    text-align: center !important;
+    padding: 60px 20px !important;
+    color: #888 !important;
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    background: #f8f9fa !important;
+    border: 2px dashed #dee2e6 !important;
+}
+
+.turnover .chart-empty {
+    padding: 60px 20px;
+    text-align: center;
+    color: #888;
+    font-size: 18px;
+    font-weight: 500;
+    background: #f8f9fa;
+    border-radius: 12px;
+    border: 2px dashed #dee2e6;
+}
+
+/* ===== АНИМАЦИЯ появления ===== */
+.turnover .no-data-overlay,
+.turnover .chart-empty,
+.turnover .no-data-row {
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ===== ИКОНКА (опционально) ===== */
+.turnover .no-data-overlay::before {
+    font-size: 32px;
+    display: block;
+    margin-bottom: 12px;
+}
+
+/* ===== РЕСПОНСИВ ===== */
+@media (max-width: 768px) {
+    .turnover .no-data-overlay {
+        font-size: 16px;
+        padding: 30px 15px;
+        min-height: 150px;
+    }
+    
+    .turnover .no-data-overlay::before {
+        font-size: 24px;
+    }
+}

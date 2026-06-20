@@ -86,7 +86,7 @@ function PlannedSalesChart({ title, rows, labels }) {
         {title}
       </h4>
 
-      <ResponsiveContainer width="100%" height={220} debounce={400}>
+      <ResponsiveContainer width="100%" height={220} debounce={800}>
         <ComposedChart
           data={chartRows}
           margin={{ top: 15, right: 10, bottom: 0, left: 0 }}

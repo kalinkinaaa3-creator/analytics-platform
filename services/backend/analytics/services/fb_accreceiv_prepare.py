@@ -48,15 +48,32 @@ def serialize_row(row):
     }
 
 
+def normalize_filter_list(value):
+    if value in ("", None, [], ()):
+        return []
+
+    if isinstance(value, tuple):
+        value = list(value)
+
+    if isinstance(value, list):
+        return [
+            item
+            for item in value
+            if item not in ("", None)
+        ]
+
+    return [value]
+
+
 def get_default_accreceiv_filters(filters=None):
     filters = filters or {}
 
     yesterday = datetime.now().date() - timedelta(days=1)
 
     return {
-        "partner": filters.get("partner", ""),
-        "contract_partner": filters.get("contract_partner", ""),
-        "manager_name": filters.get("manager_name", ""),
+        "partner": normalize_filter_list(filters.get("partner")),
+        "contract_partner": normalize_filter_list(filters.get("contract_partner")),
+        "manager_name": normalize_filter_list(filters.get("manager_name")),
         "date_start": filters.get("date_start") or f"{yesterday.year}-01-01",
         "date_end": filters.get("date_end") or yesterday.isoformat(),
     }

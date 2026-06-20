@@ -8,6 +8,8 @@ const DASHBOARD_WS_NAMES = {
   purchases: "Purchases",
   projects: "Projects",
   wordstat: "Wordstat",
+  accreceiv: "Accreceiv",
+  turnover: "Turnover",
 };
 
 function buildDashboardWsUrl() {
@@ -35,7 +37,7 @@ export function PublicDashboardPage() {
   const dashboardSlugRef = useRef(null);
 
   const defaultDatesReady =
-    !["purchases", "projects"].includes(dashboardSlug) ||
+    !["purchases", "projects", "accreceiv", "turnover"].includes(dashboardSlug) ||
     (
       dashboardSlug === "purchases" &&
       searchParams.has("date_start") &&
@@ -45,8 +47,20 @@ export function PublicDashboardPage() {
       dashboardSlug === "projects" &&
       searchParams.has("project_start") &&
       searchParams.has("project_end")
+    )||
+    (
+      dashboardSlug === "accreceiv" &&
+      searchParams.has("date_start") &&
+      searchParams.has("date_end")
+    )||
+    (
+      dashboardSlug === "turnover" &&
+      searchParams.has("date_start") &&
+      searchParams.has("date_end")
     );
 
+
+    
   const loadDashboard = useCallback(
     async ({ showSpinner = true } = {}) => {
       if (!defaultDatesReady) {
@@ -85,7 +99,7 @@ export function PublicDashboardPage() {
   }, [dashboardSlug]);
 
   useEffect(() => {
-    if (!["purchases", "projects"].includes(dashboardSlug)) {
+    if (!["purchases", "projects", "accreceiv", "turnover"].includes(dashboardSlug)) {
       return;
     }
 
@@ -112,6 +126,35 @@ export function PublicDashboardPage() {
         nextParams.set("project_end", `${year + 1}-12-31`);
       }
     }
+
+    if (dashboardSlug === "accreceiv") {
+      const yesterday = new Date();
+
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      if (!nextParams.has("date_start")) {
+        nextParams.set("date_start", `${yesterday.getFullYear()}-01-01`);
+      }
+
+      if (!nextParams.has("date_end")) {
+        nextParams.set("date_end", yesterday.toISOString().slice(0, 10));
+      }
+    }
+
+    if (dashboardSlug === "turnover") {
+      const yesterday = new Date();
+
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      if (!nextParams.has("date_start")) {
+        nextParams.set("date_start", `${yesterday.getFullYear()}-01-01`);
+      }
+
+      if (!nextParams.has("date_end")) {
+        nextParams.set("date_end", yesterday.toISOString().slice(0, 10));
+      }
+    }
+
 
     if (nextParams.toString() !== searchParams.toString()) {
       setSearchParams(nextParams, { replace: true });

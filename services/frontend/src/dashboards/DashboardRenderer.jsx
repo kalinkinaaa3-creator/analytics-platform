@@ -2,6 +2,8 @@ import { PlannedSalesDashboard } from "./plannedSales/PlannedSalesDashboard";
 import { ProjectGanttDashboard } from "./projects/ProjectGanttDashboard";
 import { WordstatDashboard } from "./wordstat/WordstatDashboard";
 import { PurchasesDashboard } from "./purchases/PurchasesDashboard";
+import { AccreceivDashboard } from "./accreceiv/AccreceivDashboard";
+import { TurnoverDashboard } from "./turnover/TurnoverDashboard";
 
 import "./spinner.css";
 
@@ -64,6 +66,28 @@ export function DashboardRenderer({ data, loading, onFiltersChange }) {
         if (widget.type === "fb_purchases_dashboard") {
           return (
             <PurchasesDashboard
+              key={widget.id}
+              data={widget.data}
+              dashboard={data.dashboard}
+              onFiltersChange={onFiltersChange}
+            />
+          );
+        }
+
+        if (widget.type === "fb_accreceiv_dashboard") {
+          return (
+            <AccreceivDashboard
+              key={widget.id}
+              data={widget.data}
+              dashboard={data.dashboard}
+              onFiltersChange={onFiltersChange}
+            />
+          );
+        }
+
+        if (widget.type === "fb_turnover_dashboard") {
+          return (
+            <TurnoverDashboard
               key={widget.id}
               data={widget.data}
               dashboard={data.dashboard}

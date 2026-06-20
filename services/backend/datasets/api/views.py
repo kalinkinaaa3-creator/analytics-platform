@@ -109,6 +109,52 @@ from analytics.services.fb_turnover_api_pipeline import run_fb_turnover_api_pipe
 from analytics.services.fb_accreceiv_api_pipeline import run_fb_accreceiv_api_pipeline
 
 
+from rest_framework.exceptions import NotFound, PermissionDenied
+from dashboards.models import DashboardPublicGroup
+
+
+
+
+
+
+
+
+
+
+
+
+def get_public_group_or_404(token):
+    try:
+        group = DashboardPublicGroup.objects.prefetch_related(
+            "items__dashboard"
+        ).get(token=token)
+    except DashboardPublicGroup.DoesNotExist:
+        raise NotFound("Public group not found")
+
+    if not group.is_valid():
+        raise PermissionDenied("Public group expired")
+
+    return group
+
+
+def check_public_dashboard_access(token, dashboard_slug):
+    group = get_public_group_or_404(token)
+
+    group_item = (
+        group.items
+        .select_related("dashboard")
+        .filter(dashboard__slug=dashboard_slug)
+        .first()
+    )
+
+    if group_item is None:
+        raise PermissionDenied("Dashboard is not available in this public group")
+
+    return group_item
+
+
+
+
 
 
 
@@ -430,23 +476,61 @@ class FBTurnoverIndicatorUploadView(APIView):
 class WordstatExportView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        filters = request.GET.dict()
+    def _get_filters_from_query_params(self, request):
+        filters = {}
 
+        for key in request.query_params.keys():
+            values = request.query_params.getlist(key)
+
+            if len(values) > 1:
+                filters[key] = values
+            elif values:
+                filters[key] = values[0]
+
+        return filters
+
+    def _get_filters_from_body(self, request):
+        return request.data or {}
+
+    def _export(self, filters):
         repo = ClickHouseRepository()
 
         rows = repo.fetch_yd_wordstat_rows(filters)
 
         return export_wordstat_to_excel(rows)
+
+    def get(self, request):
+        filters = self._get_filters_from_query_params(request)
+
+        return self._export(filters)
+
+    def post(self, request):
+        filters = self._get_filters_from_body(request)
+
+        return self._export(filters)
     
 
 
 class FBPurchasesExportView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        filters = request.GET.dict()
+    def _get_filters_from_query_params(self, request):
+        filters = {}
 
+        for key in request.query_params.keys():
+            values = request.query_params.getlist(key)
+
+            if len(values) > 1:
+                filters[key] = values
+            elif values:
+                filters[key] = values[0]
+
+        return filters
+
+    def _get_filters_from_body(self, request):
+        return request.data or {}
+
+    def _export(self, filters):
         repo = ClickHouseRepository()
 
         rows = repo.fetch_fb_purchases_use_rows(filters)
@@ -458,13 +542,37 @@ class FBPurchasesExportView(APIView):
 
         return export_purchases_to_excel(purchases_list)
 
+    def get(self, request):
+        filters = self._get_filters_from_query_params(request)
+
+        return self._export(filters)
+
+    def post(self, request):
+        filters = self._get_filters_from_body(request)
+
+        return self._export(filters)
+
 
 class FBTurnoverExportView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        filters = request.GET.dict()
+    def _get_filters_from_query_params(self, request):
+        filters = {}
 
+        for key in request.query_params.keys():
+            values = request.query_params.getlist(key)
+
+            if len(values) > 1:
+                filters[key] = values
+            elif values:
+                filters[key] = values[0]
+
+        return filters
+
+    def _get_filters_from_body(self, request):
+        return request.data or {}
+
+    def _export(self, filters):
         repo = ClickHouseRepository()
 
         rows = repo.fetch_fb_turnover_use_rows(filters)
@@ -473,13 +581,37 @@ class FBTurnoverExportView(APIView):
 
         return export_turnover_to_excel(turnover_list)
 
+    def get(self, request):
+        filters = self._get_filters_from_query_params(request)
+
+        return self._export(filters)
+
+    def post(self, request):
+        filters = self._get_filters_from_body(request)
+
+        return self._export(filters)
+
 
 class FBAccreceivExportView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        filters = request.GET.dict()
+    def _get_filters_from_query_params(self, request):
+        filters = {}
 
+        for key in request.query_params.keys():
+            values = request.query_params.getlist(key)
+
+            if len(values) > 1:
+                filters[key] = values
+            elif values:
+                filters[key] = values[0]
+
+        return filters
+
+    def _get_filters_from_body(self, request):
+        return request.data or {}
+
+    def _export(self, filters):
         repo = ClickHouseRepository()
 
         rows = repo.fetch_fb_accreceiv_use_rows(filters)
@@ -487,6 +619,122 @@ class FBAccreceivExportView(APIView):
         accreceiv_list = group_accreceiv_monthly(rows)
 
         return export_accreceiv_to_excel(accreceiv_list)
+
+    def get(self, request):
+        filters = self._get_filters_from_query_params(request)
+
+        return self._export(filters)
+
+    def post(self, request):
+        filters = self._get_filters_from_body(request)
+
+        return self._export(filters)
+
+
+
+
+
+class PublicFBTurnoverExportView(APIView):
+    authentication_classes = []
+    permission_classes = []
+    def post(self, request, token):
+        check_public_dashboard_access(
+            token=token,
+            dashboard_slug="turnover",
+        )
+        filters = request.data or {}
+        repo = ClickHouseRepository()
+        rows = repo.fetch_fb_turnover_use_rows(filters)
+        turnover_list = group_turnover_monthly(rows)
+        return export_turnover_to_excel(turnover_list)
+    def get(self, request, token):
+        check_public_dashboard_access(
+            token=token,
+            dashboard_slug="turnover",
+        )
+        filters = {}
+        for key in request.query_params.keys():
+            values = request.query_params.getlist(key)
+
+            if len(values) > 1:
+                filters[key] = values
+            elif values:
+                filters[key] = values[0]
+
+        repo = ClickHouseRepository()
+        rows = repo.fetch_fb_turnover_use_rows(filters)
+        turnover_list = group_turnover_monthly(rows)
+        return export_turnover_to_excel(turnover_list)
+
+
+class PublicFBAccreceivExportView(APIView):
+    authentication_classes = []
+    permission_classes = []
+    def post(self, request, token):
+        check_public_dashboard_access(
+            token=token,
+            dashboard_slug="accreceiv",
+        )
+        filters = request.data or {}
+        repo = ClickHouseRepository()
+        rows = repo.fetch_fb_accreceiv_use_rows(filters)
+        accreceiv_list = group_accreceiv_monthly(rows)
+        return export_accreceiv_to_excel(accreceiv_list)
+    def get(self, request, token):
+        check_public_dashboard_access(
+            token=token,
+            dashboard_slug="accreceiv",
+        )
+        filters = {}
+        for key in request.query_params.keys():
+            values = request.query_params.getlist(key)
+            if len(values) > 1:
+                filters[key] = values
+            elif values:
+                filters[key] = values[0]
+        repo = ClickHouseRepository()
+        rows = repo.fetch_fb_accreceiv_use_rows(filters)
+        accreceiv_list = group_accreceiv_monthly(rows)
+        return export_accreceiv_to_excel(accreceiv_list)
+
+
+class PublicFBPurchasesExportView(APIView):
+    authentication_classes = []
+    permission_classes = []
+    def _get_filters_from_query_params(self, request):
+        filters = {}
+        for key in request.query_params.keys():
+            values = request.query_params.getlist(key)
+            if len(values) > 1:
+                filters[key] = values
+            elif values:
+                filters[key] = values[0]
+        return filters
+    def _get_filters_from_body(self, request):
+        return request.data or {}
+    def _export(self, token, filters):
+        check_public_dashboard_access(
+            token=token,
+            dashboard_slug="purchases",
+        )
+        repo = ClickHouseRepository()
+        rows = repo.fetch_fb_purchases_use_rows(filters)
+        indicator_rows = repo.fetch_fb_purchases_indicator_rows(filters)
+        purchases_list = group_purchases_by_month(rows)
+        purchases_list = add_indicator_to_purchases(purchases_list, indicator_rows)
+        purchases_list = add_deviation_to_purchases(purchases_list)
+        return export_purchases_to_excel(purchases_list)
+    def get(self, request, token):
+        filters = self._get_filters_from_query_params(request)
+        return self._export(token=token, filters=filters)
+    def post(self, request, token):
+        filters = self._get_filters_from_body(request)
+        return self._export(token=token, filters=filters)
+
+
+
+
+
 
 
 

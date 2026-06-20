@@ -42,16 +42,33 @@ def serialize_row(row):
     }
 
 
+def normalize_filter_list(value):
+    if value in ("", None, [], ()):
+        return []
+
+    if isinstance(value, tuple):
+        value = list(value)
+
+    if isinstance(value, list):
+        return [
+            item
+            for item in value
+            if item not in ("", None)
+        ]
+
+    return [value]
+
+
 def get_default_turnover_filters(filters=None):
     filters = filters or {}
 
     today_minus_one = datetime.now().date() - timedelta(days=1)
 
     return {
-        "nomenclature": filters.get("nomenclature", ""),
-        "warehouse_group": filters.get("warehouse_group", ""),
-        "warehouse": filters.get("warehouse", ""),
-        "quantity": filters.get("quantity", ""),
+        "nomenclature": normalize_filter_list(filters.get("nomenclature")),
+        "warehouse_group": normalize_filter_list(filters.get("warehouse_group")),
+        "warehouse": normalize_filter_list(filters.get("warehouse")),
+        "quantity": normalize_filter_list(filters.get("quantity")),
         "date_start": filters.get("date_start") or f"{today_minus_one.year}-01-01",
         "date_end": filters.get("date_end") or today_minus_one.isoformat(),
     }
