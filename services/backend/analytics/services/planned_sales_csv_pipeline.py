@@ -56,3 +56,15 @@ def run_planned_sales_csv_pipeline(
     logger.info("PlannedSales CSV pipeline finished: %s", result)
 
     return result
+
+
+
+
+'''
+from analytics.services.planned_sales_csv_pipeline import run_planned_sales_csv_pipeline
+
+run_planned_sales_csv_pipeline(
+    csv_path="/app/media/datasets/dash_sales.csv",
+    truncate_source=True,
+)
+'''

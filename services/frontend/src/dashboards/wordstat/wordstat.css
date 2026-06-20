@@ -1,0 +1,504 @@
+/* ОБЩЕЕ */
+.wordstat-dashboard {
+    font-family: Helvetica, sans-serif;
+}
+
+
+/* ФИЛЬТРЫ */
+.wordstat-dashboard #filterForm {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 15px;
+    background-color: #fafafa;
+    position: relative;
+	margin-bottom: 20px;
+}
+
+.wordstat-dashboard .filter {
+  flex-basis: 120px;          /* ширину берём из модификатора */
+  display: flex;
+  flex-direction: column;
+}
+
+.wordstat-dashboard .filter label {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+  font-weight: bold;
+  min-height: 18px;
+  text-align: center;
+}
+
+/*
+.filter input,
+.filter select {
+  width: 100%;
+  box-sizing: border-box;
+  height: 24px;
+}
+*/
+
+.wordstat-dashboard .filter--no-label::before {
+  display: block;
+  min-height: 18px;
+  margin-bottom: 4px;
+}
+
+.wordstat-dashboard .filters-reset {
+  margin-left: auto;    /* кнопка «Очистить» уезжает вправо в третьей строке */
+  border-radius: 4px;
+  height: 44px;
+  cursor: pointer;
+  background: #4d5747;
+  color: white;
+  border: #4d5747;
+  transition: all 0.3s ease;
+  background: linear-gradient(90deg, #6c6c5a, #4e4e43);
+}
+
+.wordstat-dashboard .filters-reset:hover {
+  color: black;
+  border: #c8cec5;
+  filter: brightness(1);
+  background: linear-gradient(90deg, #a0a699, #c8cec5);
+}
+
+.wordstat-dashboard .filters-export {
+  border-radius: 4px;
+  height: 44px;
+  cursor: pointer;
+  background: #4d5747;
+  color: white;
+  border: #4d5747;
+  transition: all 0.3s ease;
+  background: linear-gradient(90deg, #6c6c5a, #4e4e43);
+}
+
+.wordstat-dashboard .filters-export:hover {
+  color: black;
+  border: #c8cec5;
+  filter: brightness(1);
+  background: linear-gradient(90deg, #a0a699, #c8cec5);
+}
+
+
+@media (max-width: 768px) {
+  .wordstat-dashboard #filterForm {
+    gap: 10px 8px;  /* меньше отступов на мобильных */
+    padding: 12px;
+  }
+  
+  .wordstat-dashboard .filter {
+    flex-basis: 100%;  /* на мобилках каждый фильтр в новую строку */
+  }
+  
+  .wordstat-dashboard .filters-reset {
+    margin-left: 0;    /* кнопка не уезжает вправо */
+    margin-top: 8px;
+    width: 100%;
+  }
+}
+
+
+
+
+/* ===== MULTI-SELECT ВНУТРИ ФИЛЬТРОВ ===== */
+
+.wordstat-dashboard .filter .multi-select {
+  width: 100%;
+  position: relative;
+}
+
+/* Верхняя панель (как input/select раньше) */
+.wordstat-dashboard .filter .top-bar {
+  border: 1px solid #000;
+  border-radius: 2px;
+  background: #fff;
+  min-height: 24px;
+  padding: 2px 6px;
+
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+
+  box-sizing: border-box;
+}
+
+/* Фокус как у input */
+.wordstat-dashboard .filter .top-bar:focus-within {
+  border-color: #6c6c5a;
+  box-shadow: 0 0 0 1px #a0a699;
+}
+
+/* Контейнер выбранных */
+.wordstat-dashboard .filter .selected-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* Теги */
+.wordstat-dashboard .filter .tag {
+  background: #4d5747;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+}
+
+/* Крестик */
+.wordstat-dashboard .filter .tag button {
+  background: none;
+  border: none;
+  color: white;
+  margin-left: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* Input внутри */
+.wordstat-dashboard .filter input[type="text"] {
+  border: none;
+  outline: none;
+  flex: 1;
+  min-width: 60px;
+  height: 20px;
+  font-size: 13px;
+}
+
+/* ===== DROPDOWN ===== */
+
+.wordstat-dashboard .filter .dropdown {
+  position: absolute;
+  width: 100%;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  margin-top: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  display: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 100;
+}
+
+/* Показ (будешь через JS добавлять класс) */
+.wordstat-dashboard .filter .multi-select.open .dropdown {
+  display: block;
+}
+
+/* Элемент */
+.wordstat-dashboard .filter .dropdown-item {
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+/* Hover */
+.wordstat-dashboard .filter .dropdown-item:hover {
+  background: #f0f3f7;
+}
+
+/* Label внутри */
+.wordstat-dashboard .filter .dropdown-item label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-weight: normal;
+  text-align: left;
+}
+
+/* Select all */
+.wordstat-dashboard .filter .select-all {
+  border-bottom: 1px solid #eee;
+  font-weight: bold;
+  background: #fafafa;
+}
+
+/* Чекбоксы аккуратнее */
+.wordstat-dashboard .filter input[type="checkbox"] {
+  transform: scale(0.9);
+  cursor: pointer;
+}
+
+/* ===== АДАПТАЦИЯ ПОД ТВОЮ СЕТКУ ===== */
+
+/* чтобы высота была как у select */
+.wordstat-dashboard .filter .multi-select {
+  min-height: 24px;
+}
+
+/* фикс чтобы dropdown не ломал layout */
+.wordstat-dashboard .filter {
+  position: relative;
+}
+
+/* ===== MOBILE ===== */
+
+@media (max-width: 768px) {
+
+  .wordstat-dashboard .filter .dropdown {
+    max-height: 180px;
+  }
+
+  .wordstat-dashboard .filter .tag {
+    font-size: 10px;
+  }
+
+}
+
+
+
+/* КОНЕЦ ФИЛЬТРОВ */
+
+
+
+/* ТАБЛИЦА */
+.wordstat-dashboard .gantt-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  height: 70vh;
+  overflow: auto;
+  border: 0px solid #ccc;
+  overflow-x: auto;   
+  overflow-y: auto;
+  position: relative;
+  font-size: 12px;
+}
+
+
+.wordstat-dashboard table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.wordstat-dashboard th, .wordstat-dashboard td {
+  border: 1px solid #aca5a5;
+  padding: 0; /* убираем padding для точной высоты */
+  width: 80px;
+  min-width: 80px;
+  text-align: center;
+  box-sizing: border-box;
+  background: #fff;
+  height: 30px;
+  line-height: 30px;
+}
+
+/* Тренд над столбцами 3-5 */
+.wordstat-dashboard thead tr.trend-row th:nth-child(n+3) {
+  position: sticky;
+  top: 0;
+  /* background: #eee;*/
+  z-index: 2;
+}
+
+/* Тренд над столбцами 1-2 (пустые ячейки с фоном) */
+.wordstat-dashboard thead tr.trend-row th:nth-child(-n+2) {
+  position: sticky;
+  top: 0;
+  background: #eee;
+  z-index: 3;
+}
+
+/* Заголовки столбцов 3-5 */
+.wordstat-dashboard thead tr.header-row th:nth-child(n+3) {
+  position: sticky;
+  top: 30px; /* высота тренд-строки */
+  z-index: 4;
+}
+
+/* Заголовки первых двух столбцов */
+.wordstat-dashboard thead tr.header-row th:nth-child(-n+2) {
+  position: sticky;
+  top: 30px; /* под тренд-строку */
+  background: #ddd;
+  z-index: 5;
+}
+
+/* Фиксируем первые два столбца данных */
+.wordstat-dashboard td:nth-child(1), .wordstat-dashboard th:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #f9f9f9;
+  width: 300px;
+  min-width: 300px;
+}
+.wordstat-dashboard td:nth-child(2), .wordstat-dashboard th:nth-child(2) {
+  position: sticky;
+  left: 300px;
+  z-index: 1;
+  background: #f9f9f9;
+}
+
+/* Толстая граница между основными столбцами */
+.wordstat-dashboard th.b-thick, .wordstat-dashboard td.b-thick {
+  border-left: 3px solid #666;
+}
+
+/* тень у второго фиксированного столбца */
+.wordstat-dashboard th:nth-child(2)::after,
+.wordstat-dashboard td:nth-child(2)::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -1px;
+  width: 8px;         /* ширина тени */
+  height: 100%;
+  pointer-events: none;
+
+  /* сама тень */
+  box-shadow: 4px 0 8px rgba(0,0,0,0.25);
+}
+
+.wordstat-dashboard .group-frequency { background: #e7e6e1; }
+.wordstat-dashboard .group-devices   { background: #E7E5E8; }
+.wordstat-dashboard .group-regions   { background: #f5ecec; }
+.wordstat-dashboard .group-season    { background: #fcf3e9; }
+.wordstat-dashboard .group-coefficients    { background: #e6e7e5; } 
+
+
+/* Тень под второй строкой заголовков */
+.wordstat-dashboard thead tr.header-row th:first-child::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 100vw;     /* на всю ширину, даже при скролле */
+  height: 16px;
+  pointer-events: none;
+  display: block;
+  box-shadow: 0 6px 10px rgba(0,0,0,0.25);
+  z-index: 200;     /* выше таблицы, но ниже контекстных элементов */
+}
+
+
+
+/* Жирная рамка сверху и снизу для первого ряда каждого пула (по всей таблице) */
+.wordstat-dashboard tr.phrase-group.first-row td {
+    border-top: 4px solid #666;       /* верхняя граница пула */
+}
+
+/* Убираем горизонтальные границы внутри первого столбца для остальных строк пула */
+.wordstat-dashboard tr.phrase-group td.phrase-cell.empty-cell {
+    border-top: none;
+    border-bottom: none;
+}
+
+/* Жирная граница снизу для последней строки пула */
+.wordstat-dashboard tr.phrase-group:last-child td {
+    border-bottom: 2px solid #666 !important;    /* жирная граница снизу всего пула */
+}
+
+/* Жирная рамка по всей таблице (лево/право) сохраняется) */
+.wordstat-dashboard td.phrase-cell {
+    border-left: 2px solid #666;
+}
+
+.wordstat-dashboard .gantt-table-wrapper td:nth-child(n+3) {
+    text-align: right;
+    padding-right: 6px; 
+}
+
+.wordstat-dashboard .data-cell:hover {
+    filter: brightness(1.2);
+    transform: scale(1.05);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+}
+
+/* Двойная граница и жирный для итоговой строки */
+.wordstat-dashboard .summary-row td {
+    border-bottom: 4px double #000;
+}
+
+/* Жирный + цвет только для ячейки с "Сводно" */
+.wordstat-dashboard .summary-phrase {
+    font-weight: bold;
+    background-color: #e7e6e1 !important;
+	font-size: 16px;
+}
+
+
+.wordstat-dashboard .infinite-spinner {
+    width: 40px;
+    height: 40px;
+    margin: 20px auto;
+    border: 4px solid #ddd;
+    border-top: 4px solid #555;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.wordstat-dashboard .hidden {
+    display: none;
+}
+
+
+
+
+
+/* СПИНЕР */
+
+.wordstat-dashboard .global-spinner-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.wordstat-dashboard .global-spinner-overlay.show {
+    opacity: 1;
+}
+
+.wordstat-dashboard .global-spinner-overlay.hidden {
+    display: none;
+}
+
+.wordstat-dashboard .spinner-container {
+    text-align: center;
+    padding: 40px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.wordstat-dashboard .infinite-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 15px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.wordstat-dashboard .spinner-text {
+    font-size: 16px;
+    color: #333;
+    font-weight: 500;
+}
+

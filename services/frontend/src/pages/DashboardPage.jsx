@@ -3,6 +3,13 @@ import { useParams, Navigate, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { DashboardRenderer } from "../dashboards/DashboardRenderer";
 
+const DASHBOARD_WS_NAMES = {
+  "planned-sales": "PlannedSales",
+  purchases: "Purchases",
+  projects: "Projects",
+  wordstat: "Wordstat",
+};
+
 function buildDashboardWsUrl() {
   const baseURL = api.defaults.baseURL || window.location.origin;
   const url = new URL(baseURL, window.location.origin);
@@ -23,7 +30,9 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const filtersKey = searchParams.toString();
+
   const loadDashboardRef = useRef(null);
+  const dashboardSlugRef = useRef(null);
 
   const loadDashboard = useCallback(
     async ({ showSpinner = true } = {}) => {
@@ -55,8 +64,63 @@ export function DashboardPage() {
   }, [loadDashboard]);
 
   useEffect(() => {
+    dashboardSlugRef.current = dashboardSlug;
+  }, [dashboardSlug]);
+
+  const defaultDatesReady =
+    !["purchases", "projects"].includes(dashboardSlug) ||
+    (
+      dashboardSlug === "purchases" &&
+      searchParams.has("date_start") &&
+      searchParams.has("date_end")
+    ) ||
+    (
+      dashboardSlug === "projects" &&
+      searchParams.has("project_start") &&
+      searchParams.has("project_end")
+    );
+
+  useEffect(() => {
+    if (!["purchases", "projects"].includes(dashboardSlug)) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+    const now = new Date();
+    const year = now.getFullYear();
+
+    if (dashboardSlug === "purchases") {
+      if (!nextParams.has("date_start")) {
+        nextParams.set("date_start", `${year}-01-01`);
+      }
+
+      if (!nextParams.has("date_end")) {
+        nextParams.set("date_end", now.toISOString().slice(0, 10));
+      }
+    }
+
+    if (dashboardSlug === "projects") {
+      if (!nextParams.has("project_start")) {
+        nextParams.set("project_start", `${year - 1}-01-01`);
+      }
+
+      if (!nextParams.has("project_end")) {
+        nextParams.set("project_end", `${year + 1}-12-31`);
+      }
+    }
+
+    if (nextParams.toString() !== searchParams.toString()) {
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [dashboardSlug, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!defaultDatesReady) {
+      return;
+    }
+
     loadDashboard({ showSpinner: true });
-  }, [loadDashboard]);
+  }, [loadDashboard, defaultDatesReady]);
 
   useEffect(() => {
     let socket = null;
@@ -90,10 +154,18 @@ export function DashboardPage() {
           return;
         }
 
-        if (
-          message.type === "dashboard_updated" &&
-          message.dashboard === "PlannedSales"
-        ) {
+        if (message.type !== "dashboard_updated") {
+          return;
+        }
+
+        const currentSlug = dashboardSlugRef.current;
+        const expectedDashboardName = DASHBOARD_WS_NAMES[currentSlug];
+
+        if (!expectedDashboardName) {
+          return;
+        }
+
+        if (message.dashboard === expectedDashboardName) {
           loadDashboardRef.current?.({ showSpinner: false });
         }
       };
@@ -141,10 +213,20 @@ export function DashboardPage() {
     const nextParams = new URLSearchParams(searchParams);
 
     Object.entries(filters).forEach(([key, value]) => {
+      nextParams.delete(key);
+
+      if (Array.isArray(value)) {
+        value.forEach((item) => {
+          if (item) {
+            nextParams.append(key, item);
+          }
+        });
+
+        return;
+      }
+
       if (value) {
         nextParams.set(key, value);
-      } else {
-        nextParams.delete(key);
       }
     });
 

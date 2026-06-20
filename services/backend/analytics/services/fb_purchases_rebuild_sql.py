@@ -24,8 +24,8 @@ def rebuild_fb_purchases_use_from_raw_sql():
             cursor.execute("""
                 INSERT INTO fb_purchases_use
                     (
-                        quantity_1C,
-                        revenue_1C,
+                        "quantity_1C",
+                        "revenue_1C",
                         "VAT_1C",
                         nomenclature_code,
                         date_draft,
@@ -36,8 +36,8 @@ def rebuild_fb_purchases_use_from_raw_sql():
                     )
 
                 SELECT
-                    SUM(quantity_1C_110) AS quantity_1C,
-                    SUM(revenue_1C_110) AS revenue_1C,
+                    SUM("quantity_1C_110") AS "quantity_1C",
+                    SUM("revenue_1C_110") AS "revenue_1C",
                     SUM("VAT_1C_110") AS "VAT_1C",
                     'Полиэтилен 110' AS nomenclature_code,
                     date_draft,
@@ -51,8 +51,8 @@ def rebuild_fb_purchases_use_from_raw_sql():
                 UNION ALL
 
                 SELECT
-                    SUM(quantity_1C_112) AS quantity_1C,
-                    SUM(revenue_1C_112) AS revenue_1C,
+                    SUM("quantity_1C_112") AS "quantity_1C",
+                    SUM("revenue_1C_112") AS "revenue_1C",
                     SUM("VAT_1C_112") AS "VAT_1C",
                     'Полипропилен Блоксополимеры 112' AS nomenclature_code,
                     date_draft,
@@ -66,8 +66,8 @@ def rebuild_fb_purchases_use_from_raw_sql():
                 UNION ALL
 
                 SELECT
-                    SUM(quantity_1C_100753) AS quantity_1C,
-                    SUM(revenue_1C_100753) AS revenue_1C,
+                    SUM("quantity_1C_100753") AS "quantity_1C",
+                    SUM("revenue_1C_100753") AS "revenue_1C",
                     SUM("VAT_1C_100753") AS "VAT_1C",
                     'Полипропилен Гомополимеры 100753' AS nomenclature_code,
                     date_draft,

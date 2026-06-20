@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import "./list_project.css";
 
 const FILTERS = [
@@ -137,10 +137,7 @@ function PlanFactRows({
         />
       </tr>
 
-      <tr
-        className={factClassName}
-        style={{ display: visible ? "" : "none" }}
-      >
+      <tr className={factClassName} style={{ display: visible ? "" : "none" }}>
         <td style={firstCellStyle(isNode)}>
           <IndentedName indentPx={indentPx}></IndentedName>
         </td>
@@ -218,6 +215,10 @@ function ProjectSubtaskRows({
       </tr>
     </>
   );
+}
+
+function FragmentWrapper({ children }) {
+  return <>{children}</>;
 }
 
 function HierarchyRows({
@@ -300,10 +301,6 @@ function HierarchyRows({
   );
 }
 
-function FragmentWrapper({ children }) {
-  return <>{children}</>;
-}
-
 function collectHierarchyIds(nodes, result = []) {
   nodes.forEach((node) => {
     result.push(node.id);
@@ -325,11 +322,6 @@ export function ProjectGanttDashboard({ data, onFiltersChange }) {
 
   const [localFilters, setLocalFilters] = useState(filters);
   const [expandedIds, setExpandedIds] = useState(new Set());
-
-  useEffect(() => {
-    setLocalFilters(filters);
-    setExpandedIds(new Set());
-  }, [filters, projects]);
 
   const idsByNode = useMemo(() => {
     const map = new Map();
@@ -372,18 +364,68 @@ export function ProjectGanttDashboard({ data, onFiltersChange }) {
     );
   }, [projects, idsByNode]);
 
-  function handleFilterChange(name, value) {
-    const next = {
-      ...localFilters,
-      [name]: value,
-    };
-
+  function applyFilters(next) {
     setLocalFilters(next);
 
     if (onFiltersChange) {
       onFiltersChange(next);
     }
   }
+
+  function handleFilterChange(name, value) {
+    applyFilters({
+      ...localFilters,
+      [name]: value,
+    });
+  }
+
+  const applyFiltersFromDom = useCallback(() => {
+    const form = document.getElementById("filterForm");
+    if (!form) return;
+
+    const formData = new FormData(form);
+
+    applyFilters({
+      folder_lvl1: formData.get("folder_lvl1") || "",
+      folder_lvl2: formData.get("folder_lvl2") || "",
+      folder_lvl3: formData.get("folder_lvl3") || "",
+      project_name: formData.get("project_name") || "",
+      project_type: formData.get("project_type") || "",
+      department: formData.get("department") || "",
+      project_manager: formData.get("project_manager") || "",
+      project_status: formData.get("project_status") || "",
+      deviation_project: formData.get("deviation_project") || "",
+      project_start: formData.get("project_start") || "",
+      project_end: formData.get("project_end") || "",
+    });
+  }, [onFiltersChange]);
+
+  useEffect(() => {
+    setLocalFilters(filters);
+    setExpandedIds(new Set());
+  }, [filters, projects]);
+
+  useEffect(() => {
+    const ids = ["project_start_filter", "project_end_filter"];
+
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+
+      if (el) {
+        el.addEventListener("change", applyFiltersFromDom);
+      }
+    });
+
+    return () => {
+      ids.forEach((id) => {
+        const el = document.getElementById(id);
+
+        if (el) {
+          el.removeEventListener("change", applyFiltersFromDom);
+        }
+      });
+    };
+  }, [applyFiltersFromDom]);
 
   function resetFilters() {
     const year = new Date().getFullYear() - 1;
@@ -471,7 +513,12 @@ export function ProjectGanttDashboard({ data, onFiltersChange }) {
             id="project_start_filter"
             name="project_start"
             value={localFilters.project_start || ""}
-            onChange={(event) => handleFilterChange("project_start", event.target.value)}
+            onChange={(event) =>
+              setLocalFilters((prev) => ({
+                ...prev,
+                project_start: event.target.value,
+              }))
+            }
           />
         </div>
 
@@ -482,7 +529,12 @@ export function ProjectGanttDashboard({ data, onFiltersChange }) {
             id="project_end_filter"
             name="project_end"
             value={localFilters.project_end || ""}
-            onChange={(event) => handleFilterChange("project_end", event.target.value)}
+            onChange={(event) =>
+              setLocalFilters((prev) => ({
+                ...prev,
+                project_end: event.target.value,
+              }))
+            }
           />
         </div>
 

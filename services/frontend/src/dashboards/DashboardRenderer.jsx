@@ -1,5 +1,8 @@
 import { PlannedSalesDashboard } from "./plannedSales/PlannedSalesDashboard";
 import { ProjectGanttDashboard } from "./projects/ProjectGanttDashboard";
+import { WordstatDashboard } from "./wordstat/WordstatDashboard";
+import { PurchasesDashboard } from "./purchases/PurchasesDashboard";
+
 import "./spinner.css";
 
 function GlobalSpinner() {
@@ -46,6 +49,29 @@ export function DashboardRenderer({ data, loading, onFiltersChange }) {
             />
           );
         }
+
+        if (widget.type === "yd_wordstat_table") {
+          return (
+            <WordstatDashboard
+              key={widget.id}
+              data={widget.data}
+              dashboard={data.dashboard}
+              onFiltersChange={onFiltersChange}
+            />
+          );
+        }
+
+        if (widget.type === "fb_purchases_dashboard") {
+          return (
+            <PurchasesDashboard
+              key={widget.id}
+              data={widget.data}
+              dashboard={data.dashboard}
+              onFiltersChange={onFiltersChange}
+            />
+          );
+        }
+
 
         return (
           <div key={widget.id}>

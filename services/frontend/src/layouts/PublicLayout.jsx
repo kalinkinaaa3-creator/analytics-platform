@@ -20,7 +20,13 @@ export function PublicLayout() {
       const firstSection = Object.values(response.data.sections || {})[0];
       const firstDashboard = firstSection?.[0];
 
-      if (firstDashboard && window.location.pathname === `/public/${token}`) {
+      if (
+        firstDashboard &&
+        (
+          window.location.pathname === `/public/${token}` ||
+          window.location.pathname === `/public-group/${token}`
+        )
+      ) {
         navigate(`/public/${token}/dashboards/${firstDashboard.dashboard_slug}`, {
           replace: true,
         });
@@ -41,6 +47,28 @@ export function PublicLayout() {
     submenu?.classList.toggle("collapsed");
     title.classList.toggle("collapsed");
   }
+
+  useEffect(() => {
+    const sidebar = document.getElementById("sidebar");
+    const toggleBtn = document.getElementById("toggleBtn");
+
+    function handleDocumentClick(event) {
+      if (
+        sidebar &&
+        toggleBtn &&
+        !sidebar.contains(event.target) &&
+        !toggleBtn.contains(event.target)
+      ) {
+        sidebar.classList.remove("open");
+      }
+    }
+
+    document.addEventListener("click", handleDocumentClick);
+
+    return () => {
+      document.removeEventListener("click", handleDocumentClick);
+    };
+  }, []);
 
   return (
     <div className="app-shell">
@@ -66,7 +94,7 @@ export function PublicLayout() {
         ></button>
 
         <div className="user-info">
-          <span>{groupName}</span>
+          <span>{groupName || "Публичный доступ"}</span>
         </div>
 
         <div className="sections-container">

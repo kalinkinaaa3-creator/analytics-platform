@@ -6,10 +6,12 @@ class DashboardConsumer(AsyncJsonWebsocketConsumer):
 
     async def connect(self):
         user = self.scope.get("user")
+        is_authenticated = (
+            user is not None
+            and not user.is_anonymous
+        )
 
-        if not user or user.is_anonymous:
-            await self.close()
-            return
+        self.is_authenticated = is_authenticated
 
         await self.accept()
 

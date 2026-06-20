@@ -1,5 +1,3 @@
-
-
 import {
   Bar,
   CartesianGrid,
@@ -26,6 +24,14 @@ function formatMillion(value) {
   return `${(number / 1000000).toLocaleString("ru-RU", {
     maximumFractionDigits: 0,
   })} млн`;
+}
+
+function getSeriesLabel(value) {
+  if (value === "appg") return `${new Date().getFullYear() - 1}`;
+  if (value === "fact") return `${new Date().getFullYear()}`;
+  if (value === "plan") return "plan";
+
+  return value;
 }
 
 function prepareChartRows(rows, labels) {
@@ -64,7 +70,7 @@ function CustomTooltip({ active, payload, label }) {
 
       {payload.map((item) => (
         <div key={item.dataKey} style={{ color: item.color }}>
-          {item.name}: {formatMillion(item.value)}
+          {getSeriesLabel(item.dataKey)}: {formatMillion(item.value)}
         </div>
       ))}
     </div>
@@ -80,8 +86,11 @@ function PlannedSalesChart({ title, rows, labels }) {
         {title}
       </h4>
 
-      <ResponsiveContainer width="100%" height={220}>
-        <ComposedChart data={chartRows} margin={{ top: 15, right: 10, bottom: 0, left: 0 }}>
+      <ResponsiveContainer width="100%" height={220} debounce={400}>
+        <ComposedChart
+          data={chartRows}
+          margin={{ top: 15, right: 10, bottom: 0, left: 0 }}
+        >
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
 
           <XAxis
@@ -98,23 +107,15 @@ function PlannedSalesChart({ title, rows, labels }) {
 
           <Tooltip content={<CustomTooltip />} />
 
-            <Legend
+          <Legend
             verticalAlign="bottom"
             height={28}
-            formatter={(value) => {
-                let label = value;
-
-                if (value === "appg") label = `${new Date().getFullYear() - 1}`;
-                if (value === "fact") label = `${new Date().getFullYear()}`;
-                if (value === "plan") label = "plan";
-
-                return (
-                <span style={{ fontWeight: 700 }}>
-                    {label}
-                </span>
-                );
-            }}
-            />
+            formatter={(value) => (
+              <span style={{ fontWeight: 700 }}>
+                {getSeriesLabel(value)}
+              </span>
+            )}
+          />
 
           <Bar
             dataKey="appg"
@@ -133,7 +134,7 @@ function PlannedSalesChart({ title, rows, labels }) {
           <Line
             type="monotone"
             dataKey="plan"
-            name="План"
+            name="plan"
             stroke="#e32636"
             strokeWidth={2}
             dot={{ r: 3 }}

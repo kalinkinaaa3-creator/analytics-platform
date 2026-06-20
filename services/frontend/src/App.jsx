@@ -12,7 +12,6 @@ import { AccessDeniedPage } from "./pages/AccessDeniedPage";
 import { PublicLayout } from "./layouts/PublicLayout";
 import { PublicDashboardPage } from "./pages/PublicDashboardPage";
 
-
 function App() {
   return (
     <AuthProvider>
@@ -21,7 +20,19 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
 
           <Route path="/public/:token" element={<PublicLayout />}>
-            <Route path="dashboards/:dashboardSlug" element={<PublicDashboardPage />} />
+            <Route index element={<HomePage />} />
+            <Route
+              path="dashboards/:dashboardSlug"
+              element={<PublicDashboardPage />}
+            />
+          </Route>
+
+          <Route path="/public-group/:token" element={<PublicLayout />}>
+            <Route index element={<HomePage />} />
+            <Route
+              path="dashboard/:dashboardSlug"
+              element={<PublicDashboardPage />}
+            />
           </Route>
 
           <Route
@@ -33,7 +44,10 @@ function App() {
             }
           >
             <Route index element={<HomePage />} />
-            <Route path="dashboards/:dashboardSlug" element={<DashboardPage />} />
+            <Route
+              path="dashboards/:dashboardSlug"
+              element={<DashboardPage />}
+            />
             <Route path="access-denied" element={<AccessDeniedPage />} />
           </Route>
         </Routes>
