@@ -663,7 +663,7 @@ function TreeWarehouseGroup({
   );
 }
 
-export function TurnoverDashboard({ data }) {
+export function TurnoverDashboard({ data, publicToken = null }) {
   const [dashboardData, setDashboardData] = useState(data || {});
   const [expandedMonths, setExpandedMonths] = useState(new Set());
   const [expandedCodes, setExpandedCodes] = useState(new Set());
@@ -730,13 +730,28 @@ export function TurnoverDashboard({ data }) {
     [localFilters]
   );
 
+
+  function getBuilderUrl() {
+    if (publicToken) {
+      return `/v1/dashboards/public-group/${publicToken}/dashboard/turnover/`;
+    }
+
+    return "/v1/dashboards/builder/turnover/";
+  }
+
+  function getExportUrl() {
+    if (publicToken) {
+      return `/v1/datasets/public-group/${publicToken}/fb-turnover/export/`;
+    }
+
+    return "/v1/datasets/fb-turnover/export/";
+  }
+
+
   async function fetchTurnover(nextFilters) {
     const payload = buildPayload(nextFilters);
 
-    const response = await api.post(
-      "/v1/dashboards/builder/turnover/",
-      payload
-    );
+    const response = await api.post(getBuilderUrl(), payload);
 
     const widget = response.data?.widgets?.find(
       (item) => item.type === "fb_turnover_dashboard"
@@ -893,13 +908,9 @@ export function TurnoverDashboard({ data }) {
     try {
       const payload = buildPayload(currentFilters);
 
-      const response = await api.post(
-        "/v1/datasets/fb-turnover/export/",
-        payload,
-        {
-          responseType: "blob",
-        }
-      );
+      const response = await api.post(getExportUrl(), payload, {
+        responseType: "blob",
+      });
 
       const blobUrl = window.URL.createObjectURL(response.data);
       const link = document.createElement("a");

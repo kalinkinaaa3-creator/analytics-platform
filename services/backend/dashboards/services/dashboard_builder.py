@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from django.core.cache import cache
 
 from analytics.clickhouse.repository import ClickHouseRepository
@@ -201,11 +201,21 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
             )
 
         elif widget.type == "fb_project_gantt":
+            project_filters = dict(runtime_filters)
+
+            today = date.today()
+
+            if not project_filters.get("project_start"):
+                project_filters["project_start"] = f"{today.year - 1}-01-01"
+
+            if not project_filters.get("project_end"):
+                project_filters["project_end"] = f"{today.year + 1}-12-31"
+
             rows = repository.fetch_fb_project_rows()
 
             widget_data["data"] = prepare_fb_project_gantt(
                 rows=rows,
-                filters=runtime_filters,
+                filters=project_filters,
             )
 
         elif widget.type == "yd_wordstat_table":
@@ -224,33 +234,63 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
             )
 
         elif widget.type == "fb_purchases_dashboard":
-            rows = repository.fetch_fb_purchases_use_rows(filters=runtime_filters)
-            indicator_rows = repository.fetch_fb_purchases_indicator_rows(filters=runtime_filters)
+            purchases_filters = dict(runtime_filters)
+
+            today = date.today()
+
+            if not purchases_filters.get("date_start"):
+                purchases_filters["date_start"] = f"{today.year}-01-01"
+
+            if not purchases_filters.get("date_end"):
+                purchases_filters["date_end"] = today.isoformat()
+
+            rows = repository.fetch_fb_purchases_use_rows(filters=purchases_filters)
+            indicator_rows = repository.fetch_fb_purchases_indicator_rows(filters=purchases_filters)
 
             widget_data["data"] = prepare_fb_purchases_dashboard(
                 rows=rows,
                 indicator_rows=indicator_rows,
-                filters=runtime_filters,
+                filters=purchases_filters,
             )
 
         elif widget.type == "fb_turnover_dashboard":
-            rows = repository.fetch_fb_turnover_use_rows(filters=runtime_filters)
-            indicator_rows = repository.fetch_fb_turnover_indicator_rows(filters=runtime_filters)
+            turnover_filters = dict(runtime_filters)
+
+            yesterday = date.today() - timedelta(days=1)
+
+            if not turnover_filters.get("date_start"):
+                turnover_filters["date_start"] = f"{yesterday.year}-01-01"
+
+            if not turnover_filters.get("date_end"):
+                turnover_filters["date_end"] = yesterday.isoformat()
+
+            rows = repository.fetch_fb_turnover_use_rows(filters=turnover_filters)
+            indicator_rows = repository.fetch_fb_turnover_indicator_rows(filters=turnover_filters)
 
             widget_data["data"] = prepare_fb_turnover_dashboard(
                 rows=rows,
                 indicator_rows=indicator_rows,
-                filters=runtime_filters,
+                filters=turnover_filters,
             )
 
         elif widget.type == "fb_accreceiv_dashboard":
-            rows = repository.fetch_fb_accreceiv_use_rows(filters=runtime_filters)
-            indicator_rows = repository.fetch_fb_accreceiv_indicator_rows(filters=runtime_filters)
+            accreceiv_filters = dict(runtime_filters)
+
+            yesterday = date.today() - timedelta(days=1)
+
+            if not accreceiv_filters.get("date_start"):
+                accreceiv_filters["date_start"] = f"{yesterday.year}-01-01"
+
+            if not accreceiv_filters.get("date_end"):
+                accreceiv_filters["date_end"] = yesterday.isoformat()
+
+            rows = repository.fetch_fb_accreceiv_use_rows(filters=accreceiv_filters)
+            indicator_rows = repository.fetch_fb_accreceiv_indicator_rows(filters=accreceiv_filters)
 
             widget_data["data"] = prepare_fb_accreceiv_dashboard(
                 rows=rows,
                 indicator_rows=indicator_rows,
-                filters=runtime_filters,
+                filters=accreceiv_filters,
             )
 
         elif widget.type == "planned_sales_dashboard":

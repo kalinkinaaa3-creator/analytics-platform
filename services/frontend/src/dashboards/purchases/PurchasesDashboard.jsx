@@ -439,7 +439,11 @@ function TreeCode({
   );
 }
 
-export function PurchasesDashboard({ data, onFiltersChange }) {
+export function PurchasesDashboard({
+  data,
+  onFiltersChange,
+  publicToken = null,
+}) {
   const filters = data?.filters || {};
   const filterValues = data?.filter_values || {};
   const indicators = data?.indicators || {};
@@ -463,6 +467,15 @@ export function PurchasesDashboard({ data, onFiltersChange }) {
       date_end: now.toISOString().slice(0, 10),
     };
   }, []);
+
+
+  function getExportUrl() {
+    if (publicToken) {
+      return `/v1/datasets/public-group/${publicToken}/fb-purchases/export/`;
+    }
+
+    return "/v1/datasets/fb-purchases/export/";
+  }
 
   function applyFilters(next) {
     setLocalFilters(next);
@@ -572,7 +585,7 @@ export function PurchasesDashboard({ data, onFiltersChange }) {
       const nextCodes = new Set(prev);
 
       if (nextCodes.has(codeKey)) {
-        nextCodes.delete(key);
+        nextCodes.delete(codeKey);
       } else {
         nextCodes.add(codeKey);
       }
@@ -603,13 +616,11 @@ export function PurchasesDashboard({ data, onFiltersChange }) {
 
     try {
       const params = buildParams(localFilters);
+      const url = `${getExportUrl()}?${params.toString()}`;
 
-      const response = await api.get(
-        `/v1/datasets/fb-purchases/export/?${params.toString()}`,
-        {
-          responseType: "blob",
-        }
-      );
+      const response = await api.get(url, {
+        responseType: "blob",
+      });
 
       const blobUrl = window.URL.createObjectURL(response.data);
       const link = document.createElement("a");

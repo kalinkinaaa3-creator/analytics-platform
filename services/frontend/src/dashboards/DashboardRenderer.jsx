@@ -18,7 +18,12 @@ function GlobalSpinner() {
   );
 }
 
-export function DashboardRenderer({ data, loading, onFiltersChange }) {
+export function DashboardRenderer({
+  data,
+  loading,
+  onFiltersChange,
+  publicToken = null,
+}) {
   if (loading && !data?.widgets?.length) {
     return <GlobalSpinner />;
   }
@@ -37,6 +42,7 @@ export function DashboardRenderer({ data, loading, onFiltersChange }) {
               data={widget.data}
               dashboard={data.dashboard}
               onFiltersChange={onFiltersChange}
+              publicToken={publicToken}
             />
           );
         }
@@ -48,6 +54,7 @@ export function DashboardRenderer({ data, loading, onFiltersChange }) {
               data={widget.data}
               dashboard={data.dashboard}
               onFiltersChange={onFiltersChange}
+              publicToken={publicToken}
             />
           );
         }
@@ -59,6 +66,7 @@ export function DashboardRenderer({ data, loading, onFiltersChange }) {
               data={widget.data}
               dashboard={data.dashboard}
               onFiltersChange={onFiltersChange}
+              publicToken={publicToken}
             />
           );
         }
@@ -70,6 +78,7 @@ export function DashboardRenderer({ data, loading, onFiltersChange }) {
               data={widget.data}
               dashboard={data.dashboard}
               onFiltersChange={onFiltersChange}
+              publicToken={publicToken}
             />
           );
         }
@@ -81,6 +90,7 @@ export function DashboardRenderer({ data, loading, onFiltersChange }) {
               data={widget.data}
               dashboard={data.dashboard}
               onFiltersChange={onFiltersChange}
+              publicToken={publicToken}
             />
           );
         }
@@ -92,10 +102,10 @@ export function DashboardRenderer({ data, loading, onFiltersChange }) {
               data={widget.data}
               dashboard={data.dashboard}
               onFiltersChange={onFiltersChange}
+              publicToken={publicToken}
             />
           );
         }
-
 
         return (
           <div key={widget.id}>

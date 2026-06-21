@@ -570,7 +570,7 @@ function TreePartner({
   );
 }
 
-export function AccreceivDashboard({ data }) {
+export function AccreceivDashboard({ data, publicToken = null }) {
   const [dashboardData, setDashboardData] = useState(data || {});
   const [expandedMonths, setExpandedMonths] = useState(new Set());
   const [expandedCodes, setExpandedCodes] = useState(new Set());
@@ -633,13 +633,28 @@ export function AccreceivDashboard({ data }) {
     [localFilters]
   );
 
+
+  function getBuilderUrl() {
+    if (publicToken) {
+      return `/v1/dashboards/public-group/${publicToken}/dashboard/accreceiv/`;
+    }
+
+    return "/v1/dashboards/builder/accreceiv/";
+  }
+
+  function getExportUrl() {
+    if (publicToken) {
+      return `/v1/datasets/public-group/${publicToken}/fb-accreceiv/export/`;
+    }
+
+    return "/v1/datasets/fb-accreceiv/export/";
+  }
+
+
   async function fetchAccreceiv(nextFilters) {
     const payload = buildPayload(nextFilters);
 
-    const response = await api.post(
-      "/v1/dashboards/builder/accreceiv/",
-      payload
-    );
+    const response = await api.post(getBuilderUrl(), payload);
 
     const widget = response.data?.widgets?.find(
       (item) => item.type === "fb_accreceiv_dashboard"
@@ -796,13 +811,9 @@ export function AccreceivDashboard({ data }) {
     try {
       const payload = buildPayload(currentFilters);
 
-      const response = await api.post(
-        "/v1/datasets/fb-accreceiv/export/",
-        payload,
-        {
-          responseType: "blob",
-        }
-      );
+      const response = await api.post(getExportUrl(), payload, {
+        responseType: "blob",
+      });
 
       const blobUrl = window.URL.createObjectURL(response.data);
       const link = document.createElement("a");

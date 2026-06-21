@@ -69,91 +69,13 @@ export function DashboardPage() {
     dashboardSlugRef.current = dashboardSlug;
   }, [dashboardSlug]);
 
-  const defaultDatesReady =
-    !["purchases", "projects", "accreceiv", "turnover"].includes(dashboardSlug) ||
-    (
-      dashboardSlug === "purchases" &&
-      searchParams.has("date_start") &&
-      searchParams.has("date_end")
-    ) ||
-    (
-      dashboardSlug === "projects" &&
-      searchParams.has("project_start") &&
-      searchParams.has("project_end")
-    )||
-    (
-      dashboardSlug === "accreceiv" &&
-      searchParams.has("date_start") &&
-      searchParams.has("date_end")
-    )||
-    (
-      dashboardSlug === "turnover" &&
-      searchParams.has("date_start") &&
-      searchParams.has("date_end")
-    );
-
-  useEffect(() => {
-    if (!["purchases", "projects", "accreceiv", "turnover"].includes(dashboardSlug)) {
-      return;
-    }
-
-    const nextParams = new URLSearchParams(searchParams);
-    const now = new Date();
-    const year = now.getFullYear();
-
-    if (dashboardSlug === "purchases") {
-      if (!nextParams.has("date_start")) {
-        nextParams.set("date_start", `${year}-01-01`);
-      }
-
-      if (!nextParams.has("date_end")) {
-        nextParams.set("date_end", now.toISOString().slice(0, 10));
-      }
-    }
-
-    if (dashboardSlug === "projects") {
-      if (!nextParams.has("project_start")) {
-        nextParams.set("project_start", `${year - 1}-01-01`);
-      }
-
-      if (!nextParams.has("project_end")) {
-        nextParams.set("project_end", `${year + 1}-12-31`);
-      }
-    }
-
-    if (dashboardSlug === "accreceiv") {
-      const yesterday = new Date();
-
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      if (!nextParams.has("date_start")) {
-        nextParams.set("date_start", `${yesterday.getFullYear()}-01-01`);
-      }
-
-      if (!nextParams.has("date_end")) {
-        nextParams.set("date_end", yesterday.toISOString().slice(0, 10));
-      }
-    }
-
-    if (dashboardSlug === "turnover") {
-      const yesterday = new Date();
-
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      if (!nextParams.has("date_start")) {
-        nextParams.set("date_start", `${yesterday.getFullYear()}-01-01`);
-      }
-
-      if (!nextParams.has("date_end")) {
-        nextParams.set("date_end", yesterday.toISOString().slice(0, 10));
-      }
-    }
+  const defaultDatesReady = true;
 
 
-    if (nextParams.toString() !== searchParams.toString()) {
-      setSearchParams(nextParams, { replace: true });
-    }
-  }, [dashboardSlug, searchParams, setSearchParams]);
+
+
+
+
 
   useEffect(() => {
     if (!defaultDatesReady) {
