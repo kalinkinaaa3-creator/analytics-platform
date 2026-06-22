@@ -120,6 +120,38 @@ def normalize_filters_for_dashboard(dashboard: Dashboard, filters: dict | None =
 
 
 
+def apply_default_filters_for_dashboard(dashboard: Dashboard, filters: dict) -> dict:
+    result = dict(filters)
+
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+
+    if dashboard.name == "Projects":
+        if not result.get("project_start"):
+            result["project_start"] = f"{today.year - 1}-01-01"
+
+        if not result.get("project_end"):
+            result["project_end"] = f"{today.year + 1}-12-31"
+
+    elif dashboard.name == "Purchases":
+        if not result.get("date_start"):
+            result["date_start"] = f"{today.year}-01-01"
+
+        if not result.get("date_end"):
+            result["date_end"] = today.isoformat()
+
+    elif dashboard.name in ("Turnover", "Accreceiv"):
+        if not result.get("date_start"):
+            result["date_start"] = f"{yesterday.year}-01-01"
+
+        if not result.get("date_end"):
+            result["date_end"] = yesterday.isoformat()
+
+    return result
+
+
+
+
 def clean_runtime_filters(filters: dict | None = None) -> dict:
     filters = filters or {}
 
@@ -145,6 +177,11 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
     cache_filters = normalize_filters_for_dashboard(
         dashboard=dashboard,
         filters=filters,
+    )
+
+    cache_filters = apply_default_filters_for_dashboard(
+        dashboard=dashboard,
+        filters=cache_filters,
     )
 
     runtime_filters = clean_runtime_filters(cache_filters)

@@ -544,6 +544,7 @@ function TreeMonth({
           }`}
           month={month}
           nomenclatureNode={nomenclatureNode}
+          index={index}
           monthExpanded={monthExpanded}
           expandedCodes={expandedCodes}
           onToggleCode={onToggleCode}
@@ -556,6 +557,7 @@ function TreeMonth({
 function TreeNomenclature({
   month,
   nomenclatureNode,
+  index,
   monthExpanded,
   expandedCodes,
   onToggleCode,
@@ -586,7 +588,13 @@ function TreeNomenclature({
           >
             {codeExpanded ? "[-]" : "[+]"}
           </span>{" "}
-          {nomenclature || "—"}
+          {index < 10 ? (
+            <>
+              <strong>{index + 1}</strong> {nomenclature || "—"}
+            </>
+          ) : (
+            nomenclature || "—"
+          )}
         </td>
 
         <td>—</td>
