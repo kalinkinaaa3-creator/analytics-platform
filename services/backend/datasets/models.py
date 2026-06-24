@@ -975,3 +975,187 @@ class TtProductPrice(models.Model):
 
 
 
+class ParserProductMatch(models.Model):
+    STATUS_ACTIVE = "active"
+    STATUS_INACTIVE = "inactive"
+
+    STATUS_CHOICES = (
+        (STATUS_ACTIVE, "Активен"),
+        (STATUS_INACTIVE, "Неактивен"),
+    )
+
+    product_key_base = models.BigIntegerField(db_index=True)
+    product_key_competitor = models.BigIntegerField(db_index=True)
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_ACTIVE,
+        db_index=True,
+    )
+
+    date_add = models.DateTimeField(auto_now_add=True)
+    date_update = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = "parser_product_match"
+        verbose_name = "Parser: product matching"
+        verbose_name_plural = "Parser: product matches"
+        unique_together = ("product_key_base", "product_key_competitor")
+        indexes = [
+            models.Index(fields=["product_key_base", "product_key_competitor"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.product_key_base} → {self.product_key_competitor}"
+
+
+
+
+class BaseProductPrice(models.Model):
+    product_key = models.BigIntegerField(db_index=True, verbose_name="Product key")
+
+    url = models.URLField(
+        max_length=1000,
+        blank=True,
+        null=True,
+        verbose_name="URL",
+    )
+
+    price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Цена",
+    )
+
+    value_added_tax = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="НДС",
+    )
+
+    final_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Цена без НДС",
+    )
+
+    color = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Цвет",
+    )
+
+    image = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Изображение",
+    )
+
+    name = models.CharField(
+        max_length=1000,
+        blank=True,
+        null=True,
+        verbose_name="Наименование товара",
+    )
+
+    code_1c = models.BigIntegerField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="ID товара в 1С",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Дата добавления",
+    )
+
+    class Meta:
+        db_table = "base_product_price"
+        verbose_name = "Parser: Base price"
+        verbose_name_plural = "Parser: Base prices"
+        indexes = [
+            models.Index(fields=["product_key"]),
+            models.Index(fields=["product_key", "date_add"]),
+            models.Index(fields=["code_1c"]),
+        ]
+
+    def __str__(self):
+        return f"{self.product_key}: {self.name}"
+
+
+
+
+class ParserProductClassification(models.Model):
+    STATUS_ACTIVE = "active"
+    STATUS_INACTIVE = "inactive"
+
+    STATUS_CHOICES = (
+        (STATUS_ACTIVE, "Активен"),
+        (STATUS_INACTIVE, "Неактивен"),
+    )
+
+    product_key = models.BigIntegerField(
+        unique=True,
+        db_index=True,
+        verbose_name="Product key",
+    )
+
+    category = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Категория",
+    )
+
+    subcategory = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Подкатегория",
+    )
+
+    subcategory_type = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Тип подкатегории",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_ACTIVE,
+        db_index=True,
+        verbose_name="Статус",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата добавления",
+    )
+
+    date_update = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Дата изменения",
+    )
+
+    class Meta:
+        db_table = "parser_product_classification"
+        verbose_name = "Parser: product classification"
+        verbose_name_plural = "Parser: products classification"
+
+    def __str__(self):
+        return f"{self.product_key}"

@@ -55,3 +55,11 @@ class PlannedSalesDirectoryUploadSerializer(serializers.Serializer):
 
 class ParserPrefixUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
+
+
+class ProductMatchUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+
+class ProductClassificationUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()

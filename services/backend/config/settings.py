@@ -378,6 +378,24 @@ LOGGING = {
             "encoding": "utf-8",
         },
 
+        "match_parser_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "match_parser.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
+        "base_parser_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "base_parser.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
 
 
 
@@ -476,6 +494,18 @@ LOGGING = {
 
         "parsers.tt": {
             "handlers": ["console", "tt_parser_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "parser_product_match.datasets": {
+            "handlers": ["console", "match_parser_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "parsers.base": {
+            "handlers": ["console", "base_parser_file"],
             "level": "INFO",
             "propagate": False,
         },

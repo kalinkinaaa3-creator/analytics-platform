@@ -455,7 +455,7 @@ def sync_tt_product_urls():
     )
 
     if not prefixes:
-        prefixes = ["tt"]
+        prefixes = ["-"]
 
     active_ids = set()
 

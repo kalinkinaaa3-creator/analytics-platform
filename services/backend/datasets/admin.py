@@ -28,6 +28,9 @@ from .models import (
     PsProductPrice,
     TtProductPrice,
 
+    ParserProductMatch,
+    BaseProductPrice,
+    ParserProductClassification,
 )
 
 
@@ -67,3 +70,7 @@ admin.site.register(ParserProductProperty)
 admin.site.register(TaraProductPrice)
 admin.site.register(PsProductPrice)
 admin.site.register(TtProductPrice)
+
+admin.site.register(ParserProductMatch)
+admin.site.register(BaseProductPrice)
+admin.site.register(ParserProductClassification)

@@ -1,6 +1,8 @@
 
 import tempfile
 
+from datetime import datetime
+
 from rest_framework.viewsets import ModelViewSet
 
 from datasets.models import (
@@ -38,6 +40,9 @@ from .serializers import (
     PlannedSalesDirectoryUploadSerializer,
 
     ParserPrefixUploadSerializer,
+    ProductMatchUploadSerializer,
+    ProductClassificationUploadSerializer,
+
 )
 
 
@@ -117,6 +122,14 @@ from dashboards.models import DashboardPublicGroup
 
 from datasets.services.parsers.prefix_loader import load_parser_prefixes_from_excel
 
+from datasets.services.parsers.product_match_loader import load_product_matches_from_excel
+
+from datasets.services.parsers.product_classification_loader import load_product_classification_from_excel
+
+from django.http import HttpResponse
+
+
+from datasets.services.parsers.product_url_export import build_product_url_control_excel
 
 
 
@@ -1012,3 +1025,65 @@ class ParserPrefixUploadView(APIView):
 
 
 
+class ProductMatchUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = ProductMatchUploadSerializer
+
+    def get_serializer(self, *args, **kwargs):
+        return self.serializer_class(*args, **kwargs)
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uploaded_file = serializer.validated_data["file"]
+
+        result = load_product_matches_from_excel(uploaded_file)
+
+        return Response(result, status=status.HTTP_200_OK)
+    
+
+
+
+class ProductClassificationUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = ProductClassificationUploadSerializer
+
+    def get_serializer(self, *args, **kwargs):
+        return self.serializer_class(*args, **kwargs)
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uploaded_file = serializer.validated_data["file"]
+
+        result = load_product_classification_from_excel(uploaded_file)
+
+        return Response(result, status=status.HTTP_200_OK)
+
+
+
+
+class ProductUrlControlExportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        output = build_product_url_control_excel()
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"parser_product_url_control_{timestamp}.xlsx"
+
+        response = HttpResponse(
+            output.getvalue(),
+            content_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+        return response

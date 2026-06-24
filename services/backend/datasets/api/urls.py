@@ -39,6 +39,9 @@ from .views import (
 
 
     ParserPrefixUploadView,
+    ProductMatchUploadView,
+    ProductClassificationUploadView,
+    ProductUrlControlExportView,
 
 )
 
@@ -140,6 +143,21 @@ urlpatterns = [
     path(
         "parsers/prefixes/upload/",
         ParserPrefixUploadView.as_view(),
+    ),
+
+    path(
+        "parsers/product-matches/upload/",
+        ProductMatchUploadView.as_view(),
+    ),
+
+    path(
+        "parsers/product-classification/upload/",
+        ProductClassificationUploadView.as_view(),
+    ),
+
+    path(
+        "parsers/product-url-control/export/",
+        ProductUrlControlExportView.as_view(),
     ),
 
 
