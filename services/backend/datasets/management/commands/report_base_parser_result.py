@@ -13,7 +13,6 @@ logger = logging.getLogger("parsers.base")
 
 EXPECTED_INACTIVE_ERRORS = [
     "missing_from_map",
-    "not_available_in_yml",
 ]
 
 
