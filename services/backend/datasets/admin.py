@@ -20,6 +20,14 @@ from .models import (
     TurnoverRaw,
     AccreceivRaw,
 
+
+    ParserPrefix,
+    ParserProductUrl,
+    ParserProductProperty,
+    TaraProductPrice,
+    PsProductPrice,
+    TtProductPrice,
+
 )
 
 
@@ -49,3 +57,13 @@ admin.site.register(DashSales)
 admin.site.register(FBPurchasesRaw)
 admin.site.register(TurnoverRaw)
 admin.site.register(AccreceivRaw)
+
+
+
+admin.site.register(ParserPrefix)
+admin.site.register(ParserProductUrl)
+admin.site.register(ParserProductProperty)
+
+admin.site.register(TaraProductPrice)
+admin.site.register(PsProductPrice)
+admin.site.register(TtProductPrice)

@@ -511,3 +511,467 @@ class AccreceivRaw(models.Model):
 
     def __str__(self):
         return self.partner or f"Account receivable raw {self.id}"
+
+
+
+
+
+
+
+#МОДЕЛИ ПАРСЕРОВ
+
+
+
+
+class ParserPrefix(models.Model):
+    source = models.CharField(
+        max_length=50,
+        db_index=True,
+        verbose_name="Источник",
+    )
+
+    prefix = models.CharField(
+        max_length=255,
+        verbose_name="Префикс",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата добавления",
+    )
+
+    class Meta:
+        db_table = "parser_prefix"
+        verbose_name = "Parser: prefix"
+        verbose_name_plural = "Parser: prefixes"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "prefix"],
+                name="parser_prefix_source_prefix_unique",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.source}: {self.prefix}"
+
+
+class ParserProductUrl(models.Model):
+    STATUS_ACTIVE = "active"
+    STATUS_INACTIVE = "inactive"
+
+    STATUS_CHOICES = (
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_INACTIVE, "Inactive"),
+    )
+
+    source = models.CharField(
+        max_length=50,
+        db_index=True,
+        verbose_name="Источник",
+    )
+
+    prefix = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Префикс",
+    )
+
+    url = models.URLField(
+        max_length=1000,
+        verbose_name="URL с префиксом",
+    )
+
+    additional_property = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Дополнительное свойство",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_ACTIVE,
+        db_index=True,
+        verbose_name="Статус",
+    )
+
+    lastmod = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Lastmod из sitemap",
+    )
+
+    is_loaded = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Загружено",
+    )
+
+    last_error = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Последняя ошибка",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата добавления",
+    )
+
+    date_update = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Дата обновления",
+    )
+
+    class Meta:
+        db_table = "parser_product_url"
+        verbose_name = "Parser: Product URL"
+        verbose_name_plural = "Parser: Product URLs"
+        indexes = [
+            models.Index(fields=["source", "status"]),
+            models.Index(fields=["source", "is_loaded"]),
+            models.Index(fields=["source", "date_update"]),
+            models.Index(fields=["url"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "url", "additional_property"],
+                nulls_distinct=False,
+                name="parser_product_url_source_url_additional_unique",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.source}: {self.url}"
+
+
+class ParserProductProperty(models.Model):
+    source = models.CharField(
+        max_length=50,
+        db_index=True,
+        verbose_name="Источник",
+    )
+
+    product_key = models.BigIntegerField(
+        db_index=True,
+        verbose_name="Product key",
+    )
+
+    url = models.URLField(
+        max_length=1000,
+        blank=True,
+        null=True,
+        verbose_name="URL",
+    )
+
+    properties = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name="Свойство",
+    )
+
+    value = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Значение",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата добавления",
+    )
+
+    class Meta:
+        db_table = "parser_product_property"
+        verbose_name = "Parser: product property"
+        verbose_name_plural = "Parser: product properties"
+        indexes = [
+            models.Index(fields=["source", "product_key"]),
+            models.Index(fields=["product_key"]),
+        ]
+
+    def __str__(self):
+        return f"{self.source}: {self.product_key} / {self.properties}"
+
+
+class TaraProductPrice(models.Model):
+    product_key = models.BigIntegerField(
+        db_index=True,
+        verbose_name="Product key",
+    )
+
+    url = models.URLField(
+        max_length=1000,
+        blank=True,
+        null=True,
+        verbose_name="URL",
+    )
+
+    properties_price = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Интервал цены",
+    )
+
+    price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Цена",
+    )
+
+    value_added_tax = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="НДС",
+    )
+
+    final_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Цена без НДС",
+    )
+
+    color = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Цвет",
+    )
+
+    image = models.URLField(
+        max_length=1000,
+        blank=True,
+        null=True,
+        verbose_name="Изображение",
+    )
+
+    special_quantity = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Спец. количество",
+    )
+
+    category = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name="Категория",
+    )
+
+    name = models.CharField(
+        max_length=1000,
+        blank=True,
+        null=True,
+        verbose_name="Наименование",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Дата добавления",
+    )
+
+    class Meta:
+        db_table = "tara_product_price"
+        verbose_name = "Parser: Tara price"
+        verbose_name_plural = "Parser: Tara prices"
+        indexes = [
+            models.Index(fields=["product_key"]),
+            models.Index(fields=["product_key", "date_add"]),
+        ]
+
+    def __str__(self):
+        return f"{self.product_key}: {self.name}"
+
+
+
+
+class PsProductPrice(models.Model):
+    product_key = models.BigIntegerField(
+        db_index=True,
+        verbose_name="Product key",
+    )
+
+    url = models.URLField(
+        max_length=1000,
+        blank=True,
+        null=True,
+        verbose_name="URL",
+    )
+
+    price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Цена",
+    )
+
+    value_added_tax = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="НДС",
+    )
+
+    final_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Цена без НДС",
+    )
+
+    discount = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Скидка в карточке товара",
+    )
+
+    color = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Цвет",
+    )
+
+    image = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Изображение",
+    )
+
+    name = models.CharField(
+        max_length=1000,
+        blank=True,
+        null=True,
+        verbose_name="Наименование товара",
+    )
+
+    properties_price = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Свойства цены",
+    )
+
+    special_quantity = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Персональные условия",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Дата добавления",
+    )
+
+    class Meta:
+        db_table = "ps_product_price"
+        verbose_name = "Parser: PS price"
+        verbose_name_plural = "Parser: PS prices"
+        indexes = [
+            models.Index(fields=["product_key"]),
+            models.Index(fields=["product_key", "date_add"]),
+        ]
+
+    def __str__(self):
+        return f"{self.product_key}: {self.name}"
+
+
+
+
+class TtProductPrice(models.Model):
+    product_key = models.BigIntegerField(
+        db_index=True,
+        verbose_name="Product key",
+    )
+
+    url = models.URLField(
+        max_length=1000,
+        blank=True,
+        null=True,
+        verbose_name="URL",
+    )
+
+    price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Цена",
+    )
+
+    value_added_tax = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="НДС",
+    )
+
+    final_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Цена без НДС",
+    )
+
+    additional_property = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Дополнительное свойство",
+    )
+
+    image = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Изображение",
+    )
+
+    name = models.CharField(
+        max_length=1000,
+        blank=True,
+        null=True,
+        verbose_name="Наименование товара",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Дата добавления",
+    )
+
+    class Meta:
+        db_table = "tt_product_price"
+        verbose_name = "Parser: TT price"
+        verbose_name_plural = "Parser: TT prices"
+        indexes = [
+            models.Index(fields=["product_key"]),
+            models.Index(fields=["product_key", "date_add"]),
+        ]
+
+    def __str__(self):
+        return f"{self.product_key}: {self.name}"
+
+
+
+

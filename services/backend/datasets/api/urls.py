@@ -36,6 +36,10 @@ from .views import (
     PublicFBTurnoverExportView, 
     PublicFBAccreceivExportView,
     PublicFBPurchasesExportView,
+
+
+    ParserPrefixUploadView,
+
 )
 
 
@@ -112,7 +116,7 @@ urlpatterns = [
     ),
     path(
         "public-group/<uuid:token>/fb-purchases/export/",
-        PublicFBAccreceivExportView.as_view(),
+        PublicFBPurchasesExportView.as_view(),
     ),
 
 
@@ -132,6 +136,12 @@ urlpatterns = [
 
     path("maintenance/table-health/", TableHealthCheckView.as_view()),
     path("maintenance/process-kill/", ProcessKillView.as_view()),
+
+    path(
+        "parsers/prefixes/upload/",
+        ParserPrefixUploadView.as_view(),
+    ),
+
 
     path("", include(router.urls)),
 ]

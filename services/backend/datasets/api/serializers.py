@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
-from datasets.models import Dataset
-from datasets.models import DatasetRow
+from datasets.models import Dataset, DatasetRow
+
 
 class DatasetSerializer(serializers.ModelSerializer):
 
@@ -50,4 +50,8 @@ class PlanSalesUploadSerializer(serializers.Serializer):
 
 
 class PlannedSalesDirectoryUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+
+class ParserPrefixUploadSerializer(serializers.Serializer):
     file = serializers.FileField()

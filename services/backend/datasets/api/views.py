@@ -36,6 +36,8 @@ from .serializers import (
     PlannedSalesUploadSerializer,
     PlanSalesUploadSerializer,
     PlannedSalesDirectoryUploadSerializer,
+
+    ParserPrefixUploadSerializer,
 )
 
 
@@ -113,6 +115,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied
 from dashboards.models import DashboardPublicGroup
 
 
+from datasets.services.parsers.prefix_loader import load_parser_prefixes_from_excel
 
 
 
@@ -980,3 +983,32 @@ class ProcessKillView(APIView):
             "status": "ok",
             "command": "kill_long_running_processes",
         })
+    
+
+
+
+
+
+
+
+class ParserPrefixUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = ParserPrefixUploadSerializer
+
+    def get_serializer(self, *args, **kwargs):
+        return self.serializer_class(*args, **kwargs)
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uploaded_file = serializer.validated_data["file"]
+
+        result = load_parser_prefixes_from_excel(uploaded_file)
+
+        return Response(result)
+
+
+
+

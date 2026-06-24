@@ -253,6 +253,19 @@ ENABLE_BITRIX_NOTIFICATIONS = os.getenv("ENABLE_BITRIX_NOTIFICATIONS", "false").
 
 
 
+TARA_BROWSER_SERVICE_URL = os.getenv(
+    "TARA_BROWSER_SERVICE_URL",
+    "http://parser-browser:3000",
+)
+
+TARA_PARSER_WORKERS = int(os.getenv("TARA_PARSER_WORKERS", "3"))
+TARA_PARSER_BATCH_SIZE = int(os.getenv("TARA_PARSER_BATCH_SIZE", "30"))
+
+
+
+
+
+
 
 
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
@@ -329,6 +342,45 @@ LOGGING = {
             "encoding": "utf-8",
         },
 
+        "tara_parser_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "tara_parser.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
+        "parsers_prefix_loader": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "parsers_prefix.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
+        "ps_parser_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "ps_parser.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
+        "tt_parser_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "tt_parser.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
+
+
+
         "process_kill_file": {
             "class": "logging.handlers.RotatingFileHandler",
             "filename": BASE_DIR / "logs" / "process_kill.log",
@@ -403,6 +455,32 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+
+        "parsers.tara": {
+            "handlers": ["console", "tara_parser_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "parsers.prefix_loader": {
+            "handlers": ["console", "parsers_prefix_loader"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "parsers.ps": {
+            "handlers": ["console", "ps_parser_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "parsers.tt": {
+            "handlers": ["console", "tt_parser_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+
 
         "maintenance.process_kill": {
             "handlers": ["console", "process_kill_file"],
