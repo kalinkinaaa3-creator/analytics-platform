@@ -1,6 +1,6 @@
 import csv
 from decimal import Decimal, InvalidOperation
-from datetime import datetime
+from datetime import datetime, date
 from openpyxl import load_workbook
 from datasets.models import TurnoverClear, TurnoverIndicator
 
@@ -45,13 +45,30 @@ def clean_int(value):
         return None
 
 
+from datetime import datetime, date
+
+
 def clean_date(value):
+    if value is None:
+        return None
+
+    if isinstance(value, datetime):
+        return value.date()
+
+    if isinstance(value, date):
+        return value
+
     value = clean_str(value)
 
     if value is None:
         return None
 
-    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y"):
+    for fmt in (
+        "%Y-%m-%d",
+        "%d.%m.%Y",
+        "%d/%m/%Y",
+        "%Y-%m-%d %H:%M:%S",
+    ):
         try:
             return datetime.strptime(value, fmt).date()
         except ValueError:
