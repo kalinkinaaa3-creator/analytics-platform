@@ -7,20 +7,54 @@ from airflow import DAG
 from airflow.operators.bash import BashOperator
 
 
-def send_bitrix_failure_notification(context):
+def get_bitrix_dialog_id() -> str | None:
+    user_id = os.getenv("BITRIX_NOTIFY_USER_ID")
+
+    if not user_id:
+        return None
+
+    user_id = str(user_id).strip()
+
+    if user_id.startswith("user") or user_id.startswith("chat"):
+        return user_id
+
+    if user_id.isdigit():
+        return f"user{user_id}"
+
+    return user_id
+
+
+def send_bitrix_chat_message(message: str) -> bool:
     enabled = os.getenv("ENABLE_BITRIX_NOTIFICATIONS", "false").lower() == "true"
 
     if not enabled:
         print("Bitrix notification skipped: ENABLE_BITRIX_NOTIFICATIONS=false")
-        return
+        return False
 
     webhook_url = os.getenv("BITRIX_WEBHOOK_URL")
-    user_id = os.getenv("BITRIX_NOTIFY_USER_ID")
+    dialog_id = get_bitrix_dialog_id()
 
-    if not webhook_url or not user_id:
-        print("Bitrix notification skipped: webhook or user id is empty")
-        return
+    if not webhook_url or not dialog_id:
+        print("Bitrix notification skipped: webhook or dialog id is empty")
+        return False
 
+    url = webhook_url.rstrip("/") + "/im.message.add.json"
+
+    response = requests.post(
+        url,
+        json={
+            "DIALOG_ID": dialog_id,
+            "MESSAGE": message,
+        },
+        timeout=30,
+    )
+
+    response.raise_for_status()
+    print("Bitrix chat notification sent")
+    return True
+
+
+def send_bitrix_failure_notification(context):
     task_instance = context.get("task_instance")
     dag = context.get("dag")
     exception = context.get("exception")
@@ -31,7 +65,7 @@ def send_bitrix_failure_notification(context):
     log_url = task_instance.log_url if task_instance else ""
 
     message = (
-        "Base parser pipeline FAILED\n\n"
+        "[b]Base parser pipeline FAILED[/b]\n\n"
         f"DAG: {dag_id}\n"
         f"Task: {task_id}\n"
         f"Execution date: {execution_date}\n"
@@ -39,19 +73,7 @@ def send_bitrix_failure_notification(context):
         f"Log: {log_url}"
     )
 
-    url = webhook_url.rstrip("/") + "/im.notify.system.add.json"
-
-    response = requests.post(
-        url,
-        json={
-            "USER_ID": user_id,
-            "MESSAGE": message,
-        },
-        timeout=30,
-    )
-
-    response.raise_for_status()
-    print("Bitrix failure notification sent")
+    send_bitrix_chat_message(message)
 
 
 DEFAULT_ARGS = {
