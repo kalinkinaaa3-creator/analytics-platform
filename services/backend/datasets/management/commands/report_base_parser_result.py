@@ -1,11 +1,10 @@
 import logging
-import os
 from datetime import datetime
 
-import requests
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 
+from analytics.services.bitrix_notify import send_bitrix_message
 from datasets.models import ParserProductUrl
 
 
@@ -14,37 +13,6 @@ logger = logging.getLogger("parsers.base")
 EXPECTED_INACTIVE_ERRORS = [
     "missing_from_map",
 ]
-
-
-def send_bitrix_message(message: str) -> bool:
-    enabled = os.getenv("ENABLE_BITRIX_NOTIFICATIONS", "false").lower() == "true"
-
-    if not enabled:
-        logger.info("Bitrix notification skipped: ENABLE_BITRIX_NOTIFICATIONS=false")
-        return False
-
-    webhook_url = os.getenv("BITRIX_WEBHOOK_URL")
-    user_id = os.getenv("BITRIX_NOTIFY_USER_ID")
-
-    if not webhook_url or not user_id:
-        logger.warning("Bitrix notification skipped: webhook or user id is empty")
-        return False
-
-    url = webhook_url.rstrip("/") + "/im.notify.system.add.json"
-
-    response = requests.post(
-        url,
-        json={
-            "USER_ID": user_id,
-            "MESSAGE": message,
-        },
-        timeout=30,
-    )
-
-    response.raise_for_status()
-    logger.info("Bitrix notification sent")
-
-    return True
 
 
 class Command(BaseCommand):
@@ -149,4 +117,7 @@ class Command(BaseCommand):
         logger.info(message)
         self.stdout.write(message)
 
-        send_bitrix_message(message)
+        send_bitrix_message(
+            message,
+            logger_name="parsers.base",
+        )

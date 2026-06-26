@@ -100,6 +100,7 @@ services:
       TZ: Europe/Moscow
       AIRFLOW__CORE__DEFAULT_TIMEZONE: Europe/Moscow
       AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE: Europe/Moscow
+      PYTHONPATH: /opt/airflow/dags
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
@@ -126,6 +127,7 @@ services:
       TZ: Europe/Moscow
       AIRFLOW__CORE__DEFAULT_TIMEZONE: Europe/Moscow
       AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE: Europe/Moscow
+      PYTHONPATH: /opt/airflow/dags
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
