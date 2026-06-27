@@ -43,6 +43,20 @@ from .views import (
     ProductClassificationUploadView,
     ProductUrlControlExportView,
 
+    YdWordstatPhraseRefUploadView,
+    YdWordstatDeviceRefUploadView,
+    YdWordstatIplastRegionRefUploadView,
+    YdWordstatRegionsRefreshFromApiView,
+    YdWordstatRegionsRefreshFromCsvView,
+    YdWordstatAllLoadFromCsvView,
+    YdWordstatDeviceLoadFromCsvView,
+    YdWordstatRegionLoadFromCsvView,
+
+    YdWordstatAllLoadFromApiView,
+    YdWordstatDeviceLoadFromApiView,
+    YdWordstatRegionLoadFromApiView,
+    YdWordstatFullLoadFromApiView,
+
 )
 
 
@@ -159,6 +173,61 @@ urlpatterns = [
         "parsers/product-url-control/export/",
         ProductUrlControlExportView.as_view(),
     ),
+
+
+    path(
+        "yd-wordstat/phrase-ref-upload/",
+        YdWordstatPhraseRefUploadView.as_view(),
+    ),
+    path(
+        "yd-wordstat/device-ref-upload/",
+        YdWordstatDeviceRefUploadView.as_view(),
+    ),
+    path(
+        "yd-wordstat/iplast-region-ref-upload/",
+        YdWordstatIplastRegionRefUploadView.as_view(),
+    ),
+
+    path(
+        "yd-wordstat/regions-refresh-from-api/",
+        YdWordstatRegionsRefreshFromApiView.as_view(),
+    ),
+    path(
+        "yd-wordstat/regions-refresh-from-csv/",
+        YdWordstatRegionsRefreshFromCsvView.as_view(),
+    ),
+
+
+    path(
+        "yd-wordstat/all/load-from-api/",
+        YdWordstatAllLoadFromApiView.as_view(),
+    ),
+    path(
+        "yd-wordstat/device/load-from-api/",
+        YdWordstatDeviceLoadFromApiView.as_view(),
+    ),
+    path(
+        "yd-wordstat/region/load-from-api/",
+        YdWordstatRegionLoadFromApiView.as_view(),
+    ),
+    path(
+        "yd-wordstat/all/load-from-csv/",
+        YdWordstatAllLoadFromCsvView.as_view(),
+    ),
+    path(
+        "yd-wordstat/device/load-from-csv/",
+        YdWordstatDeviceLoadFromCsvView.as_view(),
+    ),
+    path(
+        "yd-wordstat/region/load-from-csv/",
+        YdWordstatRegionLoadFromCsvView.as_view(),
+    ),
+    path(
+        "yd-wordstat/load-from-api/",
+        YdWordstatFullLoadFromApiView.as_view(),
+    ),
+
+
 
 
     path("", include(router.urls)),

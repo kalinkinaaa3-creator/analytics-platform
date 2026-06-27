@@ -63,3 +63,7 @@ class ProductMatchUploadSerializer(serializers.Serializer):
 
 class ProductClassificationUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
+
+
+class ExcelUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()

@@ -1,5 +1,6 @@
 
 import tempfile
+import os
 
 from datetime import datetime
 
@@ -42,6 +43,8 @@ from .serializers import (
     ParserPrefixUploadSerializer,
     ProductMatchUploadSerializer,
     ProductClassificationUploadSerializer,
+
+    ExcelUploadSerializer,
 
 )
 
@@ -131,7 +134,19 @@ from django.http import HttpResponse
 
 from datasets.services.parsers.product_url_export import build_product_url_control_excel
 
+from datasets.services.external_api.yd_wordstat_ref_excel_loader import (
+    load_yd_wordstat_phrase_ref_from_excel,
+    load_yd_wordstat_device_ref_from_excel,
+    load_yd_wordstat_iplast_region_ref_from_excel,
+)
 
+from datasets.services.external_api.yd_wordstat_region_ref_loader import (
+    refresh_yd_wordstat_regions_from_api,
+    refresh_yd_wordstat_regions_from_csv,
+)
+
+from analytics.services.yd_wordstat_csv_pipeline import run_yd_wordstat_csv_pipeline
+from analytics.services.yd_wordstat_api_pipeline import run_yd_wordstat_api_pipeline
 
 
 
@@ -1087,3 +1102,184 @@ class ProductUrlControlExportView(APIView):
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
 
         return response
+
+
+
+
+
+
+
+class BaseYdWordstatRefExcelUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = ExcelUploadSerializer
+    loader_func = None
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uploaded_file = serializer.validated_data["file"]
+
+        temp_path = None
+
+        try:
+            suffix = os.path.splitext(uploaded_file.name)[1] or ".xlsx"
+
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=suffix,
+            ) as temp_file:
+                for chunk in uploaded_file.chunks():
+                    temp_file.write(chunk)
+
+                temp_path = temp_file.name
+
+            result = self.loader_func(temp_path)
+
+            return Response(result)
+
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                os.remove(temp_path)
+
+
+
+class YdWordstatPhraseRefUploadView(BaseYdWordstatRefExcelUploadView):
+    loader_func = staticmethod(load_yd_wordstat_phrase_ref_from_excel)
+
+
+class YdWordstatDeviceRefUploadView(BaseYdWordstatRefExcelUploadView):
+    loader_func = staticmethod(load_yd_wordstat_device_ref_from_excel)
+
+
+class YdWordstatIplastRegionRefUploadView(BaseYdWordstatRefExcelUploadView):
+    loader_func = staticmethod(load_yd_wordstat_iplast_region_ref_from_excel)
+
+
+class YdWordstatRegionsRefreshFromApiView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        result = refresh_yd_wordstat_regions_from_api()
+        return Response(result)
+
+
+class YdWordstatRegionsRefreshFromCsvView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = ExcelUploadSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uploaded_file = serializer.validated_data["file"]
+
+        temp_path = None
+
+        try:
+            suffix = os.path.splitext(uploaded_file.name)[1] or ".csv"
+
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=suffix,
+            ) as temp_file:
+                for chunk in uploaded_file.chunks():
+                    temp_file.write(chunk)
+
+                temp_path = temp_file.name
+
+            result = refresh_yd_wordstat_regions_from_csv(temp_path)
+
+            return Response(result)
+
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                os.remove(temp_path)
+
+
+
+class BaseYdWordstatCsvPipelineView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = ExcelUploadSerializer
+    source = None
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uploaded_file = serializer.validated_data["file"]
+
+        temp_path = None
+
+        try:
+            suffix = os.path.splitext(uploaded_file.name)[1] or ".csv"
+
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=suffix,
+            ) as temp_file:
+                for chunk in uploaded_file.chunks():
+                    temp_file.write(chunk)
+
+                temp_path = temp_file.name
+
+            result = run_yd_wordstat_csv_pipeline(
+                source=self.source,
+                csv_path=temp_path,
+                truncate_source=True,
+            )
+
+            return Response(result)
+
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                os.remove(temp_path)
+
+
+class YdWordstatAllLoadFromCsvView(BaseYdWordstatCsvPipelineView):
+    source = "all"
+
+
+class YdWordstatDeviceLoadFromCsvView(BaseYdWordstatCsvPipelineView):
+    source = "device"
+
+
+class YdWordstatRegionLoadFromCsvView(BaseYdWordstatCsvPipelineView):
+    source = "region"
+
+
+
+class YdWordstatFullLoadFromApiView(APIView):
+    permission_classes = [HasInternalApiKey]
+
+    def post(self, request):
+        result = run_yd_wordstat_api_pipeline(source=None)
+        return Response(result)
+
+
+class BaseYdWordstatApiPipelineView(APIView):
+    permission_classes = [IsAuthenticated]
+    source = None
+
+    def post(self, request):
+        result = run_yd_wordstat_api_pipeline(source=self.source)
+        return Response(result)
+
+
+class YdWordstatAllLoadFromApiView(BaseYdWordstatApiPipelineView):
+    source = "all"
+
+
+class YdWordstatDeviceLoadFromApiView(BaseYdWordstatApiPipelineView):
+    source = "device"
+
+
+class YdWordstatRegionLoadFromApiView(BaseYdWordstatApiPipelineView):
+    source = "region"
+
+
+
+

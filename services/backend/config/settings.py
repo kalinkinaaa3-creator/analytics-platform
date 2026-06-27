@@ -263,6 +263,24 @@ TARA_PARSER_BATCH_SIZE = int(os.getenv("TARA_PARSER_BATCH_SIZE", "30"))
 
 
 
+YD_WORDSTAT_API_TOKEN = os.getenv("YD_WORDSTAT_API_TOKEN", "")
+YD_WORDSTAT_API_TIMEOUT = int(os.getenv("YD_WORDSTAT_API_TIMEOUT", "60"))
+
+YD_WORDSTAT_API_ERROR_SLEEP_SECONDS = int(
+    os.getenv("YD_WORDSTAT_API_ERROR_SLEEP_SECONDS", "3600")
+)
+
+YD_WORDSTAT_MAX_API_ERROR_WAITS = int(
+    os.getenv("YD_WORDSTAT_MAX_API_ERROR_WAITS", "12")
+)
+
+YD_WORDSTAT_MAX_QUOTA_WAIT_DAYS = int(
+    os.getenv("YD_WORDSTAT_MAX_QUOTA_WAIT_DAYS", "7")
+)
+
+YD_WORDSTAT_QUOTA_RESUME_MINUTES_AFTER_MIDNIGHT = int(
+    os.getenv("YD_WORDSTAT_QUOTA_RESUME_MINUTES_AFTER_MIDNIGHT", "10")
+)
 
 
 
@@ -396,6 +414,16 @@ LOGGING = {
             "encoding": "utf-8",
         },
 
+        "external_api_yd_wordstat": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "api_yd_wordstat.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
+
 
 
 
@@ -506,6 +534,12 @@ LOGGING = {
 
         "parsers.base": {
             "handlers": ["console", "base_parser_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "external_api.yd_wordstat": {
+            "handlers": ["console", "external_api_yd_wordstat"],
             "level": "INFO",
             "propagate": False,
         },
