@@ -28,7 +28,7 @@ TABLE_CHECKS = [
         "name": "PlannedSales",
         "table": "planned_sales",
         "date_add_column": "date_add",
-        "data_date_column": "date",
+        "data_date_column": None,
         "fresh_days": 0,
     },
     {
