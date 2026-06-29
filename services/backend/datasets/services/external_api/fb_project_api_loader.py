@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 
 from django.db import transaction
 
@@ -77,18 +77,14 @@ def clean_date(value):
     if value[:10] == "0001-01-01":
         return None
 
-    formats = [
-        "%Y-%m-%dT%H:%M:%S",
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%d",
-        "%d.%m.%Y",
-    ]
-
-    for fmt in formats:
-        try:
-            return datetime.strptime(value[:19], fmt).date()
-        except Exception:
-            pass
+    try:
+        dt_utc = datetime.strptime(value[:19], "%Y-%m-%dT%H:%M:%S")
+        dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+        moscow_tz = timezone(timedelta(hours=3))
+        dt_moscow = dt_utc.astimezone(moscow_tz)
+        return dt_moscow.date()
+    except Exception:
+        pass
 
     try:
         return datetime.strptime(value[:10], "%Y-%m-%d").date()

@@ -16,3 +16,4 @@ requests
 psutil
 django-cors-headers
 beautifulsoup4
+scikit-learn

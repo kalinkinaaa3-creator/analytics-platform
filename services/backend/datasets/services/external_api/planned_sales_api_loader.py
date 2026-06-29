@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
@@ -72,8 +72,16 @@ def clean_date(value):
     if value[:10] == "0001-01-01":
         return None
 
+    try:
+        dt_utc = datetime.strptime(value[:19], "%Y-%m-%dT%H:%M:%S")
+        dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+        moscow_tz = timezone(timedelta(hours=3))
+        dt_moscow = dt_utc.astimezone(moscow_tz)
+        return dt_moscow.date()
+    except Exception:
+        pass
+
     formats = [
-        "%Y-%m-%dT%H:%M:%S",
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%d",
         "%d.%m.%Y",
@@ -85,10 +93,7 @@ def clean_date(value):
         except Exception:
             pass
 
-    try:
-        return datetime.strptime(value[:10], "%Y-%m-%d").date()
-    except Exception:
-        return None
+    return None
 
 
 def add_leading_zeros(inn):
@@ -132,12 +137,21 @@ def normalize_dash_sales_record(record):
     partner_inn = add_leading_zeros(record.get("partner_inn_"))
     con_inn = add_leading_zeros(record.get("con_inn_"))
 
+
+    partner = clean_nullable_str(record.get("partner_"))
+    partner_code = clean_int(record.get("partner_code_"))
+
+    if partner == "Вайлдберриз ООО" and partner_code == 5002:
+        partner = "РВБ ООО"
+        partner_code = 23522
+        partner_inn = "9714053621"
+
     return DashSales(
         criterion=clean_str(record.get("criterion_")),
         date=clean_date(record.get("date_")),
 
-        partner=clean_nullable_str(record.get("partner_")),
-        partner_code=clean_int(record.get("partner_code_")),
+        partner=partner,
+        partner_code=partner_code,
         partner_inn=clean_nullable_str(partner_inn),
 
         macrosegment=clean_str(record.get("macrosegment_")),

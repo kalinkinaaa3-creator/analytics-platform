@@ -3,7 +3,8 @@ import tempfile
 import os
 
 from datetime import datetime
-
+from django.conf import settings
+from django.http import FileResponse, Http404
 from rest_framework.viewsets import ModelViewSet
 
 from datasets.models import (
@@ -129,10 +130,8 @@ from datasets.services.parsers.product_match_loader import load_product_matches_
 
 from datasets.services.parsers.product_classification_loader import load_product_classification_from_excel
 
-from django.http import HttpResponse
 
 
-from datasets.services.parsers.product_url_export import build_product_url_control_excel
 
 from datasets.services.external_api.yd_wordstat_ref_excel_loader import (
     load_yd_wordstat_phrase_ref_from_excel,
@@ -1086,22 +1085,32 @@ class ProductUrlControlExportView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        output = build_product_url_control_excel()
+        file_path = os.path.join(
+            settings.BASE_DIR,
+            "media",
+            "datasets",
+            "parser_product_url_control_latest.xlsx",
+        )
+
+        if not os.path.exists(file_path):
+            raise Http404(
+                "Export file not found. Run build_product_url_control_export first."
+            )
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"parser_product_url_control_{timestamp}.xlsx"
 
-        response = HttpResponse(
-            output.getvalue(),
+        file_obj = open(file_path, "rb")
+
+        return FileResponse(
+            file_obj,
+            as_attachment=True,
+            filename=filename,
             content_type=(
                 "application/vnd.openxmlformats-officedocument."
                 "spreadsheetml.sheet"
             ),
         )
-
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
-
-        return response
 
 
 

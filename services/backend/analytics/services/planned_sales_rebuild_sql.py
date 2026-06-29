@@ -90,14 +90,14 @@ def rebuild_planned_sales_from_dash_sales_sql():
                                 pd.level3 = 'Прочие'
                                 AND pd.draft2 = 'Отдел продаж "Логистика"'
                                 AND b.contract_initiator = 'Отдел продаж "Логистика"'
-                                AND b.partner NOT IN ('Вайлдберриз ООО', 'ИНТЕРНЕТ РЕШЕНИЯ ООО')
+                                AND b.partner NOT IN ('РВБ ООО', 'ИНТЕРНЕТ РЕШЕНИЯ ООО')
                             )
 
                             OR (
                                 pd.level3 = 'Прочие'
                                 AND pd.draft2 = 'Отдел продаж (СПП)'
                                 AND b.contract_initiator = 'Отдел продаж (СПП)'
-                                AND b.partner NOT IN ('Вайлдберриз ООО', 'ИНТЕРНЕТ РЕШЕНИЯ ООО')
+                                AND b.partner NOT IN ('РВБ ООО', 'ИНТЕРНЕТ РЕШЕНИЯ ООО')
                             )
 
                             OR (
@@ -277,14 +277,14 @@ def rebuild_planned_sales_from_dash_sales_sql():
                                 pd.level3 = 'Прочие'
                                 AND pd.draft2 = 'Отдел продаж "Логистика"'
                                 AND b.contract_initiator = 'Отдел продаж "Логистика"'
-                                AND b.partner NOT IN ('Вайлдберриз ООО', 'ИНТЕРНЕТ РЕШЕНИЯ ООО')
+                                AND b.partner NOT IN ('РВБ ООО', 'ИНТЕРНЕТ РЕШЕНИЯ ООО')
                             )
 
                             OR (
                                 pd.level3 = 'Прочие'
                                 AND pd.draft2 = 'Отдел продаж (СПП)'
                                 AND b.contract_initiator = 'Отдел продаж (СПП)'
-                                AND b.partner NOT IN ('Вайлдберриз ООО', 'ИНТЕРНЕТ РЕШЕНИЯ ООО')
+                                AND b.partner NOT IN ('РВБ ООО', 'ИНТЕРНЕТ РЕШЕНИЯ ООО')
                             )
 
                             OR (

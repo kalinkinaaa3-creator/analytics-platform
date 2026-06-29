@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
@@ -50,24 +50,35 @@ def clean_date(value):
     if value[:10] == "0001-01-01":
         return None
 
-    formats = [
-        "%Y-%m-%dT%H:%M:%S",
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%d",
-        "%d.%m.%Y",
-    ]
-
-    for fmt in formats:
-        try:
-            return datetime.strptime(value[:19], fmt).date()
-        except Exception:
-            pass
+    try:
+        dt_utc = datetime.strptime(value[:19], "%Y-%m-%dT%H:%M:%S")
+        dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+        moscow_tz = timezone(timedelta(hours=3))
+        dt_moscow = dt_utc.astimezone(moscow_tz)
+        return dt_moscow.date()
+    except Exception:
+        pass
 
     try:
         return datetime.strptime(value[:10], "%Y-%m-%d").date()
     except Exception:
         return None
 
+
+def clean_date_draft(value):
+    if value is None:
+        return None
+
+    value = str(value).strip()
+
+    if value == "":
+        return None
+
+    try:
+        return datetime.strptime(value[:10], "%Y-%m-%d").date()
+    except Exception:
+        return None
+    
 
 def get_fb_purchases_load_period(end_date=None):
     end_date = end_date or date.today()
@@ -87,7 +98,9 @@ def get_fb_purchases_load_period(end_date=None):
 
 
 def normalize_fb_purchases_raw_record(record):
-    row_date = clean_date(record.get("date_1C"))
+    raw_date = record.get("date_1C")
+    row_date = clean_date(raw_date)
+    draft_date = clean_date_draft(raw_date)
 
     return FBPurchasesRaw(
         date_1C=row_date,
@@ -104,7 +117,7 @@ def normalize_fb_purchases_raw_record(record):
         revenue_1C_100753=clean_decimal(record.get("revenue_1C_100753")),
         VAT_1C_100753=clean_decimal(record.get("VAT_1C_100753")),
 
-        date_draft=row_date,
+        date_draft=draft_date,
         party_status=clean_str(record.get("party_status")),
         partner=clean_str(record.get("partner")),
         nomenclature=clean_str(record.get("nomenclature")),

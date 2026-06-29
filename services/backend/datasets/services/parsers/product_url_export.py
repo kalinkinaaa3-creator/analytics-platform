@@ -1,12 +1,17 @@
 from io import BytesIO
 
 from openpyxl import Workbook
+from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 
 from datasets.models import (
     ParserProductUrl,
     ParserProductClassification,
     ParserProductMatch,
+)
+
+from datasets.services.parsers.product_auto_classification_ml import (
+    build_suggested_classification_rows,
 )
 
 
@@ -23,6 +28,30 @@ COLUMNS = [
     "prefix",
     "status",
 ]
+
+SUGGESTED_CLASSIFICATION_COLUMNS = [
+    "product_key",
+    "source",
+    "url",
+    "additional_property",
+    "product_name",
+    "suggested_category",
+    "suggested_subcategory",
+    "suggested_subcategory_type",
+    "classification_source",
+    "confidence",
+    "category_confidence",
+    "subcategory_confidence",
+    "subcategory_type_confidence",
+    "status",
+    "auto_created_subcategory",
+    "suggestion_note",
+]
+
+AUTO_CREATED_FILL = PatternFill(
+    fill_type="solid",
+    fgColor="FFF2CC",
+)
 
 
 def format_value(value):
@@ -55,13 +84,50 @@ def write_sheet(workbook, sheet_name, rows):
     worksheet.freeze_panes = "A2"
 
 
+def write_custom_sheet(workbook, sheet_name, columns, rows):
+    worksheet = workbook.create_sheet(title=sheet_name)
+
+    worksheet.append(columns)
+
+    auto_created_column_index = (
+        columns.index("auto_created_subcategory") + 1
+        if "auto_created_subcategory" in columns
+        else None
+    )
+
+    for row in rows:
+        worksheet.append([
+            format_value(row.get(column))
+            for column in columns
+        ])
+
+        if (
+            auto_created_column_index
+            and row.get("auto_created_subcategory") is True
+        ):
+            excel_row_number = worksheet.max_row
+
+            for cell in worksheet[excel_row_number]:
+                cell.fill = AUTO_CREATED_FILL
+
+    for column_index, column_name in enumerate(columns, start=1):
+        worksheet.column_dimensions[get_column_letter(column_index)].width = max(
+            15,
+            min(len(column_name) + 5, 45),
+        )
+
+    worksheet.freeze_panes = "A2"
+
+
 def build_product_url_control_excel() -> BytesIO:
     active_urls_qs = ParserProductUrl.objects.filter(
         status=ParserProductUrl.STATUS_ACTIVE,
     )
 
     classified_product_keys = set(
-        ParserProductClassification.objects.values_list(
+        ParserProductClassification.objects.filter(
+            status=ParserProductClassification.STATUS_ACTIVE,
+        ).values_list(
             "product_key",
             flat=True,
         )
@@ -74,11 +140,14 @@ def build_product_url_control_excel() -> BytesIO:
         )
     )
 
-    miss_classification_rows = list(
+    miss_classification_qs = (
         active_urls_qs
         .exclude(id__in=classified_product_keys)
         .order_by("source", "id")
-        .values(*[
+    )
+
+    miss_classification_rows = list(
+        miss_classification_qs.values(*[
             "id",
             "source",
             "url",
@@ -119,6 +188,10 @@ def build_product_url_control_excel() -> BytesIO:
     for row in pass_rows:
         row["product_key"] = row.pop("id")
 
+    suggested_classification_rows = build_suggested_classification_rows(
+        product_urls=list(miss_classification_qs),
+    )
+
     workbook = Workbook()
 
     default_sheet = workbook.active
@@ -128,6 +201,13 @@ def build_product_url_control_excel() -> BytesIO:
         workbook=workbook,
         sheet_name="miss_product_classification",
         rows=miss_classification_rows,
+    )
+
+    write_custom_sheet(
+        workbook=workbook,
+        sheet_name="suggested_classification",
+        columns=SUGGESTED_CLASSIFICATION_COLUMNS,
+        rows=suggested_classification_rows,
     )
 
     write_sheet(
