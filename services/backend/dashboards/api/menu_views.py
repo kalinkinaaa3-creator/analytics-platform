@@ -8,6 +8,7 @@ from dashboards.models import Dashboard, DashboardAccess
 DASHBOARD_MENU_CONFIG = {
     "Общее": [
         ("Projects", "Проекты"),
+        ("Revenue", "Динамика выручки"),
     ],
     "ECOM": [
         ("Wordstat", "Тренды и сезонность"),

@@ -32,6 +32,13 @@ TABLE_CHECKS = [
         "fresh_days": 0,
     },
     {
+        "name": "Revenue",
+        "table": "revenue_sales",
+        "date_add_column": "date_add",
+        "data_date_column": "date",
+        "fresh_days": 0,
+    },
+    {
         "name": "Purchases raw",
         "table": "fb_purchases_raw",
         "date_add_column": "date_add",

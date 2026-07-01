@@ -423,6 +423,14 @@ LOGGING = {
             "encoding": "utf-8",
         },
 
+        "revenue_sales": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "revenue_sales.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
 
 
 
@@ -540,6 +548,12 @@ LOGGING = {
 
         "external_api.yd_wordstat": {
             "handlers": ["console", "external_api_yd_wordstat"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "analytics.revenue_sales": {
+            "handlers": ["console", "revenue_sales"],
             "level": "INFO",
             "propagate": False,
         },

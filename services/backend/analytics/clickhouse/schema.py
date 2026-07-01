@@ -344,3 +344,56 @@ def ensure_planned_sales_directory_table():
         ENGINE = MergeTree()
         ORDER BY (level1, level2, level3, id)
     """)
+
+
+
+
+def ensure_revenue_sales_table():
+    client = get_clickhouse_client()
+
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS default.revenue_sales
+        (
+            id UInt64,
+            date Date,
+
+            direction String,
+            project String,
+            manager String,
+
+            partner String,
+            partner_code Nullable(Int64),
+            consignee String,
+
+            nom_view String,
+            nom_category String,
+            nom_group String,
+            nom String,
+            nom_code Nullable(Int64),
+
+            type_doc String,
+
+            quantity Nullable(Decimal(15, 0)),
+            weight_total Nullable(Decimal(12, 2)),
+            revenue Nullable(Decimal(20, 2)),
+
+            is_new_sku UInt8,
+            is_new_client UInt8,
+
+            date_add DateTime
+        )
+        ENGINE = MergeTree()
+        ORDER BY (
+            date,
+            direction,
+            project,
+            manager,
+            partner,
+            consignee,
+            nom_view,
+            nom_category,
+            nom_group,
+            nom,
+            id
+        )
+    """)

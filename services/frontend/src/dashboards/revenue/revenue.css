@@ -1,0 +1,396 @@
+/* ОБЩЕЕ */
+.revenue-dashboard {
+  font-family: Helvetica, sans-serif;
+  overflow-x: hidden;
+}
+
+/* ФИЛЬТРЫ */
+.revenue-dashboard #filterForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 15px;
+  background-color: #fafafa;
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.revenue-dashboard .filter {
+  flex-basis: 120px; 
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+
+
+
+.revenue-dashboard .filter--xll {
+  flex: 0 0 387px;
+  width: 387px;
+  max-width: 387px;
+}
+.revenue-dashboard .filter--smm {
+  flex: 0 0 100px;
+  width: 100px;
+  max-width: 100px;
+}
+
+
+.revenue-dashboard .filter label {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+  font-weight: bold;
+  min-height: 18px;
+  text-align: center;
+}
+
+.revenue-dashboard .filters-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+}
+
+.revenue-dashboard .filters-reset {
+  border-radius: 4px;
+  height: 44px;
+  cursor: pointer;
+  background: linear-gradient(90deg, #6c6c5a, #4e4e43);
+  color: white;
+  border: #4d5747;
+  transition: all 0.3s ease;
+}
+
+.revenue-dashboard .filters-reset:hover {
+  color: black;
+  border: #c8cec5;
+  filter: brightness(1);
+  background: linear-gradient(90deg, #a0a699, #c8cec5);
+}
+
+.revenue-dashboard .filters-export {
+  border-radius: 4px;
+  height: 44px;
+  cursor: pointer;
+  background: linear-gradient(90deg, #6c6c5a, #4e4e43);
+  color: white;
+  border: #4d5747;
+  transition: all 0.3s ease;
+}
+
+.revenue-dashboard .filters-export:hover {
+  color: black;
+  border: #c8cec5;
+  filter: brightness(1);
+  background: linear-gradient(90deg, #a0a699, #c8cec5);
+}
+
+.revenue-dashboard .filters-export:disabled,
+.revenue-dashboard .filters-reset:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.revenue-dashboard #date_start_filter,
+.revenue-dashboard #date_end_filter {
+  min-height: 20px;
+}
+
+/* MULTI-SELECT */
+.revenue-dashboard .filter .multi-select {
+  width: 100%;
+  position: relative;
+  min-height: 24px;
+}
+
+.revenue-dashboard .filter .top-bar {
+  border: 1px solid #000;
+  border-radius: 2px;
+  background: #fff;
+  min-height: 24px;
+  padding: 2px 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+}
+
+.revenue-dashboard .filter .top-bar:focus-within {
+  border-color: #6c6c5a;
+  box-shadow: 0 0 0 1px #a0a699;
+}
+
+.revenue-dashboard .filter .selected-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.revenue-dashboard .filter .tag {
+  background: #4d5747;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+}
+
+.revenue-dashboard .filter .tag button {
+  background: none;
+  border: none;
+  color: white;
+  margin-left: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.revenue-dashboard .filter input[type="text"] {
+  border: none;
+  outline: none;
+  flex: 1;
+  min-width: 60px;
+  font-size: 13px;
+}
+
+.revenue-dashboard .filter .dropdown {
+  position: absolute;
+  width: 100%;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  margin-top: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+  display: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 100;
+}
+
+.revenue-dashboard .filter .multi-select.open .dropdown {
+  display: block;
+}
+
+.revenue-dashboard .filter .dropdown-item {
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.revenue-dashboard .filter .dropdown-item:hover {
+  background: #f0f3f7;
+}
+
+.revenue-dashboard .filter .dropdown-item label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-weight: normal;
+  text-align: left;
+}
+
+.revenue-dashboard .filter .select-all {
+  border-bottom: 1px solid #eee;
+  font-weight: bold;
+  background: #fafafa;
+}
+
+.revenue-dashboard .filter input[type="checkbox"] {
+  transform: scale(0.9);
+  cursor: pointer;
+}
+
+/* ИНДИКАТОРЫ */
+.revenue-dashboard #indicators-container {
+  margin-bottom: 20px;
+}
+
+.revenue-dashboard .indicators-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 64px;
+  font-family: Helvetica, sans-serif;
+  margin-bottom: 20px;
+}
+
+.revenue-dashboard .indicators-column {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.revenue-dashboard .indicator-card {
+  background-color: #f8f9fa;  /* светлый фон */
+  border: 1px solid #ddd;     /* рамка */
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+.revenue-dashboard .indicator-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.revenue-dashboard .indicator-card .title {
+  font-size: 14px;
+  color: #555;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.revenue-dashboard .indicator-card .value {
+  font-size: 22px;
+  font-weight: bold;
+  color: #222;
+}
+
+
+
+
+/* ГРАФИКИ */
+.revenue-dashboard #charts-scroll-container {
+  width: 100%;
+  overflow: hidden;
+}
+
+.revenue-dashboard #charts-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.8rem;
+  width: 100%;
+  padding: 0.5rem 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+
+.revenue-dashboard .chart-block {
+  min-width: 0;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,249,250,0.94));
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(180, 185, 190, 0.7);
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.10),
+    0 2px 6px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.revenue-dashboard .chart-block::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 14px;
+  right: 14px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255,255,255,0.95),
+    transparent
+  );
+}
+
+.revenue-dashboard .chart-block::after {
+  content: "";
+  position: absolute;
+  top: -60px;
+  right: -80px;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(
+    circle,
+    rgba(255,255,255,0.55),
+    rgba(255,255,255,0) 65%
+  );
+  pointer-events: none;
+}
+
+.revenue-dashboard .chart-block:hover {
+  transform: translateY(-3px);
+  border-color: rgba(108, 108, 90, 0.55);
+  box-shadow:
+    0 16px 36px rgba(15, 23, 42, 0.14),
+    0 4px 10px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.revenue-dashboard .chart-block h4 {
+  color: #1f2933;
+  letter-spacing: 0.01em;
+}
+
+.revenue-dashboard #toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #324552;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 6px;
+  z-index: 9999;
+  transition: opacity 0.3s;
+}
+
+/* MOBILE */
+@media (max-width: 768px) {
+  .revenue-dashboard #filterForm {
+    gap: 10px 8px;
+    padding: 12px;
+  }
+
+  .revenue-dashboard .filter {
+    flex-basis: 100%;
+  }
+
+  .revenue-dashboard .filters-actions {
+    margin-left: 0;
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .revenue-dashboard .filters-reset,
+  .revenue-dashboard .filters-export {
+    width: 100%;
+  }
+
+  .revenue-dashboard .filter .dropdown {
+    max-height: 180px;
+  }
+
+  .revenue-dashboard .filter .tag {
+    font-size: 10px;
+  }
+
+  .revenue-dashboard .indicators-container {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .revenue-dashboard #charts-container {
+    grid-template-columns: 1fr;
+  }
+}

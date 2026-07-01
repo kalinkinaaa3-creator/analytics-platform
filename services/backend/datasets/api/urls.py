@@ -57,6 +57,8 @@ from .views import (
     YdWordstatRegionLoadFromApiView,
     YdWordstatFullLoadFromApiView,
 
+    RevenueExportView,
+    SalesRefreshView,
 )
 
 
@@ -122,6 +124,8 @@ urlpatterns = [
     path("fb-purchases/export/", FBPurchasesExportView.as_view()),
     path("fb-turnover/export/", FBTurnoverExportView.as_view()),
     path("fb-accreceiv/export/", FBAccreceivExportView.as_view()),
+
+    path("revenue/export/", RevenueExportView.as_view()),
 
     path(
         "public-group/<uuid:token>/fb-turnover/export/",
@@ -226,8 +230,7 @@ urlpatterns = [
         "yd-wordstat/load-from-api/",
         YdWordstatFullLoadFromApiView.as_view(),
     ),
-
-
+    path("sales/refresh/", SalesRefreshView.as_view()),
 
 
     path("", include(router.urls)),

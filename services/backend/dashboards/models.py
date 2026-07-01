@@ -44,6 +44,7 @@ class DashboardWidget(models.Model):
         ("fb_turnover_dashboard", "FB Turnover Dashboard"),
         ("fb_accreceiv_dashboard", "FB Accreceiv Dashboard"),
         ("planned_sales_dashboard", "Planned Sales Dashboard"),
+        ("revenue_dashboard", "Revenue Dashboard"),
     )
 
     dashboard = models.ForeignKey(

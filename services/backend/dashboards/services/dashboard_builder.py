@@ -18,6 +18,8 @@ from analytics.services.fb_accreceiv_prepare import prepare_fb_accreceiv_dashboa
 
 from analytics.services.planned_sales_prepare import prepare_planned_sales_dashboard
 
+from analytics.services.revenue_sales_prepare import prepare_revenue_dashboard
+
 
 from rest_framework.exceptions import PermissionDenied
 from dashboards.services.access import user_can_view_dashboard
@@ -35,6 +37,7 @@ def get_dashboard_cache_timeout(dashboard: Dashboard) -> int:
         "Turnover": 24 * 3600,    # 24 часа
         "Accreceiv": 24 * 3600,   # 24 часа
         "PlannedSales": 24 * 3600,
+        "Revenue": 24 * 3600,
     }
 
     return timeouts.get(dashboard.name, 300)
@@ -101,6 +104,22 @@ def normalize_filters_for_dashboard(dashboard: Dashboard, filters: dict | None =
             "date",
         ]
 
+    elif dashboard.name == "Revenue":
+        keys = [
+            "direction",
+            "project",
+            "manager",
+            "partner",
+            "consignee",
+            "nom_view",
+            "nom_category",
+            "nom_group",
+            "nom",
+            "nom_code",
+            "date_start",
+            "date_end",
+        ]
+
 
     else:
         keys = sorted(filters.keys())
@@ -113,10 +132,24 @@ def normalize_filters_for_dashboard(dashboard: Dashboard, filters: dict | None =
         if value is None:
             value = ""
 
+        if isinstance(value, tuple):
+            value = list(value)
+
+        if isinstance(value, list):
+            value = [
+                item
+                for item in value
+                if item not in ("", None)
+            ]
+
+            value = sorted(
+                value,
+                key=lambda item: str(item),
+            )
+
         normalized[key] = value
 
     return normalized
-
 
 
 
@@ -146,6 +179,13 @@ def apply_default_filters_for_dashboard(dashboard: Dashboard, filters: dict) -> 
 
         if not result.get("date_end"):
             result["date_end"] = yesterday.isoformat()
+
+    elif dashboard.name == "Revenue":
+        if not result.get("date_start"):
+            result["date_start"] = f"{today.year}-01-01"
+
+        if not result.get("date_end"):
+            result["date_end"] = today.isoformat()
 
     return result
 
@@ -365,6 +405,26 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
                     "date_end": date_end or "",
                 },
                 available_dates=available_dates,
+            )
+
+        elif widget.type == "revenue_dashboard":
+            revenue_filters = dict(runtime_filters)
+
+            rows = repository.fetch_revenue_sales_rows(
+                filters=revenue_filters,
+            )
+
+            filter_options = repository.fetch_revenue_sales_filter_options(
+                filters=revenue_filters,
+            )
+
+            last_update = repository.fetch_revenue_sales_last_update()
+
+            widget_data["data"] = prepare_revenue_dashboard(
+                rows=rows,
+                filters=revenue_filters,
+                filter_options=filter_options,
+                last_update=last_update,
             )
 
 

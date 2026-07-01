@@ -1344,3 +1344,46 @@ class YdWordstatMacroregionRaw(models.Model):
 
     def __str__(self):
         return f"{self.phrase} {self.macroregion_label} {self.date}: {self.count}"
+
+
+
+
+
+
+class RevenueSales(models.Model):
+    date = models.DateField("Дата", db_index=True)
+
+    direction = models.CharField("Направление", max_length=255, blank=True, null=True, db_index=True)
+    project = models.CharField("Проект", max_length=255, blank=True, null=True, db_index=True)
+
+    manager = models.CharField("Менеджер", max_length=255, blank=True, null=True, db_index=True)
+    partner = models.CharField("Контрагент", max_length=600, blank=True, null=True, db_index=True)
+    consignee = models.CharField("Грузополучатель", max_length=600, blank=True, null=True, db_index=True)
+    partner_code = models.IntegerField(blank=True, null=True, db_index=True)
+
+    nom_view = models.CharField("Вид продукции", max_length=255, blank=True, null=True, db_index=True)
+    nom_category = models.CharField("Категория", max_length=255, blank=True, null=True, db_index=True)
+    nom_group = models.CharField("Группа", max_length=255, blank=True, null=True, db_index=True)
+    nom = models.CharField("Номенклатура", max_length=600, blank=True, null=True, db_index=True)
+    nom_code = models.IntegerField("Код номенклатуры", blank=True, null=True, db_index=True)
+
+    type_doc = models.CharField("Документ-регистратор", max_length=600, blank=True, null=True, db_index=True)
+
+    quantity = models.DecimalField(max_digits=15, decimal_places=0, blank=True, null=True)
+    weight_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    revenue = models.DecimalField(max_digits=20, decimal_places=2, blank=True, null=True)
+
+    is_new_sku = models.BooleanField(default=False)
+    is_new_client = models.BooleanField(default=False)
+
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "revenue_sales"
+        indexes = [
+            models.Index(fields=["date"], name="idx_rev_sales_date"),
+            models.Index(fields=["date", "direction"], name="idx_rev_sales_dir"),
+            models.Index(fields=["date", "project"], name="idx_rev_sales_proj"),
+            models.Index(fields=["date", "partner"], name="idx_rev_sales_partner"),
+            models.Index(fields=["date", "nom_code"], name="idx_rev_sales_nom_code"),
+        ]

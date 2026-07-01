@@ -98,6 +98,8 @@ from analytics.services.excel_exports import (
     export_purchases_to_excel,
     export_turnover_to_excel,
     export_accreceiv_to_excel,
+
+    export_revenue_to_excel,
 )
 
 
@@ -148,6 +150,7 @@ from analytics.services.yd_wordstat_csv_pipeline import run_yd_wordstat_csv_pipe
 from analytics.services.yd_wordstat_api_pipeline import run_yd_wordstat_api_pipeline
 
 
+from django.core.cache import cache
 
 
 
@@ -952,7 +955,44 @@ class PlannedSalesApiLoadView(APIView):
         result = run_planned_sales_api_pipeline()
 
         return Response(result)
-    
+
+
+class SalesRefreshView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    LOCK_KEY = "sales_api_refresh_lock"
+    LOCK_TIMEOUT = 60 * 60
+
+    def post(self, request):
+        can_refresh = DashboardAccess.objects.filter(
+            user=request.user,
+            dashboard__slug__in=["revenue", "planned-sales"],
+            can_edit=True,
+        ).exists()
+
+        if not can_refresh:
+            return Response(
+                {"error": "No edit permission"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if cache.get(self.LOCK_KEY):
+            return Response(
+                {
+                    "status": "locked",
+                    "message": "Обновление данных уже выполнено за текущий час",
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        cache.set(self.LOCK_KEY, True, timeout=self.LOCK_TIMEOUT)
+
+        result = run_planned_sales_api_pipeline()
+
+        return Response(result)
+
+
+
 
 class FBPurchasesApiLoadView(APIView):
     authentication_classes = []
@@ -1292,3 +1332,40 @@ class YdWordstatRegionLoadFromApiView(BaseYdWordstatApiPipelineView):
 
 
 
+
+
+class RevenueExportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_filters_from_query_params(self, request):
+        filters = {}
+
+        for key in request.query_params.keys():
+            values = request.query_params.getlist(key)
+
+            if len(values) > 1:
+                filters[key] = values
+            elif values:
+                filters[key] = values[0]
+
+        return filters
+
+    def _get_filters_from_body(self, request):
+        return request.data or {}
+
+    def _export(self, filters):
+        repo = ClickHouseRepository()
+
+        rows = repo.fetch_revenue_sales_rows(filters)
+
+        return export_revenue_to_excel(rows)
+
+    def get(self, request):
+        filters = self._get_filters_from_query_params(request)
+
+        return self._export(filters)
+
+    def post(self, request):
+        filters = self._get_filters_from_body(request)
+
+        return self._export(filters)

@@ -228,3 +228,75 @@ def export_accreceiv_to_excel(accreceiv_list, filename="accreceiv.xlsx"):
         filename=filename,
         sheet_name="ДЗ",
     )
+
+
+
+
+
+
+def export_revenue_to_excel(rows, filename="revenue.xlsx"):
+    column_aliases = {
+        "date": "Дата",
+        "direction": "Направление",
+        "project": "Проект",
+        "manager": "Менеджер",
+        "partner": "Контрагент",
+        "partner_code": "Код контрагента",
+        "consignee": "Грузополучатель",
+        "nom_view": "Вид продукции",
+        "nom_category": "Категория",
+        "nom_group": "Группа",
+        "nom": "Номенклатура",
+        "nom_code": "Код номенклатуры",
+        "type_doc": "Документ-регистратор",
+        "quantity": "Количество",
+        "weight_total": "Вес",
+        "revenue": "Выручка",
+        "is_new_sku": "Новый SKU",
+        "is_new_client": "Новый клиент",
+    }
+
+    export_columns = list(column_aliases.keys())
+
+    data_for_export = [
+        {
+            column: row.get(column)
+            for column in export_columns
+        }
+        for row in rows
+    ]
+
+    df = pd.DataFrame(data_for_export)
+    df = df.rename(columns=column_aliases)
+
+    if not df.empty:
+        numeric_columns = [
+            "Код контрагента",
+            "Код номенклатуры",
+            "Количество",
+            "Вес",
+            "Выручка",
+        ]
+
+        for column in numeric_columns:
+            if column in df.columns:
+                df[column] = pd.to_numeric(
+                    df[column],
+                    errors="coerce",
+                ).fillna(0)
+
+        def format_bool(value):
+            if value in (True, 1, "1", "true", "True", "TRUE", "t", "T", "yes", "Yes", "YES"):
+                return "Да"
+
+            return "Нет"
+
+        df["Новый SKU"] = df["Новый SKU"].apply(format_bool)
+
+        df["Новый клиент"] = df["Новый клиент"].apply(format_bool)
+
+    return dataframe_to_excel_response(
+        df=df,
+        filename=filename,
+        sheet_name="Выручка",
+    )

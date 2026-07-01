@@ -4,6 +4,7 @@ import { WordstatDashboard } from "./wordstat/WordstatDashboard";
 import { PurchasesDashboard } from "./purchases/PurchasesDashboard";
 import { AccreceivDashboard } from "./accreceiv/AccreceivDashboard";
 import { TurnoverDashboard } from "./turnover/TurnoverDashboard";
+import { RevenueDashboard } from "./revenue/RevenueDashboard";
 
 import "./spinner.css";
 
@@ -98,6 +99,18 @@ export function DashboardRenderer({
         if (widget.type === "fb_turnover_dashboard") {
           return (
             <TurnoverDashboard
+              key={widget.id}
+              data={widget.data}
+              dashboard={data.dashboard}
+              onFiltersChange={onFiltersChange}
+              publicToken={publicToken}
+            />
+          );
+        }
+
+        if (widget.type === "revenue_dashboard") {
+          return (
+            <RevenueDashboard
               key={widget.id}
               data={widget.data}
               dashboard={data.dashboard}

@@ -14,6 +14,7 @@ from analytics.clickhouse.schema import (
     ensure_planned_sales_table,
     ensure_plan_sales_table,
     ensure_planned_sales_directory_table,
+    ensure_revenue_sales_table,
 )
 from datetime import date, datetime
 
@@ -233,6 +234,29 @@ PLANNED_SALES_DIRECTORY_COLUMNS = [
 
 
 
+
+REVENUE_SALES_COLUMNS = [
+    "id",
+    "date",
+    "direction",
+    "project",
+    "manager",
+    "partner",
+    "partner_code",
+    "consignee",
+    "nom_view",
+    "nom_category",
+    "nom_group",
+    "nom",
+    "nom_code",
+    "type_doc",
+    "quantity",
+    "weight_total",
+    "revenue",
+    "is_new_sku",
+    "is_new_client",
+    "date_add",
+]
 
 
 
@@ -1321,3 +1345,249 @@ class ClickHouseRepository:
             row[0].strftime("%Y-%m-01")
             for row in result
         ]
+    
+
+
+
+
+
+    def truncate_revenue_sales(self):
+        ensure_revenue_sales_table()
+
+        client = get_clickhouse_client()
+
+        client.execute("""
+            TRUNCATE TABLE default.revenue_sales
+        """)
+
+    def insert_revenue_sales_rows(self, rows):
+        ensure_revenue_sales_table()
+
+        client = get_clickhouse_client()
+
+        if not rows:
+            return 0
+
+        payload = []
+
+        for row in rows:
+            payload.append(
+                tuple(row.get(col) for col in REVENUE_SALES_COLUMNS)
+            )
+
+        columns_sql = ", ".join(REVENUE_SALES_COLUMNS)
+
+        client.execute(
+            f"""
+            INSERT INTO default.revenue_sales
+            ({columns_sql})
+            VALUES
+            """,
+            payload,
+        )
+
+        return len(payload)
+
+    def fetch_revenue_sales_rows(self, filters=None):
+        ensure_revenue_sales_table()
+
+        filters = filters or {}
+
+        client = get_clickhouse_client()
+
+        where = []
+        params = {}
+
+        list_filters = [
+            "direction",
+            "project",
+            "manager",
+            "partner",
+            "consignee",
+            "nom_view",
+            "nom_category",
+            "nom_group",
+            "nom",
+            "nom_code",
+        ]
+
+        for field in list_filters:
+            value = filters.get(field)
+
+            if value in ("", None, [], ()):
+                continue
+
+            if isinstance(value, str):
+                value = [value]
+
+            if isinstance(value, tuple):
+                value = list(value)
+
+            value = [
+                item
+                for item in value
+                if item not in ("", None)
+            ]
+
+            if not value:
+                continue
+
+            if field in ("nom_code",):
+                value = [int(item) for item in value]
+
+            else:
+                value = [str(item) for item in value]
+
+            where.append(f"{field} IN %({field})s")
+            params[field] = tuple(value)
+
+        if filters.get("date_start"):
+            where.append("date >= %(date_start)s")
+            params["date_start"] = filters["date_start"]
+
+        if filters.get("date_end"):
+            where.append("date <= %(date_end)s")
+            params["date_end"] = filters["date_end"]
+
+        where_sql = ""
+
+        if where:
+            where_sql = "WHERE " + " AND ".join(where)
+
+        columns_sql = ", ".join(REVENUE_SALES_COLUMNS)
+
+        result = client.execute(
+            f"""
+            SELECT {columns_sql}
+            FROM default.revenue_sales
+            {where_sql}
+            ORDER BY date DESC, direction, project, manager, partner, nom
+            """,
+            params,
+        )
+
+        return [
+            dict(zip(REVENUE_SALES_COLUMNS, row))
+            for row in result
+        ]
+
+    def fetch_revenue_sales_last_update(self):
+        ensure_revenue_sales_table()
+
+        client = get_clickhouse_client()
+
+        result = client.execute("""
+            SELECT max(date_add)
+            FROM default.revenue_sales
+        """)
+
+        if not result or result[0][0] is None:
+            return None
+
+        return result[0][0]
+
+    def fetch_revenue_sales_filter_options(self, filters=None):
+        ensure_revenue_sales_table()
+
+        filters = filters or {}
+
+        client = get_clickhouse_client()
+
+        option_fields = [
+            "direction",
+            "project",
+            "manager",
+            "partner",
+            "consignee",
+            "nom_view",
+            "nom_category",
+            "nom_group",
+            "nom",
+            "nom_code",
+        ]
+
+        def normalize_filter_value(field, value):
+            if value in ("", None, [], ()):
+                return []
+
+            if isinstance(value, str):
+                value = [value]
+
+            if isinstance(value, tuple):
+                value = list(value)
+
+            cleaned = [
+                item
+                for item in value
+                if item not in ("", None)
+            ]
+
+            if field == "nom_code":
+                result = []
+                for item in cleaned:
+                    try:
+                        result.append(int(item))
+                    except (TypeError, ValueError):
+                        continue
+                return result
+
+            return [str(item) for item in cleaned]
+
+        def build_where_for_options(exclude_field=None):
+            where = []
+            params = {}
+
+            for field in option_fields:
+                if field == exclude_field:
+                    continue
+
+                value = normalize_filter_value(field, filters.get(field))
+
+                if not value:
+                    continue
+
+                where.append(f"{field} IN %({field})s")
+                params[field] = tuple(value)
+
+            if filters.get("date_start"):
+                where.append("date >= %(date_start)s")
+                params["date_start"] = filters["date_start"]
+
+            if filters.get("date_end"):
+                where.append("date <= %(date_end)s")
+                params["date_end"] = filters["date_end"]
+
+            return where, params
+
+        result = {}
+
+        for field in option_fields:
+            where, params = build_where_for_options(exclude_field=field)
+
+            if field == "nom_code":
+                where.append(f"{field} IS NOT NULL")
+            else:
+                where.append(f"{field} != ''")
+
+            where_sql = ""
+
+            if where:
+                where_sql = "WHERE " + " AND ".join(where)
+
+            rows = client.execute(
+                f"""
+                SELECT DISTINCT {field}
+                FROM default.revenue_sales
+                {where_sql}
+                ORDER BY {field}
+                """,
+                params,
+            )
+
+            result[field] = [
+                row[0]
+                for row in rows
+                if row[0] not in ("", None)
+            ]
+
+        return result

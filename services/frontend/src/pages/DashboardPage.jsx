@@ -10,6 +10,7 @@ const DASHBOARD_WS_NAMES = {
   wordstat: "Wordstat",
   accreceiv: "Accreceiv",
   turnover: "Turnover",
+  revenue: "Revenue",
 };
 
 function buildDashboardWsUrl() {
