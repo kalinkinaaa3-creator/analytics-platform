@@ -16,7 +16,7 @@ with DAG(
     dag_id="base_parser_pipeline",
     default_args=DEFAULT_ARGS,
     description="Base parser pipeline: YML/PHP -> prices/properties -> report",
-    start_date=datetime(2026, 6, 23),
+    start_date=datetime(2026, 6, 1),
     schedule_interval="40 0 1 * *",
     catchup=False,
     max_active_runs=1,
