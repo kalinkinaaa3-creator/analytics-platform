@@ -966,7 +966,8 @@ class SalesRefreshView(APIView):
     def post(self, request):
         can_refresh = DashboardAccess.objects.filter(
             user=request.user,
-            dashboard__slug__in=["revenue", "planned-sales"],
+            #dashboard__slug__in=["revenue", "planned-sales"],
+            dashboard__slug="revenue",
             can_edit=True,
         ).exists()
 
@@ -976,7 +977,13 @@ class SalesRefreshView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if cache.get(self.LOCK_KEY):
+        lock_acquired = cache.add(
+            self.LOCK_KEY,
+            True,
+            timeout=self.LOCK_TIMEOUT,
+        )
+
+        if not lock_acquired:
             return Response(
                 {
                     "status": "locked",
@@ -985,12 +992,9 @@ class SalesRefreshView(APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
-        cache.set(self.LOCK_KEY, True, timeout=self.LOCK_TIMEOUT)
-
         result = run_planned_sales_api_pipeline()
 
         return Response(result)
-
 
 
 
