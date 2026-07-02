@@ -55,7 +55,7 @@ class DashboardWidget(models.Model):
 
     type = models.CharField(max_length=50, choices=WIDGET_TYPES)
 
-    config = models.JSONField(default=dict)
+    config = models.JSONField(default=dict, blank=True)
     """
     Example:
     {
