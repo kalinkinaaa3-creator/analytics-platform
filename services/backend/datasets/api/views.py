@@ -155,6 +155,16 @@ from django.core.cache import cache
 
 
 
+SALES_PIPELINE_RUNNING_LOCK_KEY = "sales_pipeline_running_lock"
+SALES_MANUAL_REFRESH_LOCK_KEY = "sales_api_refresh_lock"
+
+SALES_PIPELINE_RUNNING_LOCK_TIMEOUT = 60 * 60
+SALES_MANUAL_REFRESH_LOCK_TIMEOUT = 60 * 60
+
+
+
+
+
 
 def get_public_group_or_404(token):
     try:
@@ -952,21 +962,35 @@ class PlannedSalesApiLoadView(APIView):
     permission_classes = [HasInternalApiKey]
 
     def post(self, request):
-        result = run_planned_sales_api_pipeline()
+        running_lock_acquired = cache.add(
+            SALES_PIPELINE_RUNNING_LOCK_KEY,
+            True,
+            timeout=SALES_PIPELINE_RUNNING_LOCK_TIMEOUT,
+        )
 
-        return Response(result)
+        if not running_lock_acquired:
+            return Response(
+                {
+                    "status": "locked",
+                    "message": "Обновление данных уже выполняется",
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        try:
+            result = run_planned_sales_api_pipeline()
+            return Response(result)
+
+        finally:
+            cache.delete(SALES_PIPELINE_RUNNING_LOCK_KEY)
 
 
 class SalesRefreshView(APIView):
     permission_classes = [IsAuthenticated]
 
-    LOCK_KEY = "sales_api_refresh_lock"
-    LOCK_TIMEOUT = 60 * 60
-
     def post(self, request):
         can_refresh = DashboardAccess.objects.filter(
             user=request.user,
-            #dashboard__slug__in=["revenue", "planned-sales"],
             dashboard__slug="revenue",
             can_edit=True,
         ).exists()
@@ -977,13 +1001,13 @@ class SalesRefreshView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        lock_acquired = cache.add(
-            self.LOCK_KEY,
+        manual_lock_acquired = cache.add(
+            SALES_MANUAL_REFRESH_LOCK_KEY,
             True,
-            timeout=self.LOCK_TIMEOUT,
+            timeout=SALES_MANUAL_REFRESH_LOCK_TIMEOUT,
         )
 
-        if not lock_acquired:
+        if not manual_lock_acquired:
             return Response(
                 {
                     "status": "locked",
@@ -992,9 +1016,27 @@ class SalesRefreshView(APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
-        result = run_planned_sales_api_pipeline()
+        running_lock_acquired = cache.add(
+            SALES_PIPELINE_RUNNING_LOCK_KEY,
+            True,
+            timeout=SALES_PIPELINE_RUNNING_LOCK_TIMEOUT,
+        )
 
-        return Response(result)
+        if not running_lock_acquired:
+            return Response(
+                {
+                    "status": "locked",
+                    "message": "Обновление данных уже выполняется",
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        try:
+            result = run_planned_sales_api_pipeline()
+            return Response(result)
+
+        finally:
+            cache.delete(SALES_PIPELINE_RUNNING_LOCK_KEY)
 
 
 
