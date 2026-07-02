@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from django.db import connection, transaction
 from django.db.models import Max
 
-from datasets.models import DashSales
+from datasets.models import DashSales, RevenueSales
 
 
 logger = logging.getLogger("analytics.revenue_sales")
@@ -14,6 +14,12 @@ logger = logging.getLogger("analytics.revenue_sales")
 
 def get_revenue_sales_rebuild_start_date(end_date: date | None = None):
     end_date = end_date or date.today()
+
+    revenue_exists = RevenueSales.objects.exists()
+
+    if not revenue_exists:
+        logger.info("RevenueSales full rebuild period: RevenueSales is empty")
+        return None
 
     max_date = DashSales.objects.aggregate(
         max_date=Max("date"),
