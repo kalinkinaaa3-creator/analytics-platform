@@ -174,7 +174,7 @@ def prepare_revenue_dashboard(
     return {
         "filters": filters,
         "filter_values": filter_options,
-        "last_update": last_update.isoformat() if last_update else None,
+        "last_update": last_update.strftime("%Y-%m-%d %H:%M") if last_update else None,
         "kpi": {
             "revenue": to_float(total_revenue),
             "quantity": to_float(total_quantity),

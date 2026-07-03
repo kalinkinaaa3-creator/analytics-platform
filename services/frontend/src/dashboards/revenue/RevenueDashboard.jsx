@@ -260,17 +260,17 @@ function RevenueIndicators({ kpi }) {
     <div id="indicators-container">
       <div className="indicators-container revenue-indicators-grid">
         <div className="indicators-column">
-          <KpiCard title="Выручка, руб" value={kpi?.revenue} />
+          <KpiCard title="Выручка, руб" value={Math.round(Number(kpi?.revenue || 0))} />
           <KpiCard title="Количество, шт" value={kpi?.quantity} />
         </div>
 
-        <div className="indicators-column">
-          <KpiCard title="Вес, кг" value={kpi?.weight_total} />
+        <div className="indicators-column"> 
+          <KpiCard title="Вес, кг" value={Math.round(Number(kpi?.weight_total || 0))} />
           <KpiCard title="Клиенты, шт" value={kpi?.clients} />
         </div>
 
         <div className="indicators-column">
-          <KpiCard title="Отгрузки, шт" value={kpi?.shipments} />
+          <KpiCard title="Отгрузки, шт (реализации)" value={kpi?.shipments} />
           <KpiCard title="SKU, шт" value={kpi?.sku} />
         </div>
       </div>
@@ -289,6 +289,13 @@ export function RevenueDashboard({ data }) {
   const filterValues = dashboardData?.filter_values || {};
   const kpi = dashboardData?.kpi || {};
   const charts = dashboardData?.charts || {};
+
+  const lastUpdate = dashboardData?.last_update || null;
+
+  const refreshTitle = lastUpdate
+    ? `Данные актуальны на: ${lastUpdate}`
+    : "Данные отсутствуют";
+
 
     const defaultFilters = useMemo(() => ({
     direction: [],
@@ -485,8 +492,19 @@ export function RevenueDashboard({ data }) {
       await api.post("/v1/datasets/sales/refresh/");
       showToast("Данные обновлены");
     } catch (error) {
-      if (error.response?.status === 429) {
-        showToast(error.response?.data?.message || "На текущий час данные уже обновлены");
+      const status = error.response?.status;
+
+      if (status === 429) {
+        showToast(
+          error.response?.data?.message ||
+          "Обновление данных уже выполнено за текущий час"
+        );
+      } else if (status === 504) {
+        showToast("Обновление выполняется. Данные обновятся после завершения");
+      } else if (status === 401) {
+        showToast("Сессия истекла. Войдите заново");
+      } else if (status === 403) {
+        showToast("Нет прав на обновление данных");
       } else {
         showToast("Ошибка обновления данных");
       }
@@ -564,6 +582,7 @@ export function RevenueDashboard({ data }) {
             className="filters-export"
             onClick={refreshSales}
             disabled={refreshing}
+            title={refreshTitle}
           >
             {refreshing ? "Обновление..." : "Обновить"}
           </button>

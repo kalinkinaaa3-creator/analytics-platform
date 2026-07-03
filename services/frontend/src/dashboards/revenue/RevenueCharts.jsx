@@ -38,7 +38,7 @@ const CHARTS = [
   {
     key: "shipments",
     title: "Отгрузки",
-    barLabel: "Отгрузки, шт",
+    barLabel: "Отгрузки, шт (реализации)",
     unit: "",
     gradientFrom: "#5DADE2",
     gradientTo: "#21618C",
