@@ -291,9 +291,9 @@ def ensure_planned_sales_table():
             level2 String,
             level3 String,
 
-            fact Nullable(Decimal(12, 0)),
-            appg Nullable(Decimal(12, 0)),
-            appg_slice Nullable(Decimal(12, 0)),
+            fact Nullable(Decimal(14, 2)),
+            appg Nullable(Decimal(14, 2)),
+            appg_slice Nullable(Decimal(14, 2)),
 
             id_directory Int64,
             date_add DateTime
@@ -316,8 +316,8 @@ def ensure_plan_sales_table():
             level2 String,
             level3 String,
 
-            plan Nullable(Decimal(12, 0)),
-            projection_s Nullable(Decimal(12, 0)),
+            plan Nullable(Decimal(14, 2)),
+            projection_s Nullable(Decimal(14, 2)),
 
             id_directory Int64,
             date_add DateTime

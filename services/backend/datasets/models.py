@@ -299,9 +299,9 @@ class PlannedSales(models.Model):
     level1 = models.CharField("Уровень 1", max_length=255, blank=True, null=True, db_index=True)
     level2 = models.CharField("Уровень 2", max_length=255, blank=True, null=True, db_index=True)
     level3 = models.CharField("Уровень 3", max_length=255, blank=True, null=True, db_index=True)
-    fact = models.DecimalField("Факт", max_digits=12, decimal_places=0, blank=True, null=True)
-    appg = models.DecimalField("АППГ", max_digits=12, decimal_places=0, blank=True, null=True)
-    appg_slice = models.DecimalField("АППГ в срезе", max_digits=12, decimal_places=0, blank=True, null=True)
+    fact = models.DecimalField("Факт", max_digits=14, decimal_places=2, blank=True, null=True)
+    appg = models.DecimalField("АППГ", max_digits=14, decimal_places=2, blank=True, null=True)
+    appg_slice = models.DecimalField("АППГ в срезе", max_digits=14, decimal_places=2, blank=True, null=True)
     id_directory = models.IntegerField("id", blank=True, null=True)
     date_add = models.DateTimeField("Дата добавления", auto_now_add=True)
 
@@ -319,8 +319,8 @@ class PlanSales(models.Model):
     level1 = models.CharField("Уровень 1", max_length=255, blank=True, null=True, db_index=True)
     level2 = models.CharField("Уровень 2", max_length=255, blank=True, null=True, db_index=True)
     level3 = models.CharField("Уровень 3", max_length=255, blank=True, null=True, db_index=True)
-    plan = models.DecimalField("План", max_digits=12, decimal_places=0, blank=True, null=True)
-    projection_s = models.DecimalField("Проекция", max_digits=12, decimal_places=0, blank=True, null=True)
+    plan = models.DecimalField("План", max_digits=14, decimal_places=2, blank=True, null=True)
+    projection_s = models.DecimalField("Проекция", max_digits=14, decimal_places=2, blank=True, null=True)
     id_directory = models.IntegerField("id", blank=True, null=True)
     date_add = models.DateTimeField("Дата добавления", auto_now_add=True)
 

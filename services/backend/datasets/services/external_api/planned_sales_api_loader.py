@@ -141,10 +141,22 @@ def normalize_dash_sales_record(record):
     partner = clean_nullable_str(record.get("partner_"))
     partner_code = clean_int(record.get("partner_code_"))
 
+    contract_project = clean_str(record.get("contract_project"))
+
     if partner == "Вайлдберриз ООО" and partner_code == 5002:
         partner = "РВБ ООО"
         partner_code = 23522
         partner_inn = "9714053621"
+
+    strategic_project_map = {
+        "Полимер Пулинг Групп ООО": "Проект ПП-Групп",
+        "НКНХ ПАО": "Давальческая схема - Тара-Каучук (НКНХ)",
+        "ХОХЛАНД РУССЛАНД ООО": "Хохланд",
+        "ЗАПСИБНЕФТЕХИМ ООО": "Сибур (Зап.Сиб-2)",
+    }
+
+    if partner in strategic_project_map:
+        contract_project = strategic_project_map[partner]
 
     return DashSales(
         criterion=clean_str(record.get("criterion_")),
@@ -191,7 +203,7 @@ def normalize_dash_sales_record(record):
         nom_hier=clean_str(record.get("nom_hier")),
 
         contract_initiator=clean_str(record.get("contract_initiator")),
-        contract_project=clean_str(record.get("contract_project")),
+        contract_project=contract_project,
         contract_fullname=clean_str(record.get("contract_fullname")),
         contract_industry=clean_str(record.get("contract_industry")),
     )
