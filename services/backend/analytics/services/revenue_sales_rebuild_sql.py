@@ -100,6 +100,7 @@ def rebuild_revenue_sales_from_dash_sales_sql(
                         nom_group,
                         nom,
                         nom_code,
+                        nom_hier,
                         type_doc,
                         quantity,
                         weight_total,
@@ -131,6 +132,15 @@ def rebuild_revenue_sales_from_dash_sales_sql(
                         ds.nom_group,
                         ds.nom,
                         ds.nom_code,
+
+                        CASE
+                            WHEN ds.nom_hier IS NULL
+                            OR TRIM(ds.nom_hier) = ''
+                            OR TRIM(ds.nom_hier) = '-'
+                                THEN ds.nom
+                            ELSE ds.nom_hier
+                        END AS nom_hier,
+
                         ds.type_doc,
                         COALESCE(ds.quantity, 0) AS quantity,
                         COALESCE(ds.weight_total, 0) AS weight_total,
@@ -262,6 +272,7 @@ def rebuild_revenue_sales_from_dash_sales_sql(
                     m.nom_group,
                     m.nom,
                     m.nom_code,
+                    m.nom_hier,
                     m.type_doc,
                     m.quantity,
                     m.weight_total,

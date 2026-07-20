@@ -370,6 +370,7 @@ def ensure_revenue_sales_table():
             nom_group String,
             nom String,
             nom_code Nullable(Int64),
+            nom_hier String,
 
             type_doc String,
 

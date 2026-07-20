@@ -15,6 +15,7 @@ const FILTERS = [
   ["nom_group", "Группа", "filter--sm"],
   ["nom", "Номенклатура", "filter--xll"],
   ["nom_code", "Код", "filter--smm"],
+  ["nom_hier", "Номенклатура (группировка)", "filter--xll"],
 ];
 
 function GlobalSpinner() {
@@ -308,6 +309,7 @@ export function RevenueDashboard({ data }) {
     nom_group: [],
     nom: [],
     nom_code: [],
+    nom_hier: [],
     date_start: "",
     date_end: "",
     }), []);
@@ -323,6 +325,7 @@ export function RevenueDashboard({ data }) {
     nom_group: normalizeList(filters.nom_group),
     nom: normalizeList(filters.nom),
     nom_code: normalizeList(filters.nom_code),
+    nom_hier: normalizeList(filters.nom_hier),
     date_start: filters.date_start || "",
     date_end: filters.date_end || "",
   });
@@ -343,6 +346,7 @@ export function RevenueDashboard({ data }) {
       nom_group: normalizeList(filters.nom_group),
       nom: normalizeList(filters.nom),
       nom_code: normalizeList(filters.nom_code),
+      nom_hier: normalizeList(filters.nom_hier),
       date_start: filters.date_start || "",
       date_end: filters.date_end || "",
     });
@@ -360,6 +364,7 @@ export function RevenueDashboard({ data }) {
       nom_group: localFilters.nom_group || [],
       nom: localFilters.nom || [],
       nom_code: localFilters.nom_code || [],
+      nom_hier: localFilters.nom_hier || [],
       date_start: localFilters.date_start || "",
       date_end: localFilters.date_end || "",
     }),

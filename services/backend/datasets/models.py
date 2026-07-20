@@ -1367,6 +1367,14 @@ class RevenueSales(models.Model):
     nom = models.CharField("Номенклатура", max_length=600, blank=True, null=True, db_index=True)
     nom_code = models.IntegerField("Код номенклатуры", blank=True, null=True, db_index=True)
 
+    nom_hier = models.CharField(
+        "Номенклатура (группировка)",
+        max_length=600,
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+
     type_doc = models.CharField("Документ-регистратор", max_length=600, blank=True, null=True, db_index=True)
 
     quantity = models.DecimalField(max_digits=15, decimal_places=0, blank=True, null=True)

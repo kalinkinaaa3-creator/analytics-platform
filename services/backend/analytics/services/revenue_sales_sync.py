@@ -21,6 +21,7 @@ def sync_revenue_sales_to_clickhouse():
             "nom_group",
             "nom",
             "nom_code",
+            "nom_hier",
             "type_doc",
             "quantity",
             "weight_total",

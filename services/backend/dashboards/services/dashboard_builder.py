@@ -116,6 +116,7 @@ def normalize_filters_for_dashboard(dashboard: Dashboard, filters: dict | None =
             "nom_group",
             "nom",
             "nom_code",
+            "nom_hier",
             "date_start",
             "date_end",
         ]

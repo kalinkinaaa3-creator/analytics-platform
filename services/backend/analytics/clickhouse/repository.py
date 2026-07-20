@@ -249,6 +249,7 @@ REVENUE_SALES_COLUMNS = [
     "nom_group",
     "nom",
     "nom_code",
+    "nom_hier",
     "type_doc",
     "quantity",
     "weight_total",
@@ -1409,6 +1410,7 @@ class ClickHouseRepository:
             "nom_group",
             "nom",
             "nom_code",
+            "nom_hier",
         ]
 
         for field in list_filters:
@@ -1504,6 +1506,7 @@ class ClickHouseRepository:
             "nom_group",
             "nom",
             "nom_code",
+            "nom_hier",
         ]
 
         def normalize_filter_value(field, value):
