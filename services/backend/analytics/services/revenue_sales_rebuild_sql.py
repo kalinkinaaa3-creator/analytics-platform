@@ -152,6 +152,8 @@ def rebuild_revenue_sales_from_dash_sales_sql(
                         CASE
                             WHEN b.nom = 'Транспортные услуги'
                                 THEN 'Прочие'
+                            WHEN pd.level1 = 'СТРАТЕГИ'
+                                THEN pd.level1
                             WHEN pd.level2 IS NOT NULL
                                 THEN pd.level2
                             ELSE 'Прочие'
@@ -160,6 +162,8 @@ def rebuild_revenue_sales_from_dash_sales_sql(
                         CASE
                             WHEN b.nom = 'Транспортные услуги'
                                 THEN 'Прочие'
+                            WHEN pd.level1 = 'СТРАТЕГИ'
+                                THEN pd.level2
                             WHEN pd.level3 IS NOT NULL
                                 THEN pd.level3
                             ELSE 'Прочие'
