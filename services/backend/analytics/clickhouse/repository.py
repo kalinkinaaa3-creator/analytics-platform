@@ -1347,7 +1347,20 @@ class ClickHouseRepository:
             for row in result
         ]
     
+    def fetch_planned_sales_last_update(self):
+        ensure_planned_sales_table()
 
+        client = get_clickhouse_client()
+
+        result = client.execute("""
+            SELECT max(date_add)
+            FROM default.planned_sales
+        """)
+
+        if not result or result[0][0] is None:
+            return None
+
+        return result[0][0]
 
 
 

@@ -178,8 +178,16 @@ function DataCell({ row, config, canEdit, onSave }) {
 export function PlannedSalesDashboard({ data, dashboard, onFiltersChange }) {
   const [selectedDate, setSelectedDate] = useState(data?.filters?.date || "");
   const [toast, setToast] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   const canEdit = Boolean(dashboard?.can_edit);
+
+  const lastUpdate = data?.last_update || null;
+
+  const refreshTitle = lastUpdate
+    ? `Данные актуальны на: ${lastUpdate}`
+    : "Данные отсутствуют";
+
 
   function showToast(message) {
     setToast(message);
@@ -208,6 +216,36 @@ export function PlannedSalesDashboard({ data, dashboard, onFiltersChange }) {
     } catch (error) {
       console.error("Save error:", error);
       showToast("Ошибка сохранения");
+    }
+  }
+
+  async function refreshSales() {
+    setRefreshing(true);
+
+    try {
+      await api.post("/v1/datasets/sales/refresh/");
+      showToast("Данные обновлены");
+    } catch (error) {
+      const status = error.response?.status;
+
+      if (status === 429) {
+        showToast(
+          error.response?.data?.message ||
+          "Обновление данных уже выполнено за текущий час"
+        );
+      } else if (status === 504) {
+        showToast(
+          "Обновление выполняется. Данные обновятся после завершения"
+        );
+      } else if (status === 401) {
+        showToast("Сессия истекла. Войдите заново");
+      } else if (status === 403) {
+        showToast("Нет прав на обновление данных");
+      } else {
+        showToast("Ошибка обновления данных");
+      }
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -246,6 +284,17 @@ export function PlannedSalesDashboard({ data, dashboard, onFiltersChange }) {
               </div>
             </div>
           </div>
+        </div>
+        <div className="filters-actions">
+          <button
+            type="button"
+            className="filters-export"
+            onClick={refreshSales}
+            disabled={refreshing}
+            title={refreshTitle}
+          >
+            {refreshing ? "Обновление..." : "Обновить"}
+          </button>
         </div>
       </form>
 

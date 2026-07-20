@@ -985,22 +985,11 @@ class PlannedSalesApiLoadView(APIView):
             cache.delete(SALES_PIPELINE_RUNNING_LOCK_KEY)
 
 
+
 class SalesRefreshView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        can_refresh = DashboardAccess.objects.filter(
-            user=request.user,
-            dashboard__slug="revenue",
-            can_edit=True,
-        ).exists()
-
-        if not can_refresh:
-            return Response(
-                {"error": "No edit permission"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         manual_lock_acquired = cache.add(
             SALES_MANUAL_REFRESH_LOCK_KEY,
             True,

@@ -616,7 +616,12 @@ def build_date_range(selected_date_str):
 
 
 
-def prepare_planned_sales_dashboard(rows, filters=None, available_dates=None):
+def prepare_planned_sales_dashboard(
+    rows,
+    filters=None,
+    available_dates=None,
+    last_update=None,
+):
     filters = filters or {}
 
     selected_date = filters.get("date_end") or filters.get("date")
@@ -656,6 +661,7 @@ def prepare_planned_sales_dashboard(rows, filters=None, available_dates=None):
         "filter_values": {
             "date": available_dates or [],
         },
+        "last_update": last_update.strftime("%Y-%m-%d %H:%M") if last_update else None,
         "period_labels": period_labels,
         "indicators": indicators,
         "level2_month_agg": level2_month_agg,

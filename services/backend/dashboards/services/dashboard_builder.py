@@ -398,6 +398,9 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
             available_dates = repository.fetch_planned_sales_dates()
 
+            # Получаем дату последнего обновления
+            last_update = repository.fetch_planned_sales_last_update()
+
             widget_data["data"] = prepare_planned_sales_dashboard(
                 rows=rows,
                 filters={
@@ -406,6 +409,7 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
                     "date_end": date_end or "",
                 },
                 available_dates=available_dates,
+                last_update=last_update,
             )
 
         elif widget.type == "revenue_dashboard":
