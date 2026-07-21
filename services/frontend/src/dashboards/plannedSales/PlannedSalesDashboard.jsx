@@ -115,18 +115,30 @@ function EditableCell({ row, field, canEdit, onSave }) {
 
   return (
     <input
+      key={`${row.date}-${row.id_directory}-${field}-${row[field] ?? ""}`}
       type="text"
-      className={field === "plan" ? "edit-plan formatted-number" : "edit-projection formatted-number"}
+      className={
+        field === "plan"
+          ? "edit-plan formatted-number"
+          : "edit-projection formatted-number"
+      }
       data-date={row.date}
       data-id={row.id_directory}
       defaultValue={formatInt(row[field])}
       onFocus={(event) => {
-        event.target.dataset.originalValue = unformatNumber(event.target.value);
+        event.target.dataset.originalValue = unformatNumber(
+          event.target.value
+        );
+
         event.target.value = unformatNumber(event.target.value);
       }}
       onBlur={(event) => {
         const input = event.target;
-        const original = normalizeValue(input.dataset.originalValue || "0");
+
+        const original = normalizeValue(
+          input.dataset.originalValue || "0"
+        );
+
         const current = normalizeValue(input.value);
 
         input.value = formatInt(current);
@@ -179,6 +191,8 @@ export function PlannedSalesDashboard({ data, dashboard, onFiltersChange }) {
   const [selectedDate, setSelectedDate] = useState(data?.filters?.date || "");
   const [toast, setToast] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+
+  const [uploadingPlan, setUploadingPlan] = useState(false);
 
   const canEdit = Boolean(dashboard?.can_edit);
 
@@ -249,6 +263,50 @@ export function PlannedSalesDashboard({ data, dashboard, onFiltersChange }) {
     }
   }
 
+  async function handlePlanUpload(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    setUploadingPlan(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      await api.post(
+        "/v1/datasets/planned-sales/plan-upload/",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      showToast("План успешно загружен");
+
+      if (onFiltersChange) {
+        onFiltersChange({
+          date: selectedDate,
+        });
+      }
+    } catch (error) {
+      const message =
+        error.response?.data?.error ||
+        error.response?.data?.detail ||
+        "Ошибка загрузки плана";
+
+      showToast(message);
+    } finally {
+      setUploadingPlan(false);
+
+      // Позволяет повторно выбрать тот же файл
+      event.target.value = "";
+    }
+  }
+
+
   const dates = data?.filter_values?.date || [];
   const indicators = data?.indicators || {};
   const labels = data?.period_labels || {};
@@ -286,6 +344,29 @@ export function PlannedSalesDashboard({ data, dashboard, onFiltersChange }) {
           </div>
         </div>
         <div className="filters-actions">
+          {canEdit && (
+            <>
+              <input
+                type="file"
+                id="plan-upload-input"
+                accept=".xlsx"
+                style={{ display: "none" }}
+                onChange={handlePlanUpload}
+              />
+
+              <button
+                type="button"
+                className="filters-export"
+                disabled={uploadingPlan}
+                onClick={() =>
+                  document.getElementById("plan-upload-input")?.click()
+                }
+              >
+                {uploadingPlan ? "Загрузка..." : "Загрузить план"}
+              </button>
+            </>
+          )}
+
           <button
             type="button"
             className="filters-export"

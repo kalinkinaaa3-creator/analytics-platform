@@ -105,7 +105,7 @@ from analytics.services.excel_exports import (
 
 from datasets.services.planned_sales_loader import (
     load_planned_sales_csv,
-    load_plan_sales_csv,
+    load_plan_sales_xlsx,
     load_planned_sales_directory_xlsx,
 )
 from analytics.services.planned_sales_sync import sync_planned_sales_to_clickhouse
@@ -824,29 +824,59 @@ class PlanSalesUploadView(APIView):
     serializer_class = PlanSalesUploadSerializer
 
     def post(self, request):
+        dashboard = Dashboard.objects.filter(name="PlannedSales").first()
+
+        if not dashboard:
+            return Response(
+                {"error": "PlannedSales dashboard not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        can_edit = DashboardAccess.objects.filter(
+            user=request.user,
+            dashboard=dashboard,
+            can_edit=True,
+        ).exists()
+
+        if not can_edit:
+            return Response(
+                {"error": "No edit permission"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         uploaded_file = serializer.validated_data["file"]
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=".xlsx",
+        ) as temp_file:
             for chunk in uploaded_file.chunks():
                 temp_file.write(chunk)
+
             temp_path = temp_file.name
 
-        postgres_count = load_plan_sales_csv(temp_path)
-        clickhouse_result = sync_planned_sales_to_clickhouse()
+        try:
+            postgres_count = load_plan_sales_xlsx(temp_path)
 
-        invalidate_dashboard_by_name("PlannedSales")
-        notify_dashboard_updated("PlannedSales")
+            clickhouse_result = sync_planned_sales_to_clickhouse()
 
-        return Response({
-            "status": "ok",
-            "postgres": {
-                "plan_sales": postgres_count,
-            },
-            "clickhouse": clickhouse_result,
-        })
+            invalidate_dashboard_by_name("PlannedSales")
+            notify_dashboard_updated("PlannedSales")
+
+            return Response({
+                "status": "ok",
+                "postgres": {
+                    "plan_sales": postgres_count,
+                },
+                "clickhouse": clickhouse_result,
+            })
+
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
 
 class PlannedSalesDirectoryUploadView(APIView):
