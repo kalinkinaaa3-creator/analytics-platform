@@ -1133,6 +1133,39 @@ class ParserProductClassification(models.Model):
         verbose_name="Тип подкатегории",
     )
 
+    material = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Материал",
+    )
+
+    color = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Цвет",
+    )
+
+    modification = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Модификация",
+    )
+
+    url = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="URL",
+    )
+
+    image = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Изображение",
+    )
+
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
