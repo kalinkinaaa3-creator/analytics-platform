@@ -36,7 +36,7 @@ with DAG(
         task_id="load_ps_products",
         bash_command=(
             "docker exec analytics-django "
-            "python manage.py load_ps_products --workers 3"
+            "python manage.py load_ps_products --workers 5"
         ),
         execution_timeout=timedelta(hours=14),
     )

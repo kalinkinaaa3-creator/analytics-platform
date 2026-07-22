@@ -169,7 +169,7 @@ services:
     build: ./services/parser-browser
     container_name: analytics-parser-browser
     environment:
-      WORKERS_COUNT: 3
+      WORKERS_COUNT: 5
       MAX_REQUESTS_PER_WORKER: 30
       FETCH_TIMEOUT_MS: 60000
       PAGE_WAIT_MS: 1000

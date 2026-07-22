@@ -56,6 +56,9 @@ def build_base_url(prefix):
     if not prefix:
         raise ValueError(f"Invalid PS prefix: {prefix}")
 
+    if prefix == "spb_withoutprefix":
+        return f"https://{BASE_DOMAIN}"
+
     return f"https://{prefix}.{BASE_DOMAIN}"
 
 
