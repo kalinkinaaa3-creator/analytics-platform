@@ -37,6 +37,12 @@ services:
     build: ./services/backend
     container_name: analytics-django
     command: uvicorn config.asgi:application --host 0.0.0.0 --port 8000
+
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+
     env_file:
       - .env
     environment:
@@ -168,6 +174,12 @@ services:
   parser-browser:
     build: ./services/parser-browser
     container_name: analytics-parser-browser
+
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+
     environment:
       WORKERS_COUNT: 5
       MAX_REQUESTS_PER_WORKER: 30
