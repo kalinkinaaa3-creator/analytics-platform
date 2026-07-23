@@ -6,53 +6,6 @@ import { PlannedSalesCharts } from "./PlannedSalesCharts";
 
 
 
-const MONTH_FIELDS = [
-  ["plan", "План, руб", "editable-plan"],
-  ["fact", "Факт, руб"],
-  ["fact_vs_plan", "Факт vs\nПлан, руб"],
-  ["vs_plan_pct", "vs План, %", "percent", "vs_plan_pct_color"],
-  ["appg", "АППГ, руб"],
-  ["appg_slice", "АППГ\nYoY, руб", "italics"],
-  ["plan_vs_SPLY", "План vs\nАППГ, %", "percent italics", "plan_vs_SPLY_color"],
-  ["fact_vs_SPLY", "Факт vs\nАППГ, %", "percent", "fact_vs_SPLY_color"],
-  ["yoy", "YoY, %", "percent", "yoy_color"],
-  ["projection", "Проекция на\nмесяц, руб", "editable-projection"],
-  ["proj_vs_plan_1", "Проекция vs\nПлан, %", "percent", "proj_vs_plan_1_color"],
-  ["proj_vs_plan_2", "Проекция vs\nПлан, руб"],
-  ["proj_vs_SPLY", "Проекция vs\nАППГ, %", "percent", "proj_vs_SPLY_color"],
-];
-
-const QUARTER_FIELDS = [
-  ["plan_quarter", "План, руб"],
-  ["fact_quarter", "Факт, руб"],
-  ["fact_vs_plan_quarter", "Факт vs\nПлан, руб"],
-  ["vs_plan_pct_quarter", "vs План, %", "percent", "vs_plan_pct_quarter_color"],
-  ["year_SPLY_quarter", "АППГ, руб"],
-  ["yoy_SPLY_quarter", "АППГ\nYoY, руб", "italics"],
-  ["plan_vs_SPLY_quarter", "План vs\nАППГ, %", "percent italics", "plan_vs_SPLY_quarter_color"],
-  ["fact_vs_SPLY_quarter", "Факт vs\nАППГ, %", "percent", "fact_vs_SPLY_quarter_color"],
-  ["yoy_quarter", "YoY, %", "percent", "yoy_quarter_color"],
-  ["projection_quarter", "Проекция на\nквартал, руб"],
-  ["proj_vs_plan_q1", "Проекция vs\nПлан, %", "percent", "proj_vs_plan_q1_color"],
-  ["proj_vs_plan_q2", "Проекция vs\nПлан, руб"],
-  ["proj_vs_SPLY_quarter", "Проекция vs\nАППГ, %", "percent", "proj_vs_SPLY_quarter_color"],
-];
-
-const YEAR_FIELDS = [
-  ["plan_year", "План, руб"],
-  ["fact_year", "Факт, руб"],
-  ["fact_vs_plan_year", "Факт vs\nПлан, руб"],
-  ["vs_plan_pct_year", "vs План, %", "percent", "vs_plan_pct_year_color"],
-  ["year_SPLY_year", "АППГ, руб"],
-  ["yoy_SPLY_year", "АППГ\nYoY, руб", "italics"],
-  ["plan_vs_SPLY_year", "План vs\nАППГ, %", "percent italics", "plan_vs_SPLY_year_color"],
-  ["fact_vs_SPLY_year", "Факт vs\nАППГ, %", "percent", "fact_vs_SPLY_year_color"],
-  ["yoy_year", "YoY, %", "percent", "yoy_year_color"],
-  ["projection_year", "Проекция на\nгод, руб"],
-  ["proj_vs_plan_y1", "Проекция vs\nПлан, %", "percent", "proj_vs_plan_y1_color"],
-  ["proj_vs_plan_y2", "Проекция vs\nПлан, руб"],
-  ["proj_vs_SPLY_year", "Проекция vs\nАППГ, %", "percent", "proj_vs_SPLY_year_color"],
-];
 
 function HeaderTitle({ title }) {
   return title.split("\n").map((part, index) => (
@@ -313,36 +266,66 @@ export function PlannedSalesDashboard({ data, dashboard, onFiltersChange }) {
   const rows = data?.sales_tree || [];
   const chartData = data?.level2_month_agg || [];
 
+  const selectedYear =
+    Number(labels.year) ||
+    Number(selectedDate?.slice(0, 4)) ||
+    new Date().getFullYear();
+
+  const previousYear = selectedYear - 1;
+
+  const MONTH_FIELDS = [
+    ["plan", "План, руб", "editable-plan"],
+    ["fact", "Факт, руб"],
+    ["fact_vs_plan", "Факт vs\nПлан, руб"],
+    ["vs_plan_pct", "vs План, %", "percent", "vs_plan_pct_color"],
+    ["appg", `${previousYear}, руб`],
+    ["appg_slice", `${previousYear}\nYoY, руб`, "italics"],
+    // ["plan_vs_SPLY", `План vs\n${previousYear}, %`, "percent italics", "plan_vs_SPLY_color"],
+    ["fact_vs_SPLY", `Факт vs\n${previousYear}, %`, "percent", "fact_vs_SPLY_color"],
+    ["yoy", "YoY, %", "percent", "yoy_color"],
+    ["projection", "Проекция на\nмесяц, руб", "editable-projection"],
+    ["proj_vs_plan_1", "Проекция vs\nПлан, %", "percent", "proj_vs_plan_1_color"],
+    ["proj_vs_plan_2", "Проекция vs\nПлан, руб"],
+    ["proj_vs_SPLY", `Проекция vs\n${previousYear}, %`, "percent", "proj_vs_SPLY_color"],
+  ];
+
+  const QUARTER_FIELDS = [
+    ["plan_quarter", "План, руб"],
+    ["fact_quarter", "Факт, руб"],
+    ["fact_vs_plan_quarter", "Факт vs\nПлан, руб"],
+    ["vs_plan_pct_quarter", "vs План, %", "percent", "vs_plan_pct_quarter_color"],
+    ["year_SPLY_quarter", `${previousYear}, руб`],
+    ["yoy_SPLY_quarter", `${previousYear}\nYoY, руб`, "italics"],
+    // ["plan_vs_SPLY_quarter", `План vs\n${previousYear}, %`, "percent italics", "plan_vs_SPLY_quarter_color"],
+    ["fact_vs_SPLY_quarter", `Факт vs\n${previousYear}, %`, "percent", "fact_vs_SPLY_quarter_color"],
+    ["yoy_quarter", "YoY, %", "percent", "yoy_quarter_color"],
+    ["projection_quarter", "Проекция на\nквартал, руб"],
+    ["proj_vs_plan_q1", "Проекция vs\nПлан, %", "percent", "proj_vs_plan_q1_color"],
+    ["proj_vs_plan_q2", "Проекция vs\nПлан, руб"],
+    ["proj_vs_SPLY_quarter", `Проекция vs\n${previousYear}, %`, "percent", "proj_vs_SPLY_quarter_color"],
+  ];
+
+  const YEAR_FIELDS = [
+    ["plan_year", "План, руб"],
+    ["fact_year", "Факт, руб"],
+    ["fact_vs_plan_year", "Факт vs\nПлан, руб"],
+    ["vs_plan_pct_year", "vs План, %", "percent", "vs_plan_pct_year_color"],
+    ["year_SPLY_year", `${previousYear}, руб`],
+    ["yoy_SPLY_year", `${previousYear}\nYoY, руб`, "italics"],
+    // ["plan_vs_SPLY_year", `План vs\n${previousYear}, %`, "percent italics", "plan_vs_SPLY_year_color"],
+    ["fact_vs_SPLY_year", `Факт vs\n${previousYear}, %`, "percent", "fact_vs_SPLY_year_color"],
+    ["yoy_year", "YoY, %", "percent", "yoy_year_color"],
+    ["projection_year", "Проекция на\nгод, руб"],
+    ["proj_vs_plan_y1", "Проекция vs\nПлан, %", "percent", "proj_vs_plan_y1_color"],
+    ["proj_vs_plan_y2", "Проекция vs\nПлан, руб"],
+    ["proj_vs_SPLY_year", `Проекция vs\n${previousYear}, %`, "percent", "proj_vs_SPLY_year_color"],
+  ];
 
   return (
     <div className="planned-sales-dashboard">
       <h2>План/Факт продаж</h2>
 
       <form id="filterForm">
-        <div className="filter">
-          <label htmlFor="filter_date_list">Месяц</label>
-
-          <div className="multi-select" id="multiSelect_date">
-            <div className="dropdown static-buttons">
-              <div id="options_date" className="buttons-container">
-                {dates.map((date) => (
-                  <div className="dropdown-item" key={date}>
-                    <label>
-                      <input
-                        type="radio"
-                        name="date"
-                        value={date}
-                        checked={date === selectedDate}
-                        onChange={() => handleDateChange(date)}
-                      />
-                      <span>{date.slice(0, 7)}</span>
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
         <div className="filters-actions">
           {canEdit && (
             <>
@@ -377,6 +360,31 @@ export function PlannedSalesDashboard({ data, dashboard, onFiltersChange }) {
             {refreshing ? "Обновление..." : "Обновить"}
           </button>
         </div>
+        <div className="filter">
+          <label htmlFor="filter_date_list">Месяц</label>
+
+          <div className="multi-select" id="multiSelect_date">
+            <div className="dropdown static-buttons">
+              <div id="options_date" className="buttons-container">
+                {dates.map((date) => (
+                  <div className="dropdown-item" key={date}>
+                    <label>
+                      <input
+                        type="radio"
+                        name="date"
+                        value={date}
+                        checked={date === selectedDate}
+                        onChange={() => handleDateChange(date)}
+                      />
+                      <span>{date.slice(0, 7)}</span>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
       </form>
 
       <div id="indicators-container">
@@ -393,9 +401,9 @@ export function PlannedSalesDashboard({ data, dashboard, onFiltersChange }) {
             <thead>
               <tr className="trend-row">
                 <th className="sticky-col" rowSpan="2">Направление</th>
-                <th className="group-month" colSpan="13">{labels.month}</th>
-                <th className="group-quarter" colSpan="13">{labels.quarter} кв.</th>
-                <th className="group-year" colSpan="13">{labels.year} год YTM</th>
+                <th className="group-month" colSpan="12">{labels.month}</th>
+                <th className="group-quarter" colSpan="12">{labels.quarter} кв.</th>
+                <th className="group-year" colSpan="12">{labels.year} год YTM</th>
               </tr>
 
               <tr className="header-row">
@@ -403,9 +411,9 @@ export function PlannedSalesDashboard({ data, dashboard, onFiltersChange }) {
                   <th
                     key={`${title}-${index}`}
                     className={
-                      index < 13
+                      index < 12
                         ? "group-month"
-                        : index < 26
+                        : index < 24
                           ? "group-quarter"
                           : "group-year"
                     }

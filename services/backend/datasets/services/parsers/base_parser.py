@@ -20,7 +20,7 @@ logger = logging.getLogger("parsers.base")
 SOURCE = "base"
 MISSING_FROM_MAP = "missing_from_map"
 
-YML_URL = "https://iplast.com/bitrix/catalog_export/tXGigZ2jLniSF8rAGl2zBvkoWu5stfBIUclzRmUd.php"
+YML_URL = "https://iplast.com/bitrix/catalog_export/iPrice-9j9dpp0l4w7lh.xml"
 
 
 class BaseParserError(Exception):

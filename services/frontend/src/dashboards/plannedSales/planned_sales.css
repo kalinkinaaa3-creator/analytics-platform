@@ -255,7 +255,8 @@
 
 /* === Ячейки === */
 .planned-sales-dashboard th, .planned-sales-dashboard td {
-  border: 1px solid #aca5a5;
+  /* border: 1px solid #aca5a5; */
+  border: none;
   min-width: auto;
   width: auto;
   height: 22px;
@@ -306,14 +307,10 @@
   position: sticky;
   top: 0 !important;     /* Фиксируется на самом верху */
   z-index: 20 !important;
+  border-bottom: 1px solid #777;
 }
 
-/* ВТОРАЯ строка шапки (детали) */
-.planned-sales-dashboard thead tr.header-row th {
-  /*position: sticky; */
-  /*top: 30px !important; */
-  /*z-index: 15 !important; */
-}
+
 
 /* === Тень у второго столбца === */
 .planned-sales-dashboard td:nth-child(2),
@@ -378,7 +375,8 @@
 }
 
 .planned-sales-dashboard tr.summary-row.grand td {
-  border-bottom: 4px double #000;
+  border-top: 1px solid #000;
+  border-bottom: 1px double #000;
   background-color: #324552;
   color: white;
 }
@@ -421,7 +419,7 @@
 
 .planned-sales-dashboard {
   --first-col: 120px;
-  --cols-in-group: 13;
+  --cols-in-group: 12;
   --col-width: calc((95vw - var(--first-col)) / var(--cols-in-group));
 }
 .planned-sales-dashboard .group-month,
@@ -491,17 +489,18 @@
 }
 
 .planned-sales-dashboard .percent-dot {
-    display: inline-block;      /* Без flex */
-    width: 15px;                /* Диаметр кружка */
-    height: 15px;
-    border-radius: 50%;
-    margin-right: 4px;          /* Расстояние до текста */
-    vertical-align: middle;     /* Вертикальное выравнивание с текстом */
+  display: inline-block;      /* Без flex */
+  width: 15px;                /* Диаметр кружка */
+  height: 15px;
+  border-radius: 50%;
+  margin-right: 4px;          /* Расстояние до текста */
+  vertical-align: middle;     /* Вертикальное выравнивание с текстом */
 	position: absolute;
 	left: 4px;
 	top: 50%;
 	transform: translateY(-50%);
 	margin: 0;
+  opacity: 60%;
 }
 
 
@@ -701,6 +700,7 @@
   display: flex;
   gap: 14px;
   align-items: flex-end;
+  justify-content: flex-end;
 }
 
 .planned-sales-dashboard .filters-export {
@@ -724,3 +724,94 @@
   cursor: not-allowed;
   opacity: 0.7;
 }
+
+
+
+
+
+
+
+
+/* КОРРЕКТИРОВКА ГРАНИЦ ТАБЛИЦЫ */
+
+/* Столбцы */
+.planned-sales-dashboard tbody td:nth-child(1),
+.planned-sales-dashboard tbody td:nth-child(13), 
+.planned-sales-dashboard tbody td:nth-child(25),
+.planned-sales-dashboard tbody td:nth-child(37) {
+  border-right: 2px solid #666;
+}
+
+/* Вторая строка шапки */
+.planned-sales-dashboard thead tr.header-row th:nth-child(12),
+.planned-sales-dashboard thead tr.header-row th:nth-child(24),
+.planned-sales-dashboard thead tr.header-row th:nth-child(36) {
+  border-right: 2px solid #777;
+}
+
+/* Первый столбец */
+.planned-sales-dashboard thead tr.trend-row th.sticky-col,
+.planned-sales-dashboard thead tr.trend-row th.group-month,
+.planned-sales-dashboard thead tr.trend-row th.group-quarter,
+.planned-sales-dashboard thead tr.trend-row th.group-year {
+  border-right: 2px solid #777;
+}
+.planned-sales-dashboard thead tr.header-row th {
+  border-bottom: 1px solid #777;
+}
+/* Промежуточные итоги */
+.planned-sales-dashboard tr.summary-row td {
+  border-top: 1px solid #777;
+  border-bottom: 1px solid #777;
+}
+
+/* Границы шапки - точечная корректировка */
+.planned-sales-dashboard thead tr:first-child th {
+  border-top: 1px solid #777;
+}
+.planned-sales-dashboard tbody td:first-child {
+  border-left: 1px solid #777;
+}
+.planned-sales-dashboard thead tr.trend-row th.sticky-col {
+  border-left: 1px solid #777;
+}
+
+
+/* Границы между отдельными столбцами */
+.planned-sales-dashboard tbody td:nth-child(2),
+.planned-sales-dashboard tbody td:nth-child(5),
+.planned-sales-dashboard tbody td:nth-child(8),
+.planned-sales-dashboard tbody td:nth-child(9),
+
+.planned-sales-dashboard tbody td:nth-child(14),
+.planned-sales-dashboard tbody td:nth-child(17),
+.planned-sales-dashboard tbody td:nth-child(20),
+.planned-sales-dashboard tbody td:nth-child(21),
+
+.planned-sales-dashboard tbody td:nth-child(26),
+.planned-sales-dashboard tbody td:nth-child(29),
+.planned-sales-dashboard tbody td:nth-child(32),
+.planned-sales-dashboard tbody td:nth-child(33) {
+  border-right: 2px solid #666;
+}
+
+/* Границы между отдельными столбцами шапки */
+.planned-sales-dashboard thead tr.header-row th:nth-child(1),
+.planned-sales-dashboard thead tr.header-row th:nth-child(4),
+.planned-sales-dashboard thead tr.header-row th:nth-child(7),
+.planned-sales-dashboard thead tr.header-row th:nth-child(8),
+
+.planned-sales-dashboard thead tr.header-row th:nth-child(13),
+.planned-sales-dashboard thead tr.header-row th:nth-child(16),
+.planned-sales-dashboard thead tr.header-row th:nth-child(19),
+.planned-sales-dashboard thead tr.header-row th:nth-child(20),
+
+.planned-sales-dashboard thead tr.header-row th:nth-child(25),
+.planned-sales-dashboard thead tr.header-row th:nth-child(28),
+.planned-sales-dashboard thead tr.header-row th:nth-child(31),
+.planned-sales-dashboard thead tr.header-row th:nth-child(32) {
+  border-right: 2px solid #777;
+}
+
+
+/* КОНЕЦ КОРРЕКТИРОВКИ ГРАНИЦ ТАБЛИЦЫ */
