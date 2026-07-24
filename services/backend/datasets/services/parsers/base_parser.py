@@ -133,13 +133,11 @@ def parse_offer(offer) -> dict | None:
     picture_tag = offer.find("picture")
     image = clean_text(picture_tag.text if picture_tag is not None else None)
 
-    vendor_tag = offer.find("vendorCode")
-    code_1c = clean_int(vendor_tag.text if vendor_tag is not None else None)
-
     category_tag = offer.find("categoryId")
     category_id = clean_int(category_tag.text if category_tag is not None else None)
 
     color = None
+    code_1c = None
     properties = []
 
     for param in offer.findall("param"):
@@ -149,8 +147,14 @@ def parse_offer(offer) -> dict | None:
         if not param_name or not param_value:
             continue
 
-        if param_name.lower() == "цвет":
+        param_name_lower = param_name.lower()
+
+        if param_name_lower == "цвет":
             color = param_value
+            continue
+
+        if param_name_lower == "код товара":
+            code_1c = clean_int(param_value)
             continue
 
         properties.append(
