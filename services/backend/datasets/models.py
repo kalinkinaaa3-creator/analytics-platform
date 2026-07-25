@@ -1439,10 +1439,8 @@ class Nomenclature(models.Model):
     )
 
     nom = models.CharField(
-        max_length=255,
         blank=True,
         null=True,
-        db_index=True,
         verbose_name="Наименование номенклатуры",
     )
 
@@ -1483,10 +1481,8 @@ class Nomenclature(models.Model):
     )
 
     full_nom = models.CharField(
-        max_length=255,
         blank=True,
         null=True,
-        db_index=True,
         verbose_name="Полное наименование",
     )
 
@@ -1530,10 +1526,8 @@ class Nomenclature(models.Model):
     )
 
     nom_hier = models.CharField(
-        max_length=255,
         blank=True,
         null=True,
-        db_index=True,
         verbose_name="Группировка",
     )
 
