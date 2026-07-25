@@ -87,6 +87,21 @@ TABLE_CHECKS = [
         "data_date_column": None,
         "fresh_days": None,
     },
+    {
+        "name": "Nomenclature",
+        "table": "nomenclature",
+        "date_add_column": "date_add",
+        "data_date_column": None,
+        "fresh_days": 7,
+    },
+    {
+        "name": "Nomenclature price",
+        "table": "nomenclature_price",
+        "date_add_column": "date_add",
+        "data_date_column": "date",
+        "fresh_days": 0,
+    },
+    
 ]
 
 

@@ -67,3 +67,10 @@ class ProductClassificationUploadSerializer(serializers.Serializer):
 
 class ExcelUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
+
+
+class TransportCostUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+class ProductCostUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()

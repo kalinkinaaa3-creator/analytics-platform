@@ -47,6 +47,9 @@ from .serializers import (
 
     ExcelUploadSerializer,
 
+    TransportCostUploadSerializer,
+    ProductCostUploadSerializer,
+
 )
 
 
@@ -121,6 +124,21 @@ from analytics.services.fb_purchases_api_pipeline import run_fb_purchases_api_pi
 from analytics.services.fb_turnover_api_pipeline import run_fb_turnover_api_pipeline
 from analytics.services.fb_accreceiv_api_pipeline import run_fb_accreceiv_api_pipeline
 
+from datasets.services.external_api.nomenclature_api_loader import (
+    load_nomenclature_from_api,
+)
+
+from datasets.services.external_api.price_api_loader import (
+    load_prices_from_api,
+)
+
+from datasets.services.transport_cost_loader import (
+    load_transport_cost_from_excel,
+)
+
+from datasets.services.product_cost_loader import (
+    load_product_cost_from_excel,
+)
 
 from rest_framework.exceptions import NotFound, PermissionDenied
 from dashboards.models import DashboardPublicGroup
@@ -1434,3 +1452,102 @@ class RevenueExportView(APIView):
         filters = self._get_filters_from_body(request)
 
         return self._export(filters)
+
+
+
+
+class NomenclatureApiLoadView(APIView):
+    authentication_classes = []
+    permission_classes = [HasInternalApiKey]
+
+    def post(self, request):
+        result = load_nomenclature_from_api()
+
+        return Response(result)
+
+
+class NomenclaturePriceApiLoadView(APIView):
+    authentication_classes = []
+    permission_classes = [HasInternalApiKey]
+
+    def post(self, request):
+        result = load_prices_from_api()
+        return Response(result)
+
+
+class TransportCostUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = TransportCostUploadSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(
+            data=request.data,
+        )
+
+        serializer.is_valid(
+            raise_exception=True,
+        )
+
+        uploaded_file = serializer.validated_data["file"]
+
+        try:
+            result = load_transport_cost_from_excel(
+                uploaded_file
+            )
+
+        except ValueError as exc:
+            return Response(
+                {
+                    "status": "error",
+                    "error": str(exc),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                "status": "ok",
+                **result,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ProductCostUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = ProductCostUploadSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(
+            data=request.data,
+        )
+
+        serializer.is_valid(
+            raise_exception=True,
+        )
+
+        uploaded_file = serializer.validated_data["file"]
+
+        try:
+            result = load_product_cost_from_excel(
+                uploaded_file
+            )
+
+        except ValueError as exc:
+            return Response(
+                {
+                    "status": "error",
+                    "error": str(exc),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                "status": "ok",
+                **result,
+            },
+            status=status.HTTP_200_OK,
+        )

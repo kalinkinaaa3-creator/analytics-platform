@@ -59,6 +59,12 @@ from .views import (
 
     RevenueExportView,
     SalesRefreshView,
+
+    NomenclatureApiLoadView,
+    NomenclaturePriceApiLoadView,
+
+    TransportCostUploadView,
+    ProductCostUploadView,
 )
 
 
@@ -231,6 +237,25 @@ urlpatterns = [
         YdWordstatFullLoadFromApiView.as_view(),
     ),
     path("sales/refresh/", SalesRefreshView.as_view()),
+
+
+    path("nomenclature/load-from-api/", NomenclatureApiLoadView.as_view()),
+
+    path(
+        "nomenclature-price/load-from-api/",
+        NomenclaturePriceApiLoadView.as_view(),
+    ),
+
+    path(
+        "transport-cost/upload/",
+        TransportCostUploadView.as_view(),
+    ),
+
+    path(
+        "product-cost/upload/",
+        ProductCostUploadView.as_view(),
+    ),
+
 
 
     path("", include(router.urls)),

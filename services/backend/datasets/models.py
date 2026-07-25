@@ -1428,3 +1428,409 @@ class RevenueSales(models.Model):
             models.Index(fields=["date", "partner"], name="idx_rev_sales_partner"),
             models.Index(fields=["date", "nom_code"], name="idx_rev_sales_nom_code"),
         ]
+
+
+
+
+class Nomenclature(models.Model):
+    nom_code = models.IntegerField(
+        db_index=True,
+        verbose_name="Код номенклатуры",
+    )
+
+    nom = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Наименование номенклатуры",
+    )
+
+    nom_article = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Артикул номенклатуры",
+    )
+
+    nom_base_unit = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Базовая единица",
+    )
+
+    nom_stock_unit = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Единица хранения остатков",
+    )
+
+    nom_report_unit = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Единица для отчетов",
+    )
+
+    nom_cn_fea = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Код ТН ВЭД",
+    )
+
+    full_nom = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Полное наименование",
+    )
+
+    weight_kg = models.DecimalField(
+        max_digits=9,
+        decimal_places=3,
+        blank=True,
+        null=True,
+        verbose_name="Вес, кг",
+    )
+
+    weight_assembly_kg = models.DecimalField(
+        max_digits=9,
+        decimal_places=3,
+        blank=True,
+        null=True,
+        verbose_name="Вес изделия в сборе, кг",
+    )
+
+    nom_view = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Вид номенклатуры",
+    )
+
+    nom_group = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Группа продукции",
+    )
+
+    nom_hier_code = models.IntegerField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Код группировки",
+    )
+
+    nom_hier = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Группировка",
+    )
+
+    nom_category = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Категория продукции",
+    )
+
+    vat = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="НДС",
+    )
+
+    type_rep = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Вид воспроизводства",
+    )
+
+    height_mm = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Высота, мм",
+    )
+
+    length_mm = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Длина, мм",
+    )
+
+    width_mm = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Ширина, мм",
+    )
+
+    tiering = models.DecimalField(
+        max_digits=9,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Ярусность",
+    )
+
+    color = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Цвет",
+    )
+
+    quantity_eurotruck = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Количество в еврофуре",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата добавления",
+    )
+
+    class Meta:
+        db_table = "nomenclature"
+        verbose_name = "Номенклатура"
+        verbose_name_plural = "Номенклатура"
+
+    def __str__(self):
+        return f"{self.nom_code} - {self.nom}"
+
+
+
+class NomenclaturePrice(models.Model):
+    date = models.DateField(
+        db_index=True,
+        verbose_name="Дата цены",
+    )
+
+    shipp_region = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Регион отгрузки",
+    )
+
+    nom_group = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Группа номенклатуры",
+    )
+
+    price_list = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Прайс-лист",
+    )
+
+    nom = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Номенклатура",
+    )
+
+    code = models.IntegerField(
+        db_index=True,
+        verbose_name="Код номенклатуры",
+    )
+
+    vat = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="НДС",
+    )
+
+    distr = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        blank=True,
+        null=True,
+        verbose_name="Дистрибьютор",
+    )
+
+    distr_1 = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        blank=True,
+        null=True,
+        verbose_name="Дистрибьютор 1",
+    )
+
+    retail = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        blank=True,
+        null=True,
+        verbose_name="Розница",
+    )
+
+    small = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        blank=True,
+        null=True,
+        verbose_name="Малый опт",
+    )
+
+    medium = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        blank=True,
+        null=True,
+        verbose_name="Средний опт",
+    )
+
+    large = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        blank=True,
+        null=True,
+        verbose_name="Крупный опт",
+    )
+
+    base = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        blank=True,
+        null=True,
+        verbose_name="Базовая цена",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата добавления",
+    )
+
+    class Meta:
+        db_table = "nomenclature_price"
+        verbose_name = "Цена номенклатуры"
+        verbose_name_plural = "Цены номенклатуры"
+
+        indexes = [
+            models.Index(
+                fields=["date", "code"],
+                name="nom_price_date_code_idx",
+            ),
+            models.Index(
+                fields=["date", "shipp_region"],
+                name="nom_price_date_region_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.date} | {self.code} | {self.shipp_region}"
+
+
+class TransportCost(models.Model):
+    departure = models.CharField(
+        max_length=255,
+        db_index=True,
+        verbose_name="Пункт отправления",
+    )
+
+    arrival = models.CharField(
+        max_length=255,
+        db_index=True,
+        verbose_name="Пункт прибытия",
+    )
+
+    cost = models.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        verbose_name="Стоимость перевозки без НДС",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата добавления",
+    )
+
+    class Meta:
+        db_table = "transport_cost"
+        verbose_name = "Транспортные расходы"
+        verbose_name_plural = "Транспортные расходы"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["departure", "arrival"],
+                name="transport_cost_departure_arrival_uniq",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.departure} -> {self.arrival}: {self.cost}"
+
+
+class ProductCost(models.Model):
+    date = models.DateField(
+        db_index=True,
+        verbose_name="Месяц",
+    )
+
+    code = models.IntegerField(
+        db_index=True,
+        verbose_name="Код номенклатуры",
+    )
+
+    name = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Наименование",
+    )
+
+    departure = models.CharField(
+        max_length=255,
+        db_index=True,
+        verbose_name="Пункт отправления",
+    )
+
+    cost = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        verbose_name="Себестоимость",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата добавления",
+    )
+
+    class Meta:
+        db_table = "product_cost"
+        verbose_name = "Себестоимость"
+        verbose_name_plural = "Себестоимость"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["date", "code", "departure"],
+                name="product_cost_month_code_departure_uniq",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.date} | {self.code} | {self.departure} | {self.cost}"
