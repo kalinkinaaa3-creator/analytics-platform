@@ -183,7 +183,12 @@ class Command(BaseCommand):
                     else:
                         max_date_add = scalar(
                             cursor,
-                            f'SELECT MAX(DATE("{date_add_column}")) FROM "{table}"',
+                            f'''
+                            SELECT MAX(
+                                ("{date_add_column}" AT TIME ZONE 'Europe/Moscow')::date
+                            )
+                            FROM "{table}"
+                            ''',
                         )
 
                         min_allowed = today - timedelta(days=fresh_days)
