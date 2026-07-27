@@ -3,6 +3,7 @@ services:
   postgres:
     image: postgres:16
     container_name: analytics-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: analytics
       POSTGRES_USER: analytics
@@ -17,12 +18,14 @@ services:
   redis:
     image: redis:7
     container_name: analytics-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
 
   clickhouse:
     image: clickhouse/clickhouse-server:latest
     container_name: analytics-clickhouse
+    restart: unless-stopped
     environment:
       TZ: Europe/Moscow
     ports:
@@ -36,6 +39,7 @@ services:
   django:
     build: ./services/backend
     container_name: analytics-django
+    restart: unless-stopped
     command: uvicorn config.asgi:application --host 0.0.0.0 --port 8000
 
     ulimits:
@@ -95,7 +99,7 @@ services:
     image: apache/airflow:2.10.5
     user: "0:0"
     container_name: analytics-airflow-webserver
-    restart: always
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -122,7 +126,7 @@ services:
     image: apache/airflow:2.10.5
     user: "0:0"
     container_name: analytics-airflow-scheduler
-    restart: always
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -147,6 +151,7 @@ services:
   airflow-postgres:
     image: postgres:16
     container_name: analytics-airflow-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: airflow
       POSTGRES_USER: airflow
@@ -160,6 +165,7 @@ services:
   frontend:
     build: ./services/frontend
     container_name: analytics-frontend
+    restart: unless-stopped
     volumes:
       - ./services/frontend:/app
       - /app/node_modules
@@ -199,7 +205,7 @@ services:
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: analytics-pgadmin
-    restart: always
+    restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@example.com
       PGADMIN_DEFAULT_PASSWORD: admin
@@ -214,7 +220,7 @@ services:
   clickhouse-ui:
     image: ghcr.io/caioricciuti/ch-ui:latest
     container_name: analytics-clickhouse-ui
-    restart: always
+    restart: unless-stopped
     ports:
       - "5521:5521"
     depends_on:
