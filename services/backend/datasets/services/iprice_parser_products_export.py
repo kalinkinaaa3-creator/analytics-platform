@@ -149,7 +149,8 @@ def _get_latest_price_rows(
 
     6. Если за актуальный день final_price отсутствует
        во всех строках:
-           строку цены НЕ выбираем;
+           для заполнения информационных полей выгрузки
+           выбираем строку с MIN(id);
            product_key возвращаем в errors.
 
     7. Если вообще нет price-строк:
@@ -294,6 +295,14 @@ def _get_latest_price_rows(
                 "отсутствует заполненный final_price"
             )
 
+            # Price validity and export completeness are separate concerns.
+            # A zero/empty price must not become calculation-ready, but the
+            # available product metadata (code_1c, name, URL, image, raw
+            # price) still has to be visible to the product analyst.
+            selected_rows[product_key] = min(
+                latest_rows,
+                key=lambda row: row["id"],
+            )
             continue
 
         # ----------------------------------------------------
@@ -1559,7 +1568,8 @@ def export_iprice_parser_products():
 
     Если final_price на актуальную дату отсутствует:
         товар НЕ удаляется из выгрузки;
-        price-поля остаются пустыми;
+        доступные поля актуальной price-row заполняются;
+        final_price остается пустым;
         ошибка пишется в price_selection_error.
     """
 
