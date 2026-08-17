@@ -19,6 +19,7 @@ from datasets.models import (
     ProductCost,
     TransportCost,
     IPriceCalculationConfig,
+    IPriceCompetitorSelectionOverride,
     AnalyticsProductClassificationApplication,
     AnalyticsProductMatchCandidate,
 )
@@ -364,6 +365,19 @@ def check_matches(
 ):
     issues = []
 
+    override_rows = IPriceCompetitorSelectionOverride.objects.filter(
+        product_key_base__in=active_classification_keys,
+        product_key_competitor__in=active_classification_keys,
+    ).values_list(
+        "product_key_base",
+        "product_key_competitor",
+        "selection_mode",
+    )
+    override_modes = {
+        (base_key, competitor_key): selection_mode
+        for base_key, competitor_key, selection_mode in override_rows
+    }
+
     application = AnalyticsProductClassificationApplication.objects.select_related(
         "run"
     ).order_by("-date_add", "-id").first()
@@ -392,6 +406,10 @@ def check_matches(
     ).iterator(chunk_size=500):
         base_key = candidate["product_key_base"]
         competitor_key = candidate["product_key_competitor"]
+        if override_modes.get((base_key, competitor_key)) == (
+            IPriceCompetitorSelectionOverride.MODE_EXCLUDE
+        ):
+            continue
         add_issue(
             issues,
             ERROR,
@@ -441,10 +459,23 @@ def check_matches(
         )
 
     for row in rows:
-        if row["weighted_exists"]:
-            continue
         base_key = row["product_key_base"]
         competitor_key = row["product_key_competitor"]
+        override_mode = override_modes.get(
+            (base_key, competitor_key)
+        )
+        is_manual_include = (
+            row["match_type"] == ParserProductMatch.MATCH_TYPE_MANUAL
+            and override_mode == IPriceCompetitorSelectionOverride.MODE_INCLUDE
+        )
+        if row["weighted_exists"] or is_manual_include:
+            continue
+        if (
+            override_mode == IPriceCompetitorSelectionOverride.MODE_EXCLUDE
+            or row["match_type"] == ParserProductMatch.MATCH_TYPE_MANUAL
+        ):
+            # A more precise error is emitted in the detailed validation below.
+            continue
         add_issue(
             issues,
             ERROR,
@@ -513,13 +544,46 @@ def check_matches(
         business_key = (
             f"{base_key}->{competitor_key}"
         )
-        if not row["weighted_exists"]:
+        override_mode = override_modes.get(
+            (base_key, competitor_key)
+        )
+        is_manual_include = (
+            row["match_type"] == ParserProductMatch.MATCH_TYPE_MANUAL
+            and override_mode == IPriceCompetitorSelectionOverride.MODE_INCLUDE
+        )
+        if override_mode == IPriceCompetitorSelectionOverride.MODE_EXCLUDE:
+            add_issue(
+                issues,
+                ERROR,
+                "MATCH_EXCLUDED_PAIR_ACTIVE",
+                business_key,
+                "Исключённая вручную связь осталась активной",
+                product_key_base=base_key,
+                product_key_competitor=competitor_key,
+            )
+        elif (
+            row["match_type"] == ParserProductMatch.MATCH_TYPE_MANUAL
+            and not is_manual_include
+        ):
+            add_issue(
+                issues,
+                ERROR,
+                "MATCH_MANUAL_OVERRIDE_MISSING",
+                business_key,
+                "Для ручной активной связи отсутствует override=include",
+                product_key_base=base_key,
+                product_key_competitor=competitor_key,
+            )
+        elif not row["weighted_exists"]:
             add_issue(
                 issues, ERROR, "MATCH_WEIGHTED_RESULT_MISSING", business_key,
                 "Для активной связи отсутствует подходящий весовой результат Product Control",
                 product_key_base=base_key, product_key_competitor=competitor_key,
             )
-        elif not row["weighted_evidence"]:
+        elif (
+            row["match_type"] == ParserProductMatch.MATCH_TYPE_AUTO
+            and not row["weighted_evidence"]
+        ):
             add_issue(
                 issues, WARNING, "MATCH_EVIDENCE_EMPTY", business_key,
                 "Для активной связи отсутствует детализация сравнения свойств",
@@ -566,21 +630,6 @@ def check_matches(
                         competitor_key
                     ),
                 )
-
-        if (
-            row["match_type"]
-            != ParserProductMatch.MATCH_TYPE_AUTO
-        ):
-            add_issue(
-                issues,
-                WARNING,
-                "MATCH_TYPE_NOT_AUTO",
-                business_key,
-                (
-                    "Активная связь не помечена как "
-                    "автоматически сформированная"
-                ),
-            )
 
         if base_key == competitor_key:
             add_issue(
@@ -2472,6 +2521,59 @@ def check_iprice_calculation_config():
             ).values_list("id", flat=True),
         ).values_list("product_key", flat=True)
     )
+
+    # ProductCost is the source of the current set of productions.
+    # Every production of every active base product must have an active
+    # calculation configuration for every configured sale region.
+    reported_missing_keys = set()
+    cost_departures_by_code = defaultdict(dict)
+    for code, departure in ProductCost.objects.values_list(
+        "code",
+        "departure",
+    ):
+        normalized_departure = normalize_text(departure)
+        if code is None or not normalized_departure:
+            continue
+        cost_departures_by_code[code][
+            normalized_departure.casefold()
+        ] = normalized_departure
+
+    for product_key in sorted(expected_product_keys):
+        code_1c = code_by_product.get(product_key)
+        if code_1c is None:
+            continue
+        for departure_key, departure in sorted(
+            cost_departures_by_code.get(code_1c, {}).items()
+        ):
+            for arrival_key, arrival in sorted(arrivals.items()):
+                expected_key = (
+                    product_key,
+                    departure_key,
+                    arrival_key,
+                )
+                if expected_key in active_by_key:
+                    continue
+                reported_missing_keys.add(expected_key)
+                add_issue(
+                    issues,
+                    ERROR,
+                    "IPRICE_CONFIG_ACTIVE_MISSING",
+                    f"{product_key}:{departure}->{arrival}",
+                    (
+                        "Для производства из product_cost отсутствует "
+                        "активная конфигурация расчёта"
+                    ),
+                    product_key=product_key,
+                    departure=departure,
+                    arrival=arrival,
+                    item_type=(
+                        classifications[product_key].item_type
+                        if product_key in classifications else None
+                    ),
+                    code_1c=code_1c,
+                    source="product_cost",
+                )
+
     for (
         product_key,
         departure_key,
@@ -2480,7 +2582,11 @@ def check_iprice_calculation_config():
         if product_key not in expected_product_keys:
             continue
         arrival = arrivals.get(arrival_key, arrival_key)
-        if (product_key, departure_key, arrival_key) not in active_by_key:
+        expected_key = (product_key, departure_key, arrival_key)
+        if (
+            expected_key not in active_by_key
+            and expected_key not in reported_missing_keys
+        ):
             add_issue(
                 issues, ERROR, "IPRICE_CONFIG_ACTIVE_MISSING",
                 f"{product_key}:{departure}->{arrival}",

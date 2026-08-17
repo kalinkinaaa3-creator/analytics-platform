@@ -39,17 +39,17 @@ const UPLOAD_DEFINITIONS = [
   },
 
   {
-    id: "calculation_config",
+    id: "product_cost",
     hasTemplate: true,
-    title: "3. Конфигурации расчёта",
+    title: "3. Себестоимость товаров",
     accept: ".xlsx,.xls",
     fileHint: "Excel",
   },
 
   {
-    id: "product_cost",
+    id: "calculation_config",
     hasTemplate: true,
-    title: "4. Себестоимость товаров",
+    title: "4. Конфигурации расчёта",
     accept: ".xlsx,.xls",
     fileHint: "Excel",
   },

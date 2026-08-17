@@ -128,6 +128,8 @@ def _header_cell(
 def _get_latest_price_rows(
     model,
     product_keys,
+    *,
+    report_missing_final_price=True,
 ):
     """
     Для каждого product_key выбирает одну актуальную
@@ -151,7 +153,8 @@ def _get_latest_price_rows(
        во всех строках:
            для заполнения информационных полей выгрузки
            выбираем строку с MIN(id);
-           product_key возвращаем в errors.
+           product_key возвращаем в errors, если
+           report_missing_final_price=True.
 
     7. Если вообще нет price-строк:
            product_key возвращаем в errors.
@@ -289,11 +292,12 @@ def _get_latest_price_rows(
         # ----------------------------------------------------
 
         if not rows_with_final_price:
-            errors[product_key] = (
-                f"За актуальную дату {latest_day} "
-                f"в {model._meta.db_table} "
-                "отсутствует заполненный final_price"
-            )
+            if report_missing_final_price:
+                errors[product_key] = (
+                    f"За актуальную дату {latest_day} "
+                    f"в {model._meta.db_table} "
+                    "отсутствует заполненный final_price"
+                )
 
             # Price validity and export completeness are separate concerns.
             # A zero/empty price must not become calculation-ready, but the
@@ -574,6 +578,9 @@ def _add_source_sheet(
     ) = _get_latest_price_rows(
         price_model,
         product_keys,
+        report_missing_final_price=(
+            source != "base"
+        ),
     )
 
     # --------------------------------------------------------
@@ -771,6 +778,7 @@ def _get_latest_base_code_rows(
     ) = _get_latest_price_rows(
         BaseProductPrice,
         product_keys,
+        report_missing_final_price=False,
     )
 
     result = {}

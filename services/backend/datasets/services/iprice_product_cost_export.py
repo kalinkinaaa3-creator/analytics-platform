@@ -3,7 +3,8 @@ from io import BytesIO
 
 from django.utils import timezone
 from openpyxl import Workbook
-from openpyxl.styles import Font
+from openpyxl.comments import Comment
+from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from datasets.models import (
@@ -26,7 +27,7 @@ MAIN_HEADERS = [
     "Вид",
     "Группа",
     "Категория",
-    "Регион производства",
+    "Регион производства — проверить и при необходимости изменить *",
 ]
 
 
@@ -141,10 +142,10 @@ def _get_latest_base_price_rows(product_keys):
 
     6. Если за актуальный день final_price отсутствует
        во всех строках:
-           строку НЕ выбираем;
-           product_key попадает в errors.
+           выбираем строку с MIN(id), чтобы получить
+           code_1c для связи с Nomenclature.
 
-    Никакого fallback на price нет.
+    Поле price не используется как расчетная цена.
 
     Возвращает:
 
@@ -261,17 +262,19 @@ def _get_latest_base_price_rows(product_keys):
         ]
 
         # ----------------------------------------------------
-        # На актуальный день final_price нет
+        # На актуальный день final_price нет.
         #
-        # ВАЖНО:
-        # price НЕ используем вместо final_price.
+        # Для шаблона себестоимости из BaseProductPrice
+        # нужен прежде всего code_1c. Текущая цена нашего
+        # товара для iPrice берется из NomenclaturePrice,
+        # поэтому отсутствие final_price не должно исключать
+        # товар и создавать ошибку этого экспорта.
         # ----------------------------------------------------
 
         if not rows_with_final_price:
-            errors[product_key] = (
-                f"За актуальную дату {latest_day} "
-                "в base_product_price отсутствует "
-                "заполненный final_price"
+            selected_rows[product_key] = min(
+                latest_rows,
+                key=lambda row: row["id"],
             )
             continue
 
@@ -336,7 +339,8 @@ def export_iprice_product_cost_template():
         product_key
                 ↓
         актуальная строка:
-        MAX day -> MAX(final_price) -> MIN(id)
+        MAX day -> MAX(final_price) -> MIN(id),
+        а при отсутствии final_price -> MIN(id)
                 ↓
         code_1c
                 ↓
@@ -407,12 +411,12 @@ def export_iprice_product_cost_template():
     #
     # MAX календарной даты
     #     ↓
-    # MAX(final_price)
+    # MAX(final_price), а при его отсутствии строка
+    # все равно используется для получения code_1c
     #     ↓
     # при одинаковой цене MIN(id)
     #
-    # Если final_price нет:
-    #     ERROR
+    # Отсутствие final_price ошибкой здесь не является.
     # ========================================================
 
     (
@@ -519,6 +523,7 @@ def export_iprice_product_cost_template():
             "id",
             "product_key",
             "departure",
+            "arrival",
         )
     )
 
@@ -529,6 +534,7 @@ def export_iprice_product_cost_template():
     # --------------------------------------------------------
 
     departure_seen = set()
+    route_seen = set()
 
     for row in discount_rows:
         product_key = row[
@@ -537,6 +543,9 @@ def export_iprice_product_cost_template():
 
         departure = normalize_text(
             row["departure"]
+        )
+        arrival = normalize_text(
+            row["arrival"]
         )
 
         if not departure:
@@ -560,10 +569,13 @@ def export_iprice_product_cost_template():
             departure.casefold(),
         )
 
-        if normalized_key in departure_seen:
-            # Технически БД этого допустить не должна,
-            # но при отличиях регистра возможна логическая
-            # дубликация.
+        normalized_route_key = (
+            product_key,
+            departure.casefold(),
+            arrival.casefold() if arrival else "",
+        )
+
+        if normalized_route_key in route_seen:
             errors.append({
                 "product_key": product_key,
                 "code_1c": (
@@ -574,10 +586,21 @@ def export_iprice_product_cost_template():
                 "departure": departure,
                 "error": (
                     "Обнаружен логический дубликат "
-                    "product_key + departure "
+                    "product_key + departure + arrival "
                     "в departure_discount"
                 ),
             })
+            continue
+
+        route_seen.add(
+            normalized_route_key
+        )
+
+        if normalized_key in departure_seen:
+            # Одно производство закономерно повторяется для
+            # разных регионов продажи. Шаблону себестоимости
+            # нужна одна строка code_1c + departure, поэтому
+            # остальные корректные маршруты просто сворачиваем.
             continue
 
         departure_seen.add(
@@ -821,6 +844,29 @@ def export_iprice_product_cost_template():
         cell.font = Font(
             bold=True
         )
+
+    production_header = worksheet.cell(
+        row=1,
+        column=6,
+    )
+    production_header.fill = PatternFill(
+        fill_type="solid",
+        fgColor="FFF2CC",
+    )
+    production_header.font = Font(
+        bold=True,
+        color="9C5700",
+    )
+    production_header.comment = Comment(
+        (
+            "Проверьте актуальный регион производства. "
+            "Если производство изменилось или у товара несколько "
+            "производств, скорректируйте/добавьте строки до загрузки. "
+            "После загрузки себестоимости необходимо обновить "
+            "конфигурации расчёта и скидки для всех маршрутов."
+        ),
+        "iPrice",
+    )
 
     for row in export_rows:
         worksheet.append(
