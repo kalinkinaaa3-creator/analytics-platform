@@ -542,6 +542,7 @@ def parse_ps_products(
     retry_failed: bool = False,
     blocked_only: bool = False,
     workers: int | None = None,
+    product_keys: set[int] | None = None,
 ) -> dict:
     workers = workers or settings.TARA_PARSER_WORKERS
     today = date.today()
@@ -550,6 +551,11 @@ def parse_ps_products(
         source=SOURCE,
         status=ParserProductUrl.STATUS_ACTIVE,
     )
+
+    if product_keys is not None:
+        queryset = queryset.filter(
+            id__in=product_keys,
+        )
 
     if blocked_only:
         queryset = queryset.filter(
@@ -586,11 +592,16 @@ def parse_ps_products(
         )
 
     logger.info(
-        "PS products parsing started: total=%s workers=%s retry_failed=%s blocked_only=%s",
+        (
+            "PS products parsing started: "
+            "total=%s workers=%s retry_failed=%s "
+            "blocked_only=%s product_keys_filter=%s"
+        ),
         len(product_url_ids),
         workers,
         retry_failed,
         blocked_only,
+        product_keys is not None,
     )
 
     total = len(product_url_ids)

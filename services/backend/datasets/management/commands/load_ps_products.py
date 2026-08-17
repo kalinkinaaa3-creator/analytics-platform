@@ -1,5 +1,9 @@
 from django.core.management.base import BaseCommand
 
+from datasets.services.parsers.product_key_selector import (
+    get_active_classified_product_keys,
+)
+
 from datasets.services.parsers.ps_product_parser import parse_ps_products
 
 
@@ -11,13 +15,38 @@ class Command(BaseCommand):
         parser.add_argument("--workers", type=int, default=None)
         parser.add_argument("--retry-failed", action="store_true")
         parser.add_argument("--retry-blocked", action="store_true")
+        parser.add_argument(
+            "--classified-only",
+            action="store_true",
+            help=(
+                "Parse only active PS product_key values "
+                "from active product classification"
+            ),
+        )
 
     def handle(self, *args, **options):
+        product_keys = None
+
+        if options["classified_only"]:
+            product_keys = (
+                get_active_classified_product_keys(
+                    source="ps",
+                )
+            )
+
+            self.stdout.write(
+                (
+                    "PS classified product keys selected: "
+                    f"{len(product_keys)}"
+                )
+            )
+
         result = parse_ps_products(
             limit=options["limit"],
             workers=options["workers"],
             retry_failed=options["retry_failed"],
             blocked_only=options["retry_blocked"],
+            product_keys=product_keys,
         )
 
         self.stdout.write(

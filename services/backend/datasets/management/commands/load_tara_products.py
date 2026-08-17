@@ -2,6 +2,10 @@ import time
 
 from django.core.management.base import BaseCommand
 
+from datasets.services.parsers.product_key_selector import (
+    get_active_classified_product_keys,
+)
+
 from datasets.services.parsers.tara_product_parser import parse_tara_products
 
 
@@ -31,14 +35,44 @@ class Command(BaseCommand):
             default=1,
         )
 
+        parser.add_argument(
+            "--classified-only",
+            action="store_true",
+            help=(
+                "Parse only active Tara product_key values "
+                "from active product classification"
+            ),
+        )
+
     def handle(self, *args, **options):
         limit = options["limit"]
         workers = options["workers"]
         retry_failed = options["retry_failed"]
 
+        product_keys = None
+
+        if options["classified_only"]:
+            product_keys = (
+                get_active_classified_product_keys(
+                    source="tara",
+                )
+            )
+
+            self.stdout.write(
+                (
+                    "Tara classified product keys selected: "
+                    f"{len(product_keys)}"
+                )
+            )
+
         self.stdout.write(
-            f"Tara products parsing started: "
-            f"limit={limit}, workers={workers}, retry_failed={retry_failed}"
+            (
+                "Tara products parsing started: "
+                f"limit={limit}, "
+                f"workers={workers}, "
+                f"retry_failed={retry_failed}, "
+                f"classified_only={options['classified_only']}"
+            )
         )
 
         result = parse_tara_products(
@@ -46,6 +80,7 @@ class Command(BaseCommand):
             workers=workers,
             retry_failed=retry_failed,
             blocked_only=False,
+            product_keys=product_keys,
         )
 
         self.stdout.write(
@@ -65,7 +100,9 @@ class Command(BaseCommand):
             return
 
         if result.get("blocked", 0) <= 0:
-            self.stdout.write("No blocked Tara products to retry")
+            self.stdout.write(
+                "No blocked Tara products to retry"
+            )
             return
 
         delay = options["retry_blocked_delay"]
@@ -73,8 +110,11 @@ class Command(BaseCommand):
 
         for round_number in range(1, rounds + 1):
             self.stdout.write(
-                f"Tara blocked retry round {round_number}/{rounds} "
-                f"will start after {delay} seconds"
+                (
+                    f"Tara blocked retry round "
+                    f"{round_number}/{rounds} "
+                    f"will start after {delay} seconds"
+                )
             )
 
             time.sleep(delay)
@@ -84,6 +124,7 @@ class Command(BaseCommand):
                 workers=workers,
                 retry_failed=False,
                 blocked_only=True,
+                product_keys=product_keys,
             )
 
             self.stdout.write(

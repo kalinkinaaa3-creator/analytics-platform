@@ -8,7 +8,7 @@ from typing import Any
 import requests
 from bs4 import BeautifulSoup
 from django.conf import settings
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
 from datasets.models import (
@@ -430,6 +430,7 @@ def parse_tara_products(
     retry_failed: bool = False,
     blocked_only: bool = False,
     workers: int | None = None,
+    product_keys: set[int] | None = None,
 ) -> dict:
     workers = workers or settings.TARA_PARSER_WORKERS
     today = date.today()
@@ -439,33 +440,28 @@ def parse_tara_products(
         status=ParserProductUrl.STATUS_ACTIVE,
     )
 
+    if product_keys is not None:
+        queryset = queryset.filter(
+            id__in=product_keys,
+        )
+
     if blocked_only:
         queryset = queryset.filter(
             is_loaded=False,
             last_error__icontains="blocked",
         )
+
     elif retry_failed:
         queryset = queryset.filter(
             is_loaded=False,
             last_error__isnull=False,
         )
+
     else:
         queryset = queryset.filter(
-            date_update__date__lt=today,
-        ) | queryset.filter(
-            date_update__isnull=True,
-        )
-
-        queryset = queryset.filter(
-            is_loaded=False,
-        ) | ParserProductUrl.objects.filter(
-            source=SOURCE,
-            status=ParserProductUrl.STATUS_ACTIVE,
-            date_update__date__lt=today,
-        ) | ParserProductUrl.objects.filter(
-            source=SOURCE,
-            status=ParserProductUrl.STATUS_ACTIVE,
-            date_update__isnull=True,
+            models.Q(is_loaded=False)
+            | models.Q(date_update__date__lt=today)
+            | models.Q(date_update__isnull=True)
         )
 
     product_url_ids = list(
@@ -487,11 +483,16 @@ def parse_tara_products(
         )
 
     logger.info(
-        "Tara products parsing started: total=%s workers=%s retry_failed=%s blocked_only=%s",
+        (
+            "Tara products parsing started: "
+            "total=%s workers=%s retry_failed=%s "
+            "blocked_only=%s product_keys_filter=%s"
+        ),
         len(product_url_ids),
         workers,
         retry_failed,
         blocked_only,
+        product_keys is not None,
     )
 
     total = len(product_url_ids)

@@ -1,4 +1,10 @@
-import { createContext, useContext, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { api } from "../api/client";
 
 const AuthContext = createContext(null);
@@ -25,7 +31,7 @@ export function AuthProvider({ children }) {
     setUsername(usernameValue);
   }
 
-  function logout() {
+  const logout = useCallback(() => {
     localStorage.removeItem("access");
     localStorage.removeItem("refresh");
     localStorage.removeItem("username");
@@ -33,7 +39,25 @@ export function AuthProvider({ children }) {
     setAccess(null);
     setRefresh(null);
     setUsername(null);
-  }
+  }, []);
+
+  useEffect(() => {
+    function handleUnauthorized() {
+      logout();
+    }
+
+    window.addEventListener(
+      "auth:unauthorized",
+      handleUnauthorized,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "auth:unauthorized",
+        handleUnauthorized,
+      );
+    };
+  }, [logout]);
 
   return (
     <AuthContext.Provider

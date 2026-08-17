@@ -4,6 +4,13 @@ import { useAuth } from "../auth/AuthContext";
 import { api } from "../api/client";
 import "../styles/list_base.css";
 
+function isSectionLink(item) {
+  return (
+    item.navigation_type === "section_link"
+    || item.id === "iprice"
+  );
+}
+
 export function MainLayout() {
   const { logout, username } = useAuth();
   const navigate = useNavigate();
@@ -93,27 +100,59 @@ export function MainLayout() {
         </div>
 
         <div className="sections-container">
-          {Object.entries(sections).map(([group, items]) => (
-            <div className="section" key={group}>
-              <div className="section-title" onClick={toggleSubmenu}>
-                <span className="arrow"></span>
-                <span className="section-icon">🗁&nbsp;</span>
-                {group}
-              </div>
+          {Object.entries(sections).map(([group, items]) => {
+            const sectionLinks = items.filter(
+              isSectionLink
+            );
+            const submenuItems = items.filter(
+              (item) => !isSectionLink(item)
+            );
 
-              <div className="submenu">
-                {items.map((item) => (
+            return (
+              <div className="section" key={group}>
+                {sectionLinks.map((item) => (
                   <NavLink
                     to={item.url}
                     key={item.id}
-                    className={({ isActive }) => (isActive ? "active" : "")}
+                    className={({ isActive }) => [
+                      "section-title",
+                      "section-title--link",
+                      isActive ? "active" : "",
+                    ].filter(Boolean).join(" ")}
                   >
-                    <span className="text">{item.name}</span>
+                    <span className="section-icon">
+                      {item.icon}&nbsp;
+                    </span>
+                    {item.name}
                   </NavLink>
                 ))}
+
+                {submenuItems.length > 0 && (
+                  <>
+                    <div className="section-title" onClick={toggleSubmenu}>
+                      <span className="arrow"></span>
+                      <span className="section-icon">🗁&nbsp;</span>
+                      {group}
+                    </div>
+
+                    <div className="submenu">
+                      {submenuItems.map((item) => (
+                        <NavLink
+                          to={item.url}
+                          key={item.id}
+                          className={({ isActive }) => (
+                            isActive ? "active" : ""
+                          )}
+                        >
+                          <span className="text">{item.name}</span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <button type="button" className="logout-btn" onClick={handleLogout}>

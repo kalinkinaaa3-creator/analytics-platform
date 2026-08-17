@@ -12,6 +12,9 @@ import { AccessDeniedPage } from "./pages/AccessDeniedPage";
 import { PublicLayout } from "./layouts/PublicLayout";
 import { PublicDashboardPage } from "./pages/PublicDashboardPage";
 
+import { IPricePage } from "./iprice/IPricePage";
+
+
 function App() {
   return (
     <AuthProvider>
@@ -47,6 +50,10 @@ function App() {
             <Route
               path="dashboards/:dashboardSlug"
               element={<DashboardPage />}
+            />
+            <Route
+              path="iprice"
+              element={<IPricePage />}
             />
             <Route path="access-denied" element={<AccessDeniedPage />} />
           </Route>

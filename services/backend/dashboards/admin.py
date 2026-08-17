@@ -9,6 +9,7 @@ from dashboards.models import (
     DashboardViewLog,
     DashboardPublicGroup,
     DashboardPublicGroupItem,
+    IPriceParameterChangeLog,
 )
 
 
@@ -210,4 +211,30 @@ class DashboardPublicGroupItemAdmin(admin.ModelAdmin):
         "group",
         "section",
         "position",
+    )
+
+
+@admin.register(IPriceParameterChangeLog)
+class IPriceParameterChangeLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "created_at",
+        "snapshot_id",
+        "mode",
+        "user",
+        "status",
+    )
+    list_filter = ("status", "mode", "created_at")
+    search_fields = ("snapshot_id", "user__username", "user__email")
+    readonly_fields = (
+        "user",
+        "snapshot_id",
+        "mode",
+        "filters",
+        "search",
+        "changes",
+        "affected",
+        "status",
+        "error",
+        "created_at",
+        "finished_at",
     )

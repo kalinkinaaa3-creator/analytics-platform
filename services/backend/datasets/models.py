@@ -1,4 +1,8 @@
 from django.db import models
+from django.db.models import Q
+from django.conf import settings
+
+
 
 
 class Dataset(models.Model):
@@ -31,7 +35,7 @@ class DatasetRow(models.Model):
 
     def __str__(self):
         return f"{self.dataset.name} #{self.id}"
-    
+
 
 
 
@@ -521,6 +525,128 @@ class AccreceivRaw(models.Model):
 #МОДЕЛИ ПАРСЕРОВ
 
 
+class DepartureDiscount(models.Model):
+    product_key = models.BigIntegerField(
+        db_index=True,
+        verbose_name="Product key",
+    )
+
+    departure = models.CharField(
+        max_length=255,
+        db_index=True,
+        verbose_name="Производство",
+    )
+
+    arrival = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Регион продажи",
+        help_text="Для legacy-строк может быть пустым",
+    )
+
+    distr = models.DecimalField(
+        max_digits=7,
+        decimal_places=6,
+        verbose_name="Скидка distr",
+    )
+
+    distr_1 = models.DecimalField(
+        max_digits=7,
+        decimal_places=6,
+        verbose_name="Скидка distr_1",
+    )
+
+    small = models.DecimalField(
+        max_digits=7,
+        decimal_places=6,
+        verbose_name="Скидка small",
+    )
+
+    medium = models.DecimalField(
+        max_digits=7,
+        decimal_places=6,
+        verbose_name="Скидка medium",
+    )
+
+    large = models.DecimalField(
+        max_digits=7,
+        decimal_places=6,
+        verbose_name="Скидка large",
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Активная запись",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Дата добавления",
+    )
+
+    class Meta:
+        db_table = "departure_discount"
+        verbose_name = "Скидка по производству"
+        verbose_name_plural = "Скидки по производствам"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "product_key",
+                    "departure",
+                    "arrival",
+                ],
+                condition=Q(is_active=True),
+                name="uniq_active_dep_discount_product_route",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(is_active=False)
+                    | Q(arrival__isnull=False)
+                ),
+                name="active_dep_discount_requires_arrival",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "product_key",
+                    "departure",
+                    "arrival",
+                    "is_active",
+                ],
+                name="dep_disc_route_active_idx",
+            ),
+            models.Index(
+                fields=[
+                    "product_key",
+                    "departure",
+                    "arrival",
+                    "date_add",
+                ],
+                name="dep_disc_route_date_idx",
+            ),
+        ]
+
+    def __str__(self):
+        active_text = (
+            "active"
+            if self.is_active
+            else "inactive"
+        )
+
+        return (
+            f"{self.product_key} | "
+            f"{self.departure} -> "
+            f"{self.arrival or 'legacy'} | "
+            f"{active_text}"
+        )
+
 
 
 class ParserPrefix(models.Model):
@@ -533,6 +659,14 @@ class ParserPrefix(models.Model):
     prefix = models.CharField(
         max_length=255,
         verbose_name="Префикс",
+    )
+
+    shipp_region = models.CharField(
+        max_length=255,
+        db_index=True,
+        verbose_name="Регион",
+        null=True,
+        blank=True,
     )
 
     date_add = models.DateTimeField(
@@ -552,7 +686,7 @@ class ParserPrefix(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.source}: {self.prefix}"
+        return f"{self.source}: {self.prefix} -> {self.shipp_region}"
 
 
 class ParserProductUrl(models.Model):
@@ -980,37 +1114,227 @@ class ParserProductMatch(models.Model):
     STATUS_INACTIVE = "inactive"
 
     STATUS_CHOICES = (
-        (STATUS_ACTIVE, "Активен"),
-        (STATUS_INACTIVE, "Неактивен"),
+        (
+            STATUS_ACTIVE,
+            "Активен",
+        ),
+        (
+            STATUS_INACTIVE,
+            "Неактивен",
+        ),
     )
 
-    product_key_base = models.BigIntegerField(db_index=True)
-    product_key_competitor = models.BigIntegerField(db_index=True)
+    MATCH_TYPE_MANUAL = "manual"
+    MATCH_TYPE_AUTO = "auto"
+
+    MATCH_TYPE_CHOICES = (
+        (
+            MATCH_TYPE_MANUAL,
+            "Добавлен вручную",
+        ),
+        (
+            MATCH_TYPE_AUTO,
+            "Добавлен автоматически",
+        ),
+    )
+
+    product_key_base = models.BigIntegerField(
+        db_index=True,
+        verbose_name="Product key нашего товара",
+    )
+
+    product_key_competitor = models.BigIntegerField(
+        db_index=True,
+        verbose_name="Product key конкурента",
+    )
 
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default=STATUS_ACTIVE,
         db_index=True,
+        verbose_name="Статус",
     )
 
-    date_add = models.DateTimeField(auto_now_add=True)
-    date_update = models.DateTimeField(blank=True, null=True)
+    match_type = models.CharField(
+        max_length=20,
+        choices=MATCH_TYPE_CHOICES,
+        default=MATCH_TYPE_MANUAL,
+        db_index=True,
+        verbose_name="Способ добавления",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата добавления",
+    )
 
     class Meta:
         db_table = "parser_product_match"
+
         verbose_name = "Parser: product matching"
         verbose_name_plural = "Parser: product matches"
-        unique_together = ("product_key_base", "product_key_competitor")
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "product_key_base",
+                    "product_key_competitor",
+                ],
+                name=(
+                    "parser_product_match_"
+                    "base_competitor_uniq"
+                ),
+            ),
+        ]
+
         indexes = [
-            models.Index(fields=["product_key_base", "product_key_competitor"]),
-            models.Index(fields=["status"]),
+            models.Index(
+                fields=[
+                    "product_key_base",
+                    "status",
+                ],
+                name=(
+                    "parser_match_base_status_idx"
+                ),
+            ),
+            models.Index(
+                fields=[
+                    "product_key_competitor",
+                    "status",
+                ],
+                name=(
+                    "parser_match_comp_status_idx"
+                ),
+            ),
+            models.Index(
+                fields=[
+                    "match_type",
+                    "status",
+                ],
+                name=(
+                    "parser_match_type_status_idx"
+                ),
+            ),
         ]
 
     def __str__(self):
-        return f"{self.product_key_base} → {self.product_key_competitor}"
+        return (
+            f"{self.product_key_base} "
+            f"→ {self.product_key_competitor} "
+            f"[{self.match_type}; {self.status}]"
+        )
 
 
+
+class IPriceCompetitorSelectionOverride(models.Model):
+    MODE_AUTO = "auto"
+    MODE_INCLUDE = "include"
+    MODE_EXCLUDE = "exclude"
+
+    MODE_CHOICES = (
+        (MODE_AUTO, "Автоматический выбор"),
+        (MODE_INCLUDE, "Включён вручную"),
+        (MODE_EXCLUDE, "Исключён вручную"),
+    )
+
+    product_key_base = models.BigIntegerField(
+        db_index=True,
+        verbose_name="Product key нашего товара",
+    )
+    product_key_competitor = models.BigIntegerField(
+        db_index=True,
+        verbose_name="Product key конкурента",
+    )
+    selection_mode = models.CharField(
+        max_length=20,
+        choices=MODE_CHOICES,
+        default=MODE_AUTO,
+        db_index=True,
+        verbose_name="Режим участия в расчёте",
+    )
+    reason = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Причина ручного решения",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="iprice_competitor_selection_overrides",
+        verbose_name="Кем изменено",
+    )
+    date_add = models.DateTimeField(auto_now_add=True)
+    date_update = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "iprice_competitor_selection_override"
+        verbose_name = "iPrice: ручной выбор конкурента"
+        verbose_name_plural = "iPrice: ручной выбор конкурентов"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "product_key_base",
+                    "product_key_competitor",
+                ],
+                name="iprice_competitor_selection_pair_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["product_key_base", "selection_mode"],
+                name="iprice_comp_sel_base_mode_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.product_key_base} -> "
+            f"{self.product_key_competitor}: {self.selection_mode}"
+        )
+
+
+class IPriceCompetitorSelectionChange(models.Model):
+    override = models.ForeignKey(
+        IPriceCompetitorSelectionOverride,
+        on_delete=models.PROTECT,
+        related_name="changes",
+        verbose_name="Настройка конкурента",
+    )
+    snapshot = models.ForeignKey(
+        "IPriceSnapshot",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="competitor_selection_changes",
+        verbose_name="Снапшот",
+    )
+    previous_mode = models.CharField(max_length=20, blank=True, default="")
+    selection_mode = models.CharField(
+        max_length=20,
+        choices=IPriceCompetitorSelectionOverride.MODE_CHOICES,
+    )
+    reason = models.TextField(blank=True, default="")
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="iprice_competitor_selection_changes",
+    )
+    date_add = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "iprice_competitor_selection_change"
+        ordering = ("-date_add", "-id")
+        indexes = [
+            models.Index(
+                fields=["snapshot", "date_add"],
+                name="iprice_comp_change_snap_idx",
+            ),
+        ]
 
 
 class BaseProductPrice(models.Model):
@@ -1102,8 +1426,42 @@ class ParserProductClassification(models.Model):
     STATUS_INACTIVE = "inactive"
 
     STATUS_CHOICES = (
-        (STATUS_ACTIVE, "Активен"),
-        (STATUS_INACTIVE, "Неактивен"),
+        (
+            STATUS_ACTIVE,
+            "Активен",
+        ),
+        (
+            STATUS_INACTIVE,
+            "Неактивен",
+        ),
+    )
+
+    MATCH_TYPE_MANUAL = "manual"
+    MATCH_TYPE_AUTO = "auto"
+
+    MATCH_TYPE_CHOICES = (
+        (
+            MATCH_TYPE_MANUAL,
+            "Добавлен вручную",
+        ),
+        (
+            MATCH_TYPE_AUTO,
+            "Добавлен автоматически по URL",
+        ),
+    )
+
+    ITEM_TYPE_PRODUCT = "product"
+    ITEM_TYPE_COMPONENT = "component"
+
+    ITEM_TYPE_CHOICES = (
+        (
+            ITEM_TYPE_PRODUCT,
+            "Товар",
+        ),
+        (
+            ITEM_TYPE_COMPONENT,
+            "Комплектующее",
+        ),
     )
 
     product_key = models.BigIntegerField(
@@ -1154,6 +1512,15 @@ class ParserProductClassification(models.Model):
         verbose_name="Модификация",
     )
 
+    item_type = models.CharField(
+        max_length=20,
+        choices=ITEM_TYPE_CHOICES,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Тип товара",
+    )
+
     url = models.TextField(
         blank=True,
         null=True,
@@ -1174,6 +1541,14 @@ class ParserProductClassification(models.Model):
         verbose_name="Статус",
     )
 
+    match_type = models.CharField(
+        max_length=20,
+        choices=MATCH_TYPE_CHOICES,
+        default=MATCH_TYPE_MANUAL,
+        db_index=True,
+        verbose_name="Способ добавления",
+    )
+
     date_add = models.DateTimeField(
         auto_now_add=True,
         verbose_name="Дата добавления",
@@ -1187,11 +1562,32 @@ class ParserProductClassification(models.Model):
 
     class Meta:
         db_table = "parser_product_classification"
-        verbose_name = "Parser: product classification"
-        verbose_name_plural = "Parser: products classification"
+
+        verbose_name = (
+            "Parser: product classification"
+        )
+
+        verbose_name_plural = (
+            "Parser: products classification"
+        )
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "match_type",
+                    "status",
+                ],
+                name=(
+                    "parser_class_type_status_idx"
+                ),
+            ),
+        ]
 
     def __str__(self):
-        return f"{self.product_key}"
+        return (
+            f"{self.product_key} "
+            f"[{self.match_type}; {self.status}]"
+        )
 
 
 
@@ -1758,8 +2154,15 @@ class TransportCost(models.Model):
         verbose_name="Стоимость перевозки без НДС",
     )
 
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Активная запись",
+    )
+
     date_add = models.DateTimeField(
         auto_now_add=True,
+        db_index=True,
         verbose_name="Дата добавления",
     )
 
@@ -1770,13 +2173,47 @@ class TransportCost(models.Model):
 
         constraints = [
             models.UniqueConstraint(
-                fields=["departure", "arrival"],
-                name="transport_cost_departure_arrival_uniq",
+                fields=[
+                    "departure",
+                    "arrival",
+                ],
+                condition=Q(is_active=True),
+                name="uniq_active_transport_departure_arrival",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "departure",
+                    "arrival",
+                    "is_active",
+                ],
+                name="transport_route_active_idx",
+            ),
+            models.Index(
+                fields=[
+                    "departure",
+                    "arrival",
+                    "date_add",
+                ],
+                name="transport_route_date_idx",
             ),
         ]
 
     def __str__(self):
-        return f"{self.departure} -> {self.arrival}: {self.cost}"
+        active_text = (
+            "active"
+            if self.is_active
+            else "inactive"
+        )
+
+        return (
+            f"{self.departure} -> "
+            f"{self.arrival}: "
+            f"{self.cost} "
+            f"({active_text})"
+        )
 
 
 class ProductCost(models.Model):
@@ -1828,3 +2265,1886 @@ class ProductCost(models.Model):
 
     def __str__(self):
         return f"{self.date} | {self.code} | {self.departure} | {self.cost}"
+
+
+class IPriceCalculationConfig(models.Model):
+    product_key = models.BigIntegerField(
+        db_index=True,
+        verbose_name="Product key",
+    )
+
+    departure = models.CharField(
+        max_length=255,
+        db_index=True,
+        verbose_name="Место производства",
+    )
+
+    arrival = models.CharField(
+        max_length=255,
+        db_index=True,
+        verbose_name="Регион продажи",
+    )
+
+    base_analog = models.DecimalField(
+        max_digits=12,
+        decimal_places=6,
+        verbose_name="Коэффициент цены аналога",
+        help_text=(
+            "Коэффициент, на который умножается "
+            "цена аналога или конкурента"
+        ),
+    )
+
+    base_exclusive = models.DecimalField(
+        max_digits=12,
+        decimal_places=6,
+        verbose_name="Маржинальность эксклюзивного товара",
+        help_text=(
+            "Используется при расчете цены от себестоимости: "
+            "РРЦ = себестоимость с логистикой / "
+            "(1 - base_exclusive)"
+        ),
+    )
+
+    minimum_margin = models.DecimalField(
+        max_digits=12,
+        decimal_places=6,
+        verbose_name="Минимальная маржинальность",
+        help_text=(
+            "Минимально допустимая маржинальность "
+            "после применения скидки"
+        ),
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Активная конфигурация",
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата создания",
+    )
+
+
+    class Meta:
+        db_table = "iprice_calculation_config"
+
+        verbose_name = "Конфигурация расчета iPrice"
+        verbose_name_plural = "Конфигурации расчета iPrice"
+
+        ordering = (
+            "product_key",
+            "departure",
+            "arrival",
+            "-date_add",
+            "-id",
+        )
+
+        constraints = (
+            models.UniqueConstraint(
+                fields=(
+                    "product_key",
+                    "departure",
+                    "arrival",
+                ),
+                condition=Q(
+                    is_active=True,
+                ),
+                name=(
+                    "unique_active_iprice_config_"
+                    "per_product_route"
+                ),
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    base_analog__gte=0,
+                ),
+                name=(
+                    "iprice_config_base_analog_gte_zero"
+                ),
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(base_exclusive__gt=0)
+                    & Q(base_exclusive__lt=1)
+                ),
+                name=(
+                    "iprice_config_base_exclusive_range"
+                ),
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(minimum_margin__gte=0)
+                    & Q(minimum_margin__lt=1)
+                ),
+                name=(
+                    "iprice_config_minimum_margin_range"
+                ),
+            ),
+        )
+
+        indexes = (
+            models.Index(
+                fields=(
+                    "product_key",
+                    "departure",
+                    "arrival",
+                    "date_add",
+                ),
+                name="iprice_config_route_date_idx",
+            ),
+        )
+
+    def __str__(self):
+        active_text = (
+            "active"
+            if self.is_active
+            else "inactive"
+        )
+
+        return (
+            f"{self.product_key}: "
+            f"{self.departure} -> {self.arrival}, "
+            f"analog={self.base_analog}, "
+            f"exclusive={self.base_exclusive}, "
+            f"margin={self.minimum_margin} "
+            f"({active_text})"
+        )
+
+
+class ParserMasterPipelineRun(models.Model):
+    STATUS_QUEUED = "queued"
+    STATUS_RUNNING = "running"
+    STATUS_SUCCESS = "success"
+    STATUS_FAILED = "failed"
+
+    STATUS_CHOICES = [
+        (STATUS_QUEUED, "Queued"),
+        (STATUS_RUNNING, "Running"),
+        (STATUS_SUCCESS, "Success"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_QUEUED,
+        db_index=True,
+    )
+
+    current_step = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+    )
+
+    started_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="parser_master_pipeline_runs",
+    )
+
+    started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    finished_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    error = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    result = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    date_add = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        db_table = "parser_master_pipeline_run"
+        ordering = ["-date_add"]
+
+    def __str__(self):
+        return f"Parser pipeline #{self.pk}: {self.status}"
+
+
+
+
+class IPriceSnapshot(models.Model):
+    STATUS_BUILDING = "building"
+    STATUS_SUCCESS = "success"
+    STATUS_FAILED = "failed"
+
+    STATUS_CHOICES = (
+        (
+            STATUS_BUILDING,
+            "Выполняется",
+        ),
+        (
+            STATUS_SUCCESS,
+            "Рассчитан",
+        ),
+        (
+            STATUS_FAILED,
+            "Ошибка",
+        ),
+    )
+
+    calculation_date = models.DateField(
+        db_index=True,
+        verbose_name="Дата расчета",
+    )
+
+    version_number = models.PositiveIntegerField(
+        unique=True,
+        db_index=True,
+        verbose_name="Глобальный номер версии",
+    )
+
+    revision_for_date = models.PositiveIntegerField(
+        verbose_name="Номер версии за дату",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_BUILDING,
+        db_index=True,
+        verbose_name="Статус",
+    )
+
+    is_current = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Текущая версия за дату",
+    )
+
+    is_active = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Активный окончательный расчет",
+    )
+
+    was_active = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Была активной",
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_iprice_snapshots",
+        verbose_name="Кем создан",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Дата создания",
+    )
+
+    finished_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Дата завершения",
+    )
+
+    activated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="activated_iprice_snapshots",
+        verbose_name="Кем активирован",
+    )
+
+    activated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Дата активации",
+    )
+
+    error = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Ошибка",
+    )
+
+    parameters = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Параметры запуска",
+    )
+
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "iprice_snapshot"
+        verbose_name = "iPrice snapshot"
+        verbose_name_plural = "iPrice snapshots"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "calculation_date",
+                    "revision_for_date",
+                ],
+                name="iprice_snapshot_date_revision_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "calculation_date",
+                ],
+                condition=Q(is_current=True),
+                name="iprice_snapshot_current_date_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "is_active",
+                ],
+                condition=Q(is_active=True),
+                name="iprice_snapshot_one_active_uniq",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "calculation_date",
+                    "is_current",
+                ],
+                name="iprice_snap_date_current_idx",
+            ),
+            models.Index(
+                fields=[
+                    "status",
+                    "created_at",
+                ],
+                name="iprice_snap_status_created_idx",
+            ),
+        ]
+
+        ordering = [
+            "-created_at",
+            "-id",
+        ]
+
+    @property
+    def display_version(self):
+        return (
+            f"v{self.version_number}-"
+            f"{self.calculation_date:%d.%m.%y}"
+        )
+
+    def __str__(self):
+        return self.display_version
+
+
+class IPriceSnapshotProduct(models.Model):
+    PRICING_METHOD_ANALOG = "analog"
+    PRICING_METHOD_EXCLUSIVE = "exclusive"
+
+    PRICING_METHOD_CHOICES = (
+        (
+            PRICING_METHOD_ANALOG,
+            "Аналог",
+        ),
+        (
+            PRICING_METHOD_EXCLUSIVE,
+            "Эксклюзив",
+        ),
+    )
+
+    STATUS_SUCCESS = "success"
+    STATUS_WARNING = "warning"
+    STATUS_ERROR = "error"
+
+    STATUS_CHOICES = (
+        (
+            STATUS_SUCCESS,
+            "Рассчитано",
+        ),
+        (
+            STATUS_WARNING,
+            "Есть предупреждения",
+        ),
+        (
+            STATUS_ERROR,
+            "Расчет невозможен",
+        ),
+    )
+
+    snapshot = models.ForeignKey(
+        IPriceSnapshot,
+        on_delete=models.CASCADE,
+        related_name="products",
+        verbose_name="Snapshot",
+    )
+
+    base_product_key = models.BigIntegerField(
+        db_index=True,
+        verbose_name="Product key нашего товара",
+    )
+
+    code_1c = models.BigIntegerField(
+        db_index=True,
+        verbose_name="Код номенклатуры 1С",
+    )
+
+    nom = models.CharField(
+        max_length=1000,
+        null=True,
+        blank=True,
+        verbose_name="Наименование",
+    )
+
+    nom_hier_code = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Код иерархии",
+    )
+
+    nom_hier = models.CharField(
+        max_length=1000,
+        null=True,
+        blank=True,
+        verbose_name="Иерархия",
+    )
+
+    nom_view = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Вид номенклатуры",
+    )
+
+    nom_category = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Категория номенклатуры",
+    )
+
+    nom_group = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Группа номенклатуры",
+    )
+
+    assortment_matrix_status = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="САМ",
+    )
+
+    our_offer = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="Наши предложения",
+    )
+
+    category = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Внутренняя категория",
+    )
+
+    subcategory = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Внутренняя подкатегория",
+    )
+
+    subcategory_type = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Тип подкатегории",
+    )
+
+    color = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Цвет",
+    )
+
+    material = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Материал",
+    )
+
+    modification = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Модификация",
+    )
+
+    image = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="Изображение",
+    )
+
+    url = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="URL",
+    )
+
+    item_type = models.CharField(
+        max_length=20,
+        db_index=True,
+        verbose_name="Тип позиции",
+    )
+
+    pricing_method = models.CharField(
+        max_length=20,
+        choices=PRICING_METHOD_CHOICES,
+        db_index=True,
+        verbose_name="Метод ценообразования",
+    )
+
+    competitor_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Количество конкурентов",
+    )
+
+    competitor_rrp_min = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Минимальная РРЦ конкурентов",
+    )
+
+    competitor_rrp_max = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Максимальная РРЦ конкурентов",
+    )
+
+    competitor_rrp_median = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Медианная РРЦ конкурентов",
+    )
+
+    current_retail_min = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Минимальная текущая розница",
+    )
+
+    current_retail_max = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Максимальная текущая розница",
+    )
+
+    current_retail_median = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Медианная текущая розница",
+    )
+
+    current_vs_competitor_amount = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Отклонение от медианы, руб.",
+    )
+
+    current_vs_competitor_percent = models.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Отклонение от медианы, доля",
+    )
+
+    effective_approved_rrp_median = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Медиана итоговой РРЦ",
+    )
+
+    current_vs_approved_amount = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Разница розницы и итоговой РРЦ",
+    )
+
+    calculation_status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_SUCCESS,
+        db_index=True,
+        verbose_name="Статус расчета",
+    )
+
+    warning_codes = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Предупреждения",
+    )
+
+    error_codes = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Ошибки",
+    )
+
+    calculation_details = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Детали расчета",
+    )
+
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "iprice_snapshot_product"
+        verbose_name = "iPrice snapshot product"
+        verbose_name_plural = "iPrice snapshot products"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "snapshot",
+                    "base_product_key",
+                ],
+                name="iprice_snap_product_key_uniq",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "snapshot",
+                    "code_1c",
+                ],
+                name="iprice_sp_snap_code_idx",
+            ),
+            models.Index(
+                fields=[
+                    "snapshot",
+                    "pricing_method",
+                ],
+                name="iprice_sp_snap_method_idx",
+            ),
+            models.Index(
+                fields=[
+                    "snapshot",
+                    "calculation_status",
+                ],
+                name="iprice_sp_snap_status_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.snapshot.display_version} | "
+            f"{self.code_1c} | {self.nom}"
+        )
+
+
+class IPriceSnapshotCompetitor(models.Model):
+    snapshot_product = models.ForeignKey(
+        IPriceSnapshotProduct,
+        on_delete=models.CASCADE,
+        related_name="competitors",
+        verbose_name="Товар snapshot",
+    )
+
+    competitor_product_key = models.BigIntegerField(
+        db_index=True,
+        verbose_name="Product key конкурента",
+    )
+
+    source = models.CharField(
+        max_length=50,
+        db_index=True,
+        verbose_name="Источник",
+    )
+
+    url = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="URL конкурента",
+    )
+
+    prefix = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Префикс",
+    )
+
+    competitor_price_date = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Дата конкурентной цены",
+    )
+
+    competitor_final_price_max = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Максимальная цена без НДС",
+    )
+
+    source_price_row_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="ID выбранной строки цены",
+    )
+
+    price_variants = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Все варианты цены за день",
+    )
+
+    is_all_regions = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Применяется ко всем регионам",
+    )
+
+    applicable_regions = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Применимые регионы продажи",
+    )
+
+    base_analog = models.DecimalField(
+        max_digits=12,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Коэффициент аналога",
+    )
+
+    preliminary_rrp = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Предварительная РРЦ",
+    )
+
+    calculation_status = models.CharField(
+        max_length=20,
+        default="success",
+        db_index=True,
+        verbose_name="Статус расчета",
+    )
+
+    warning_codes = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Предупреждения",
+    )
+
+    error_codes = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Ошибки",
+    )
+
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "iprice_snapshot_competitor"
+        verbose_name = "iPrice snapshot competitor"
+        verbose_name_plural = "iPrice snapshot competitors"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "snapshot_product",
+                    "competitor_product_key",
+                ],
+                name="iprice_snap_product_competitor_uniq",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "snapshot_product",
+                    "source",
+                ],
+                name="iprice_sc_product_source_idx",
+            ),
+            models.Index(
+                fields=[
+                    "source",
+                    "competitor_product_key",
+                    "competitor_price_date",
+                ],
+                name="iprice_sc_source_key_date_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.snapshot_product.base_product_key} -> "
+            f"{self.source}:{self.competitor_product_key}"
+        )
+
+
+class IPriceSnapshotRegion(models.Model):
+    STATUS_SUCCESS = "success"
+    STATUS_WARNING = "warning"
+    STATUS_ERROR = "error"
+
+    snapshot_product = models.ForeignKey(
+        IPriceSnapshotProduct,
+        on_delete=models.CASCADE,
+        related_name="regions",
+        verbose_name="Товар snapshot",
+    )
+
+    sale_region = models.CharField(
+        max_length=255,
+        db_index=True,
+        verbose_name="Регион продажи",
+    )
+
+    departure = models.CharField(
+        max_length=255,
+        db_index=True,
+        verbose_name="Производство",
+    )
+
+    product_cost_source_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="ID исходной себестоимости",
+    )
+
+    transport_cost_source_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="ID исходного транспорта",
+    )
+
+    nomenclature_price_source_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="ID исходной цены 1С",
+    )
+
+    departure_discount_source_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="ID исходных скидок",
+    )
+
+    calculation_config_source_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="ID исходной конфигурации",
+    )
+
+    product_cost_month = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Месяц себестоимости",
+    )
+
+    nomenclature_price_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Дата цены 1С",
+    )
+
+    current_retail = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Текущая розница",
+    )
+
+    current_distr = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Текущий distr",
+    )
+
+    current_distr_1 = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Текущий distr_1",
+    )
+
+    current_small = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Текущий малый опт",
+    )
+
+    current_medium = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Текущий средний опт",
+    )
+
+    current_large = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Текущий крупный опт",
+    )
+
+    product_cost = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Себестоимость",
+    )
+
+    transport_cost = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Стоимость перевозки",
+    )
+
+    quantity_eurotruck = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Количество в еврофуре",
+    )
+
+    logistics_unit = models.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Логистика на единицу",
+    )
+
+    cost_with_logistics = models.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Себестоимость с логистикой",
+    )
+
+    regional_competitor_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Количество конкурентов региона",
+    )
+
+    regional_competitor_rrp_min = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Минимальная РРЦ конкурентов региона",
+    )
+
+    regional_competitor_rrp_max = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Максимальная РРЦ конкурентов региона",
+    )
+
+    regional_competitor_rrp_median = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Медианная РРЦ конкурентов региона",
+    )
+
+    base_analog = models.DecimalField(
+        max_digits=12,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Коэффициент аналога",
+    )
+
+    base_exclusive = models.DecimalField(
+        max_digits=12,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Коэффициент эксклюзива",
+    )
+
+    minimum_margin = models.DecimalField(
+        max_digits=12,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Минимальная маржинальность",
+    )
+
+    discount_distr = models.DecimalField(
+        max_digits=7,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Скидка distr",
+    )
+
+    discount_distr_1 = models.DecimalField(
+        max_digits=7,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Скидка distr_1",
+    )
+
+    discount_small = models.DecimalField(
+        max_digits=7,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Скидка small",
+    )
+
+    discount_medium = models.DecimalField(
+        max_digits=7,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Скидка medium",
+    )
+
+    discount_large = models.DecimalField(
+        max_digits=7,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Скидка large",
+    )
+
+    preliminary_rrp = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Предварительная РРЦ",
+    )
+
+    minimum_price = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Минимальная цена",
+    )
+
+    calculated_rrp = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Расчетная РРЦ",
+    )
+
+    default_approved_rrp = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="РРЦ по умолчанию",
+    )
+
+    calculated_distr = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Расчетный distr",
+    )
+
+    calculated_distr_1 = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Расчетный distr_1",
+    )
+
+    calculated_small = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Расчетный малый опт",
+    )
+
+    calculated_medium = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Расчетный средний опт",
+    )
+
+    calculated_large = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Расчетный крупный опт",
+    )
+
+    margin_current = models.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Текущая маржа",
+    )
+
+    margin_calculated = models.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Расчетная маржа",
+    )
+
+    current_vs_calculated_percent = models.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        verbose_name="Отклонение текущей цены",
+    )
+
+    calculation_status = models.CharField(
+        max_length=20,
+        default=STATUS_SUCCESS,
+        db_index=True,
+        verbose_name="Статус расчета",
+    )
+
+    warning_codes = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Предупреждения",
+    )
+
+    error_codes = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Ошибки",
+    )
+
+    calculation_details = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Детали расчета",
+    )
+
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "iprice_snapshot_region"
+        verbose_name = "iPrice snapshot region"
+        verbose_name_plural = "iPrice snapshot regions"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "snapshot_product",
+                    "sale_region",
+                    "departure",
+                ],
+                name="iprice_snap_product_region_dep_uniq",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "snapshot_product",
+                    "sale_region",
+                ],
+                name="iprice_sr_product_region_idx",
+            ),
+            models.Index(
+                fields=[
+                    "sale_region",
+                    "departure",
+                ],
+                name="iprice_sr_region_departure_idx",
+            ),
+            models.Index(
+                fields=[
+                    "calculation_status",
+                ],
+                name="iprice_sr_status_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.snapshot_product.code_1c} | "
+            f"{self.departure} -> {self.sale_region}"
+        )
+
+
+class IPriceSnapshotApproval(models.Model):
+    snapshot_region = models.ForeignKey(
+        IPriceSnapshotRegion,
+        on_delete=models.CASCADE,
+        related_name="approvals",
+        verbose_name="Региональная строка",
+    )
+
+    revision = models.PositiveIntegerField(
+        verbose_name="Версия утверждения",
+    )
+
+    approved_rrp = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        verbose_name="Утвержденная РРЦ",
+    )
+
+    approved_distr = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Утвержденный distr",
+    )
+
+    approved_distr_1 = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Утвержденный distr_1",
+    )
+
+    approved_small = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Утвержденный малый опт",
+    )
+
+    approved_medium = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Утвержденный средний опт",
+    )
+
+    approved_large = models.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Утвержденный крупный опт",
+    )
+
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="iprice_approvals",
+        verbose_name="Кем утверждено",
+    )
+
+    approved_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Дата утверждения",
+    )
+
+    comment = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Комментарий",
+    )
+
+    is_current = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Текущее утверждение",
+    )
+
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "iprice_snapshot_approval"
+        verbose_name = "iPrice snapshot approval"
+        verbose_name_plural = "iPrice snapshot approvals"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "snapshot_region",
+                    "revision",
+                ],
+                name="iprice_approval_region_revision_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "snapshot_region",
+                ],
+                condition=Q(is_current=True),
+                name="iprice_approval_current_region_uniq",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "snapshot_region",
+                    "is_current",
+                ],
+                name="iprice_approval_current_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.snapshot_region} | "
+            f"revision={self.revision} | "
+            f"rrp={self.approved_rrp}"
+        )
+
+
+# ============================================================
+# Analytics product directory and automatic analysis
+#
+# This subsystem is intentionally independent from
+# ParserProductClassification and ParserProductMatch.  It produces
+# candidates and Product Control data without changing the existing
+# manual classification/matching workflow.
+# ============================================================
+
+
+class AnalyticsProductDirectoryLoad(models.Model):
+    STATUS_LOADING = "loading"
+    STATUS_SUCCESS = "success"
+    STATUS_FAILED = "failed"
+
+    STATUS_CHOICES = (
+        (STATUS_LOADING, "Загружается"),
+        (STATUS_SUCCESS, "Успешно"),
+        (STATUS_FAILED, "Ошибка"),
+    )
+
+    filename = models.CharField(max_length=500)
+    checksum = models.CharField(max_length=64, db_index=True)
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_LOADING,
+        db_index=True,
+    )
+    rows_loaded = models.JSONField(default=dict, blank=True)
+    error_text = models.TextField(blank=True, default="")
+    date_add = models.DateTimeField(auto_now_add=True, db_index=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "analytics_product_directory_load"
+        ordering = ("-date_add", "-id")
+
+
+class AnalyticsProductPriceRule(models.Model):
+    source = models.CharField(max_length=50, db_index=True)
+    normalized_property = models.CharField(max_length=500)
+    source_table = models.CharField(max_length=100)
+    source_field = models.CharField(max_length=100)
+    source_value = models.TextField()
+    property_name = models.CharField(max_length=100, db_index=True)
+    property_type = models.CharField(max_length=30)
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "analytics_product_price_rule"
+
+
+class AnalyticsProductPropertyRule(models.Model):
+    source = models.CharField(max_length=50, db_index=True)
+    normalized_property = models.CharField(max_length=500)
+    source_table = models.CharField(max_length=100)
+    source_field = models.CharField(max_length=100)
+    field_text = models.TextField()
+    source_value = models.TextField()
+    property_name = models.CharField(max_length=100, db_index=True)
+    property_type = models.CharField(max_length=30)
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "analytics_product_property_rule"
+
+
+class AnalyticsProductManualProperty(models.Model):
+    product_key = models.BigIntegerField(db_index=True)
+    property_name = models.CharField(max_length=100, db_index=True)
+    value = models.TextField()
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "analytics_product_manual_property"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("product_key", "property_name"),
+                name="analytics_manual_property_product_name_uniq",
+            )
+        ]
+
+
+class AnalyticsProductClassificationRuleBase(models.Model):
+    source = models.CharField(max_length=50, db_index=True)
+    item_type = models.CharField(max_length=20)
+    category = models.CharField(max_length=255)
+    subcategory = models.CharField(max_length=255, db_index=True)
+    subcategory_type = models.CharField(max_length=255)
+    subcategory_table = models.CharField(max_length=100)
+    subcategory_field = models.CharField(max_length=100)
+    subcategory_value = models.TextField()
+    subcategory_type_table = models.CharField(max_length=100)
+    subcategory_type_field = models.CharField(max_length=100)
+    subcategory_type_value = models.TextField()
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True
+
+
+class AnalyticsProductClassificationPrice(
+    AnalyticsProductClassificationRuleBase
+):
+    class Meta:
+        db_table = "analytics_product_classification_price"
+
+
+class AnalyticsProductClassificationProperty(
+    AnalyticsProductClassificationRuleBase
+):
+    subcategory_type_field_text = models.TextField()
+
+    class Meta:
+        db_table = "analytics_product_classification_property"
+
+
+class AnalyticsProductNumericalMetric(models.Model):
+    metrics_name = models.CharField(max_length=100, unique=True)
+    number_format = models.CharField(max_length=20)
+    measurability = models.CharField(max_length=50)
+    tolerance = models.DecimalField(max_digits=18, decimal_places=6)
+    check_note = models.TextField(blank=True, default="")
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "analytics_product_numerical_metric"
+
+
+class AnalyticsProductManyToManyRule(models.Model):
+    code = models.CharField(max_length=50, unique=True)
+    handler_name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, default="")
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "analytics_product_many_to_many_rule"
+
+
+class AnalyticsProductModificationRule(models.Model):
+    property_name = models.CharField(max_length=100, unique=True)
+    render_group = models.CharField(max_length=100)
+    group_priority = models.PositiveIntegerField()
+    property_priority = models.PositiveIntegerField()
+    value_type = models.CharField(max_length=30)
+    canonical_unit = models.CharField(max_length=50, blank=True, default="")
+    render_rule = models.CharField(max_length=100)
+    template_true = models.TextField(blank=True, default="")
+    template_false = models.TextField(blank=True, default="")
+    template_value = models.TextField(blank=True, default="")
+    value_map = models.JSONField(default=dict, blank=True)
+    dependency = models.CharField(max_length=255, blank=True, default="")
+    include_rule = models.CharField(max_length=100)
+    example = models.TextField(blank=True, default="")
+    rule_note = models.TextField(blank=True, default="")
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "analytics_product_modification_rule"
+        ordering = ("group_priority", "property_priority", "id")
+
+
+class AnalyticsProductScoreProfileBase(models.Model):
+    item_type = models.CharField(max_length=20)
+    category = models.CharField(max_length=255)
+    subcategory = models.CharField(max_length=255, db_index=True)
+    subcategory_type = models.CharField(max_length=255, db_index=True)
+    score_profile = models.CharField(max_length=100)
+    total_weight = models.DecimalField(max_digits=8, decimal_places=4)
+    rule_note = models.TextField(blank=True, default="")
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True
+
+
+class AnalyticsProductClassificationScoreProfile(
+    AnalyticsProductScoreProfileBase
+):
+    class Meta:
+        db_table = "analytics_product_classification_score_profile"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("item_type", "category", "subcategory", "subcategory_type"),
+                name="analytics_class_score_profile_uniq",
+            )
+        ]
+
+
+class AnalyticsProductMatchingScoreProfile(
+    AnalyticsProductScoreProfileBase
+):
+    class Meta:
+        db_table = "analytics_product_matching_score_profile"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("item_type", "category", "subcategory", "subcategory_type"),
+                name="analytics_match_score_profile_uniq",
+            )
+        ]
+
+
+class AnalyticsProductScoreWeightBase(models.Model):
+    property_name = models.CharField(max_length=100)
+    weight = models.DecimalField(max_digits=8, decimal_places=4)
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True
+
+
+class AnalyticsProductClassificationScoreWeight(
+    AnalyticsProductScoreWeightBase
+):
+    profile = models.ForeignKey(
+        AnalyticsProductClassificationScoreProfile,
+        on_delete=models.CASCADE,
+        related_name="weights",
+    )
+
+    class Meta:
+        db_table = "analytics_product_classification_score_weight"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("profile", "property_name"),
+                name="analytics_class_score_weight_uniq",
+            )
+        ]
+
+
+class AnalyticsProductMatchingScoreWeight(AnalyticsProductScoreWeightBase):
+    profile = models.ForeignKey(
+        AnalyticsProductMatchingScoreProfile,
+        on_delete=models.CASCADE,
+        related_name="weights",
+    )
+
+    class Meta:
+        db_table = "analytics_product_matching_score_weight"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("profile", "property_name"),
+                name="analytics_match_score_weight_uniq",
+            )
+        ]
+
+
+class AnalyticsProductScoringThreshold(models.Model):
+    metric = models.CharField(max_length=100, db_index=True)
+    level = models.CharField(max_length=50)
+    min_value = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True
+    )
+    max_value = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True
+    )
+    status = models.CharField(max_length=100)
+    auto_action = models.CharField(max_length=100)
+    rule_note = models.TextField(blank=True, default="")
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "analytics_product_scoring_threshold"
+
+
+class AnalyticsProductClassificationPriority(models.Model):
+    stage = models.CharField(max_length=50)
+    rule_source = models.CharField(max_length=100)
+    rule_kind = models.CharField(max_length=100)
+    priority = models.IntegerField()
+    specificity_order = models.IntegerField()
+    tie_breaker = models.CharField(max_length=100)
+    rule_note = models.TextField(blank=True, default="")
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "analytics_product_classification_priority"
+
+
+class AnalyticsProductSourcePriority(models.Model):
+    source = models.CharField(max_length=50, db_index=True)
+    priority = models.PositiveIntegerField()
+    source_table = models.CharField(max_length=100)
+    extraction_scope = models.CharField(max_length=50, blank=True, default="")
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "analytics_product_source_priority"
+        ordering = ("source", "priority", "id")
+
+
+class AnalyticsProductProcessingRun(models.Model):
+    STATUS_QUEUED = "queued"
+    STATUS_RUNNING = "running"
+    STATUS_SUCCESS = "success"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = (
+        (STATUS_QUEUED, "В очереди"),
+        (STATUS_RUNNING, "Выполняется"),
+        (STATUS_SUCCESS, "Успешно"),
+        (STATUS_FAILED, "Ошибка"),
+    )
+
+    directory_load = models.ForeignKey(
+        AnalyticsProductDirectoryLoad,
+        on_delete=models.PROTECT,
+        related_name="processing_runs",
+    )
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_QUEUED, db_index=True
+    )
+    current_step = models.CharField(max_length=100, blank=True, default="")
+    result = models.JSONField(default=dict, blank=True)
+    error_text = models.TextField(blank=True, default="")
+    date_add = models.DateTimeField(auto_now_add=True, db_index=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "analytics_product_processing_run"
+        ordering = ("-date_add", "-id")
+
+
+class AnalyticsProductAnalysisResult(models.Model):
+    run = models.ForeignKey(
+        AnalyticsProductProcessingRun,
+        on_delete=models.CASCADE,
+        related_name="products",
+    )
+    product_key = models.BigIntegerField()
+    source = models.CharField(max_length=50, db_index=True)
+    product_name = models.TextField(blank=True, default="")
+    url = models.TextField(blank=True, default="")
+    image = models.TextField(blank=True, default="")
+    item_type = models.CharField(max_length=20, blank=True, default="")
+    category = models.CharField(max_length=255, blank=True, default="")
+    subcategory = models.CharField(max_length=255, blank=True, default="")
+    subcategory_type = models.CharField(max_length=255, blank=True, default="")
+    classification_status = models.CharField(max_length=30, db_index=True)
+    classification_score = models.DecimalField(
+        max_digits=8, decimal_places=4, null=True, blank=True
+    )
+    classification_available_weight = models.DecimalField(
+        max_digits=12, decimal_places=4, default=0
+    )
+    classification_matched_weight = models.DecimalField(
+        max_digits=12, decimal_places=4, default=0
+    )
+    normalized_properties = models.JSONField(default=dict, blank=True)
+    classification_evidence = models.JSONField(default=dict, blank=True)
+    modification = models.TextField(blank=True, default="")
+    modification_code = models.TextField(blank=True, default="")
+    best_match_product_key = models.BigIntegerField(null=True, blank=True)
+    best_match_name = models.TextField(blank=True, default="")
+    match_score = models.DecimalField(
+        max_digits=8, decimal_places=4, null=True, blank=True
+    )
+    match_coverage = models.DecimalField(
+        max_digits=8, decimal_places=4, null=True, blank=True
+    )
+    second_match_product_key = models.BigIntegerField(null=True, blank=True)
+    second_match_name = models.TextField(blank=True, default="")
+    second_match_score = models.DecimalField(
+        max_digits=8, decimal_places=4, null=True, blank=True
+    )
+    match_gap = models.DecimalField(
+        max_digits=8, decimal_places=4, null=True, blank=True
+    )
+    match_status = models.CharField(max_length=30, blank=True, default="")
+    match_evidence = models.JSONField(default=dict, blank=True)
+    control_reasons = models.JSONField(default=list, blank=True)
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "analytics_product_analysis_result"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("run", "product_key"),
+                name="analytics_product_result_run_key_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=("run", "source", "classification_status"),
+                name="an_product_run_status_idx",
+            )
+        ]
+
+
+class AnalyticsProductMatchCandidate(models.Model):
+    """Versioned weighted comparison of one base/competitor pair."""
+
+    run = models.ForeignKey(
+        AnalyticsProductProcessingRun,
+        on_delete=models.CASCADE,
+        related_name="match_candidates",
+    )
+    application = models.ForeignKey(
+        "AnalyticsProductClassificationApplication",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="match_candidates",
+    )
+    product_key_base = models.BigIntegerField(db_index=True)
+    product_key_competitor = models.BigIntegerField(db_index=True)
+    competitor_source = models.CharField(max_length=50, db_index=True)
+    match_score = models.DecimalField(max_digits=8, decimal_places=4)
+    match_coverage = models.DecimalField(max_digits=8, decimal_places=4)
+    is_eligible = models.BooleanField(default=False, db_index=True)
+    threshold_status = models.CharField(max_length=100, blank=True, default="")
+    control_reasons = models.JSONField(default=list, blank=True)
+    match_evidence = models.JSONField(default=dict, blank=True)
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "analytics_product_match_candidate"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("run", "product_key_base", "product_key_competitor"),
+                condition=Q(application__isnull=True),
+                name="analytics_match_candidate_run_pair_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=("application", "product_key_base", "product_key_competitor"),
+                condition=Q(application__isnull=False),
+                name="analytics_match_candidate_app_pair_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=("run", "product_key_base", "is_eligible"),
+                name="an_match_run_base_eligible_idx",
+            ),
+            models.Index(
+                fields=("run", "competitor_source", "is_eligible"),
+                name="an_match_run_src_eligible_idx",
+            ),
+            models.Index(
+                fields=("application", "product_key_base", "is_eligible"),
+                name="an_match_app_base_eligible_idx",
+            ),
+        ]
+
+
+class AnalyticsProductClassificationApplication(models.Model):
+    """Audit record for a manually uploaded Product Control classification."""
+
+    run = models.ForeignKey(
+        AnalyticsProductProcessingRun,
+        on_delete=models.PROTECT,
+        related_name="classification_applications",
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="analytics_product_classification_applications",
+    )
+    filename = models.CharField(max_length=255, blank=True, default="")
+    checksum = models.CharField(max_length=64, db_index=True)
+    classifications_applied = models.PositiveIntegerField(default=0)
+    matches_applied = models.PositiveIntegerField(default=0)
+    result = models.JSONField(default=dict, blank=True)
+    date_add = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "analytics_product_classification_application"
+        ordering = ("-date_add", "-id")

@@ -121,27 +121,115 @@ def load_transport_cost_from_excel(file_obj) -> dict:
             "Existing data will not be deleted."
         )
 
-    objects = [
-        TransportCost(
-            departure=departure,
-            arrival=arrival,
-            cost=cost,
-        )
+    incoming_rows = [
+        {
+            "departure": departure,
+            "arrival": arrival,
+            "cost": cost,
+        }
         for (departure, arrival), cost in rows_by_key.items()
     ]
 
-    with transaction.atomic():
-        deleted_count, _ = TransportCost.objects.all().delete()
+    created = 0
+    changed = 0
+    unchanged = 0
+    deactivated = 0
 
-        TransportCost.objects.bulk_create(
-            objects,
-            batch_size=1000,
+    with transaction.atomic():
+        departures = {
+            row["departure"]
+            for row in incoming_rows
+        }
+
+        arrivals = {
+            row["arrival"]
+            for row in incoming_rows
+        }
+
+        active_objects = list(
+            TransportCost.objects
+            .select_for_update()
+            .filter(
+                departure__in=departures,
+                arrival__in=arrivals,
+                is_active=True,
+            )
         )
+
+        active_by_key = {
+            (
+                obj.departure.strip().casefold(),
+                obj.arrival.strip().casefold(),
+            ): obj
+            for obj in active_objects
+        }
+
+        objects_to_create = []
+        ids_to_deactivate = []
+
+        for row in incoming_rows:
+            key = (
+                row["departure"].strip().casefold(),
+                row["arrival"].strip().casefold(),
+            )
+
+            active_obj = active_by_key.get(key)
+
+            if active_obj is None:
+                objects_to_create.append(
+                    TransportCost(
+                        departure=row["departure"],
+                        arrival=row["arrival"],
+                        cost=row["cost"],
+                        is_active=True,
+                    )
+                )
+
+                created += 1
+                continue
+
+            if active_obj.cost == row["cost"]:
+                unchanged += 1
+                continue
+
+            ids_to_deactivate.append(active_obj.pk)
+
+            objects_to_create.append(
+                TransportCost(
+                    departure=row["departure"],
+                    arrival=row["arrival"],
+                    cost=row["cost"],
+                    is_active=True,
+                )
+            )
+
+            changed += 1
+
+        if ids_to_deactivate:
+            deactivated = (
+                TransportCost.objects
+                .filter(
+                    pk__in=ids_to_deactivate,
+                    is_active=True,
+                )
+                .update(
+                    is_active=False,
+                )
+            )
+
+        if objects_to_create:
+            TransportCost.objects.bulk_create(
+                objects_to_create,
+                batch_size=1000,
+            )
 
     result = {
         "received_unique": len(rows_by_key),
-        "saved": len(objects),
-        "deleted": deleted_count,
+        "created": created,
+        "changed": changed,
+        "unchanged": unchanged,
+        "deactivated": deactivated,
+        "saved_new_versions": len(objects_to_create),
         "duplicates": duplicates,
         "skipped": skipped,
     }

@@ -297,6 +297,13 @@ PRICE_API_TIMEOUT = int(
 )
 
 
+PARSER_MASTER_PIPELINE_STALE_HOURS = int(
+    os.getenv(
+        "PARSER_MASTER_PIPELINE_STALE_HOURS",
+        "12",
+    )
+)
+
 
 
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
@@ -464,6 +471,16 @@ LOGGING = {
         },
 
 
+        "parser_master_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "parser_master.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
+
+
 
 
         "process_kill_file": {
@@ -483,6 +500,7 @@ LOGGING = {
             "formatter": "standard",
             "encoding": "utf-8",
         },
+
 
     },
 
@@ -597,6 +615,12 @@ LOGGING = {
 
         "external_api.price": {
             "handlers": ["console", "price_api_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+
+        "parsers.master": {
+            "handlers": ["console", "parser_master_file"],
             "level": "INFO",
             "propagate": False,
         },

@@ -28,7 +28,13 @@ class DashboardConsumer(AsyncJsonWebsocketConsumer):
             )
 
     async def dashboard_updated(self, event):
+        payload = {
+            key: value
+            for key, value in event.items()
+            if key != "type"
+        }
+
         await self.send_json({
             "type": "dashboard_updated",
-            "dashboard": event.get("dashboard"),
+            **payload,
         })

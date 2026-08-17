@@ -39,8 +39,8 @@ from .views import (
 
 
     ParserPrefixUploadView,
-    ProductMatchUploadView,
     ProductClassificationUploadView,
+    AnalyticsProductDirectoryUploadView,
     ProductUrlControlExportView,
 
     YdWordstatPhraseRefUploadView,
@@ -65,6 +65,36 @@ from .views import (
 
     TransportCostUploadView,
     ProductCostUploadView,
+    IPriceProductCostTemplateExportView,
+    IPriceAccessView,
+    IPriceUploadTemplateExportView,
+    IPriceParserProductsExportView,
+    IPricePreparationCheckExportView,
+    IPriceCalculationConfigUploadView,
+    ParserMasterPipelineRunView,
+
+    IPriceSnapshotRunView,
+    IPriceParameterChangeView,
+    IPriceSnapshotListView,
+    IPriceSnapshotDetailView,
+    IPriceSnapshotActivateView,
+    IPriceSnapshotRowsView,
+    IPriceSnapshotFiltersView,
+    IPriceSnapshotProductDetailView,
+    IPriceSnapshotApprovalSaveView,
+    IPriceSnapshotApprovalHistoryView,
+    IPriceSnapshotExportView,
+    IPriceSnapshotMarketAssortmentView,
+    IPriceSnapshotCompetitorSelectionView,
+    IPriceSnapshotOwnAssortmentView,
+    IPriceSnapshotCompareView,
+    IPriceSnapshotCompareFiltersView,
+    IPriceHealthView,
+    IPricePriceAnalyticsView,
+    IPricePriceZoneConfigView,
+    IPriceAnalyticsSelectionView,
+    IPriceAnalyticsSelectionDetailView,
+
 )
 
 
@@ -170,13 +200,18 @@ urlpatterns = [
     ),
 
     path(
-        "parsers/product-matches/upload/",
-        ProductMatchUploadView.as_view(),
+        "parsers/master/run/",
+        ParserMasterPipelineRunView.as_view(),
     ),
 
     path(
         "parsers/product-classification/upload/",
         ProductClassificationUploadView.as_view(),
+    ),
+
+    path(
+        "parsers/product-directory/upload/",
+        AnalyticsProductDirectoryUploadView.as_view(),
     ),
 
     path(
@@ -247,14 +282,187 @@ urlpatterns = [
     ),
 
     path(
-        "transport-cost/upload/",
+        "iprice/access/",
+        IPriceAccessView.as_view(),
+    ),
+    path(
+        "iprice/transport-cost/upload/",
         TransportCostUploadView.as_view(),
     ),
 
     path(
-        "product-cost/upload/",
+        "iprice/product-cost/upload/",
         ProductCostUploadView.as_view(),
     ),
+    path(
+        "iprice/product-cost-template/export/",
+        IPriceProductCostTemplateExportView.as_view(),
+    ),
+    path(
+        "iprice/upload-templates/<str:upload_type>/export/",
+        IPriceUploadTemplateExportView.as_view(),
+    ),
+    path(
+        "iprice/parser-products/export/",
+        IPriceParserProductsExportView.as_view(),
+    ),
+    path(
+        "iprice/preparation-check/export/",
+        IPricePreparationCheckExportView.as_view(),
+    ),
+
+    path(
+        "iprice/data/health/",
+        IPriceHealthView.as_view(),
+    ),
+
+    path(
+        "iprice/calculation-config/upload/",
+        IPriceCalculationConfigUploadView.as_view(),
+    ),
+
+    path(
+        "iprice/snapshots/run/",
+        IPriceSnapshotRunView.as_view(),
+    ),
+    path(
+        "iprice/snapshots/<int:snapshot_id>/parameters/",
+        IPriceParameterChangeView.as_view(),
+    ),
+
+    path(
+        "iprice/analytics/price-zones/",
+        IPricePriceZoneConfigView.as_view(),
+    ),
+    path(
+        "iprice/snapshots/<int:snapshot_id>/analytics/selection/",
+        IPriceAnalyticsSelectionView.as_view(),
+    ),
+    path(
+        "iprice/analytics/selection/<str:token>/",
+        IPriceAnalyticsSelectionDetailView.as_view(),
+    ),
+
+    path(
+        "iprice/snapshots/",
+        IPriceSnapshotListView.as_view(),
+    ),
+
+    path(
+        "iprice/snapshots/compare/",
+        IPriceSnapshotCompareView.as_view(),
+    ),
+
+    path(
+        "iprice/snapshots/compare/filters/",
+        (
+            IPriceSnapshotCompareFiltersView
+            .as_view()
+        ),
+    ),
+
+    path(
+        "iprice/snapshots/<int:snapshot_id>/",
+        IPriceSnapshotDetailView.as_view(),
+    ),
+
+    path(
+        "iprice/snapshots/<int:snapshot_id>/activate/",
+        IPriceSnapshotActivateView.as_view(),
+    ),
+
+    path(
+        (
+            "iprice/snapshots/"
+            "<int:snapshot_id>/rows/"
+        ),
+        IPriceSnapshotRowsView.as_view(),
+    ),
+
+    path(
+        (
+            "iprice/snapshots/"
+            "<int:snapshot_id>/filters/"
+        ),
+        IPriceSnapshotFiltersView.as_view(),
+    ),
+
+    path(
+        (
+            "iprice/snapshots/"
+            "<int:snapshot_id>/analytics/"
+        ),
+        IPricePriceAnalyticsView.as_view(),
+    ),
+
+    path(
+        (
+            "iprice/snapshots/"
+            "<int:snapshot_id>/export/"
+        ),
+        IPriceSnapshotExportView.as_view(),
+    ),
+
+    path(
+        (
+            "iprice/snapshots/"
+            "<int:snapshot_id>/products/"
+            "<int:product_id>/"
+        ),
+        IPriceSnapshotProductDetailView.as_view(),
+    ),
+
+    path(
+        (
+            "iprice/snapshots/"
+            "<int:snapshot_id>/products/"
+            "<int:product_id>/"
+            "market-assortment/"
+        ),
+        (
+            IPriceSnapshotMarketAssortmentView
+            .as_view()
+        ),
+    ),
+
+    path(
+        (
+            "iprice/snapshots/"
+            "<int:snapshot_id>/products/"
+            "<int:product_id>/"
+            "competitor-selection/"
+        ),
+        IPriceSnapshotCompetitorSelectionView.as_view(),
+    ),
+
+    path(
+        (
+            "iprice/snapshots/"
+            "<int:snapshot_id>/products/"
+            "<int:product_id>/"
+            "own-assortment/"
+        ),
+        IPriceSnapshotOwnAssortmentView.as_view(),
+    ),
+
+    path(
+        (
+            "iprice/snapshots/"
+            "<int:snapshot_id>/regions/"
+            "<int:region_id>/approval/"
+        ),
+        IPriceSnapshotApprovalSaveView.as_view(),
+    ),
+
+    path(
+        (
+            "iprice/snapshots/"
+            "<int:snapshot_id>/regions/"
+            "<int:region_id>/approval-history/"
+        ),
+        IPriceSnapshotApprovalHistoryView.as_view(),
+    ),
+
 
 
 
