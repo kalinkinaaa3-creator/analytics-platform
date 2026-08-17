@@ -2,6 +2,8 @@ from collections import defaultdict
 from datetime import date, datetime
 from calendar import monthrange
 
+from django.utils import timezone
+
 
 def to_float(value):
     try:
@@ -119,6 +121,8 @@ def build_planned_sales_tree(rows):
         return []
 
     max_date = max(r["date"] for r in rows if r.get("date"))
+    current_month = timezone.localdate().replace(day=1)
+    projection_editable = max_date >= current_month
 
     def get_quarter(dt):
         return (dt.month - 1) // 3 + 1
@@ -184,6 +188,7 @@ def build_planned_sales_tree(rows):
                 detail_row = {
                     "date": max_date.strftime("%Y-%m-01"),
                     "id_directory": group_rows[0].get("id_directory"),
+                    "projection_editable": projection_editable,
                     "level1": level1,
                     "level2": level2,
                     "level3": level3,

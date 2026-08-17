@@ -1,5 +1,7 @@
 import json
 
+from django.utils import timezone
+
 from analytics.clickhouse.client import get_clickhouse_client
 from analytics.clickhouse.schema import (
     ensure_dataset_rows_table,
@@ -1236,7 +1238,9 @@ class ClickHouseRepository:
         client = get_clickhouse_client()
 
         where = []
-        params = {}
+        params = {
+            "current_month": timezone.localdate().replace(day=1),
+        }
 
         if filters.get("date_start"):
             where.append("date >= %(date_start)s")
@@ -1263,7 +1267,10 @@ class ClickHouseRepository:
                 appg_slice,
                 id_directory,
                 plan,
-                projection_s
+                CASE
+                    WHEN date < %(current_month)s THEN fact
+                    ELSE projection_s
+                END AS projection_s
             FROM
             (
                 SELECT

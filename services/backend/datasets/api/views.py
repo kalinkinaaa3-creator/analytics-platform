@@ -1175,8 +1175,32 @@ class PlannedSalesSavePlanView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        try:
+            parsed_row_date = datetime.strptime(
+                str(row_date),
+                "%Y-%m-%d",
+            ).date()
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "date must be YYYY-MM-DD"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        current_month = timezone.localdate().replace(day=1)
+        row_month = parsed_row_date.replace(day=1)
+        if field == "projection_s" and row_month < current_month:
+            return Response(
+                {
+                    "error": (
+                        "Проекция прошедшего месяца равна факту "
+                        "и недоступна для редактирования"
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         PlanSales.objects.update_or_create(
-            date=row_date,
+            date=parsed_row_date,
             id_directory=int(id_directory),
             defaults={
                 field: value or 0,

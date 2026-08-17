@@ -60,7 +60,13 @@ function Toast({ message }) {
 }
 
 function EditableCell({ row, field, canEdit, onSave }) {
-  const editable = !row.is_grand && !row.is_summary && row.id_directory;
+  const projectionLocked =
+    field === "projection" && row.projection_editable === false;
+  const editable =
+    !row.is_grand &&
+    !row.is_summary &&
+    row.id_directory &&
+    !projectionLocked;
 
   if (!editable || !canEdit) {
     return <>{formatInt(row[field])}</>;
