@@ -51,7 +51,7 @@ IPRICE_CLASSIFICATION_COLUMNS = (
     "calculation_version", "include", "product_key", "product_name", "source",
     "category", "subcategory", "subcategory_type", "material", "color",
     "modification", "item_type", "automatic_status", "classification_score",
-    "matches_found", "control_reason",
+    "matches_found", "control_reason", "present",
 )
 CANDIDATE_COLUMNS = (
     "product_key_base", "base_product_name", "product_key_competitor",
@@ -137,6 +137,13 @@ def _append_iprice_classification_sheet(workbook, run, queryset):
             .annotate(count=Count("id"))
         )
     }
+    base_classes = {
+        tuple(value or "" for value in values)
+        for values in queryset.filter(source="base").values_list(
+            "item_type", "category", "subcategory", "subcategory_type"
+        ).iterator(chunk_size=QUERY_CHUNK_SIZE)
+        if all(value for value in values)
+    }
     columns = (
         "product_key", "product_name", "source", "category", "subcategory",
         "subcategory_type", "normalized_properties", "modification", "item_type",
@@ -145,6 +152,12 @@ def _append_iprice_classification_sheet(workbook, run, queryset):
     for row in queryset.values(*columns).iterator(chunk_size=QUERY_CHUNK_SIZE):
         properties = row.get("normalized_properties") or {}
         reasons = row.get("control_reasons") or []
+        classification_key = tuple(
+            row.get(column) or ""
+            for column in (
+                "item_type", "category", "subcategory", "subcategory_type"
+            )
+        )
         prepared = {
             "calculation_version": run.id,
             "include": "Да",
@@ -168,6 +181,11 @@ def _append_iprice_classification_sheet(workbook, run, queryset):
             "control_reason": " ".join(
                 CONTROL_REASON_EXPLANATIONS.get(reason, str(reason))
                 for reason in reasons
+            ),
+            "present": (
+                "yes"
+                if all(classification_key) and classification_key in base_classes
+                else "no"
             ),
         }
         output_row = []

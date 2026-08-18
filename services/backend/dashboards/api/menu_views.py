@@ -50,6 +50,10 @@ DASHBOARD_MENU_CONFIG = {
             "PlannedSales",
             "План/Факт продаж",
         ),
+        (
+            "CRM Analytics",
+            "Аналитика CRM",
+        ),
     ],
 }
 

@@ -17,6 +17,8 @@ urlpatterns = [
 
     # API V1 - ЧЁТКАЯ СЕГМЕНТАЦИЯ
     path("api/v1/datasets/", include("datasets.api.urls")),
+
+    path("api/v1/bitrix24/", include("bitrix24.api.urls")),
     
     path("api/v1/dashboards/", include("dashboards.api.urls")),
 ]

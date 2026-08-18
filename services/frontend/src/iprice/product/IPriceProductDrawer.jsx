@@ -1190,6 +1190,8 @@ function ModificationFilter({
   items,
   value,
   onChange,
+  competitorValue = "",
+  onCompetitorChange = null,
 }) {
   const modifications = Array.from(new Set(
     items
@@ -1199,10 +1201,20 @@ function ModificationFilter({
   const hasEmpty = items.some(
     (item) => !String(item.modification || "").trim(),
   );
+  const competitors = Array.from(new Set(
+    items
+      .map((item) => String(item.source || "").trim().toLowerCase())
+      .filter(Boolean),
+  )).sort((left, right) => (
+    getIPriceCompetitorSourceLabel(left).localeCompare(
+      getIPriceCompetitorSourceLabel(right),
+      "ru",
+    )
+  ));
 
   return (
     <div className="iprice-assortment-filter">
-      <label>
+      <label className="iprice-assortment-filter__modification">
         <span>Модификация iPrice</span>
         <select
           value={value}
@@ -1221,12 +1233,34 @@ function ModificationFilter({
           )}
         </select>
       </label>
+      {onCompetitorChange && (
+        <label className="iprice-assortment-filter__competitor">
+          <span>Конкурент</span>
+          <select
+            value={competitorValue}
+            onChange={(event) => onCompetitorChange(event.target.value)}
+          >
+            <option value="">Все конкуренты</option>
+            {competitors.map((source) => (
+              <option key={source} value={source}>
+                {getIPriceCompetitorSourceLabel(source)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <span className="iprice-assortment-filter__count">
         Показано {items.filter((item) => (
-          !value
-          || (value === EMPTY_MODIFICATION_FILTER
-            ? !String(item.modification || "").trim()
-            : String(item.modification || "").trim() === value)
+          (
+            !value
+            || (value === EMPTY_MODIFICATION_FILTER
+              ? !String(item.modification || "").trim()
+              : String(item.modification || "").trim() === value)
+          )
+          && (
+            !competitorValue
+            || String(item.source || "").trim().toLowerCase() === competitorValue
+          )
         )).length} из {items.length}
       </span>
     </div>
@@ -1243,12 +1277,19 @@ function MarketTab({
   onSelectionChange,
 }) {
   const [modificationFilter, setModificationFilter] = useState("");
+  const [competitorFilter, setCompetitorFilter] = useState("");
   const results = Array.isArray(data?.results) ? data.results : [];
   const filteredResults = results.filter((item) => (
-    !modificationFilter
-    || (modificationFilter === EMPTY_MODIFICATION_FILTER
-      ? !String(item.modification || "").trim()
-      : String(item.modification || "").trim() === modificationFilter)
+    (
+      !modificationFilter
+      || (modificationFilter === EMPTY_MODIFICATION_FILTER
+        ? !String(item.modification || "").trim()
+        : String(item.modification || "").trim() === modificationFilter)
+    )
+    && (
+      !competitorFilter
+      || String(item.source || "").trim().toLowerCase() === competitorFilter
+    )
   ));
 
   if (loading) {
@@ -1309,6 +1350,8 @@ function MarketTab({
         items={results}
         value={modificationFilter}
         onChange={setModificationFilter}
+        competitorValue={competitorFilter}
+        onCompetitorChange={setCompetitorFilter}
       />
 
       {filteredResults.length ? (
@@ -1470,7 +1513,7 @@ function MarketTab({
         </div>
       ) : (
         <div className="iprice-product-empty">
-          Товары с выбранной модификацией не найдены.
+          Товары с выбранными параметрами не найдены.
         </div>
       )}
     </>
@@ -2247,6 +2290,7 @@ export function IPriceProductDrawer({
 
               {activeTab === TAB_MARKET && (
                 <MarketTab
+                  key={`${snapshotId}:${productId}`}
                   loading={marketLoading}
                   error={marketError}
                   data={marketData}

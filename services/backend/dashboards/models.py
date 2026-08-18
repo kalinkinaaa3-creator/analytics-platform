@@ -47,6 +47,7 @@ class DashboardWidget(models.Model):
         ("planned_sales_dashboard", "Planned Sales Dashboard"),
         ("revenue_dashboard", "Revenue Dashboard"),
         ("iprice_dashboard", "iPrice Dashboard"),
+        ("crm_analytics_dashboard", "CRM Analytics Dashboard"),
     )
 
     dashboard = models.ForeignKey(

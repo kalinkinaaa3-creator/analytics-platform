@@ -50,6 +50,9 @@ REQUIRED_HEADERS = {
     "subcategory", "subcategory_type", "material", "color", "modification",
     "item_type",
 }
+# Информационные столбцы допустимы во входном файле, но не загружаются
+# в модели и не влияют на повторный matching.
+INFORMATIONAL_HEADERS = {"present"}
 TRUE_VALUES = {"1", "yes", "true", "да", "включить"}
 FALSE_VALUES = {"0", "no", "false", "нет", "исключить"}
 MAX_CLASSIFICATION_FILE_SIZE = 50 * 1024 * 1024
@@ -178,6 +181,8 @@ def _read_rows(file_obj):
             row = dict(zip(headers, values))
             if not any(value not in (None, "") for value in values):
                 continue
+            for informational_header in INFORMATIONAL_HEADERS:
+                row.pop(informational_header, None)
             row["_row_number"] = row_number
             result.append(row)
         return result

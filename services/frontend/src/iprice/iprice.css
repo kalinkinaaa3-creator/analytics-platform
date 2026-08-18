@@ -3691,6 +3691,16 @@ th.iprice-sticky-column {
   min-width: 0;
 }
 
+.iprice-assortment-filter .iprice-assortment-filter__modification {
+  flex: 3 1 520px;
+}
+
+.iprice-assortment-filter .iprice-assortment-filter__competitor {
+  flex: 0 1 230px;
+  max-width: 260px;
+  min-width: 180px;
+}
+
 .iprice-assortment-filter label > span {
   color: #555b52;
   font-size: 11px;
@@ -3734,6 +3744,11 @@ th.iprice-sticky-column {
 
   .iprice-assortment-filter label {
     flex-basis: auto;
+  }
+
+  .iprice-assortment-filter .iprice-assortment-filter__competitor {
+    max-width: none;
+    min-width: 0;
   }
 
   .iprice-assortment-filter__count {

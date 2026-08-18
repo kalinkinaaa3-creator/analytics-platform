@@ -5,6 +5,7 @@ import { PurchasesDashboard } from "./purchases/PurchasesDashboard";
 import { AccreceivDashboard } from "./accreceiv/AccreceivDashboard";
 import { TurnoverDashboard } from "./turnover/TurnoverDashboard";
 import { RevenueDashboard } from "./revenue/RevenueDashboard";
+import { CrmAnalyticsDashboard } from "./crmAnalytics/CrmAnalyticsDashboard";
 
 import "./spinner.css";
 
@@ -118,6 +119,10 @@ export function DashboardRenderer({
               publicToken={publicToken}
             />
           );
+        }
+
+        if (widget.type === "crm_analytics_dashboard") {
+          return <CrmAnalyticsDashboard key={widget.id} dashboard={data.dashboard} />;
         }
 
         return (

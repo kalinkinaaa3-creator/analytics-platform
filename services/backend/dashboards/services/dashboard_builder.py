@@ -432,6 +432,11 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
                 last_update=last_update,
             )
 
+        elif widget.type == "crm_analytics_dashboard":
+            # The dedicated CRM component loads compact aggregate and paginated
+            # endpoints. Do not duplicate that payload in the generic builder.
+            widget_data["data"] = {}
+
 
 
 

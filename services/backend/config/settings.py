@@ -43,6 +43,7 @@ INSTALLED_APPS = [
 
     "rest_framework",
 
+    "bitrix24.apps.Bitrix24Config",
     "datasets.apps.DatasetsConfig",
     "analytics",
     "dashboards",
@@ -250,6 +251,11 @@ FB_ACCRECEIV_API_TIMEOUT = int(os.getenv("FB_ACCRECEIV_API_TIMEOUT", "300"))
 BITRIX_WEBHOOK_URL = os.getenv("BITRIX_WEBHOOK_URL", "")
 BITRIX_NOTIFY_USER_ID = os.getenv("BITRIX_NOTIFY_USER_ID", "")
 ENABLE_BITRIX_NOTIFICATIONS = os.getenv("ENABLE_BITRIX_NOTIFICATIONS", "false").lower() == "true"
+
+BITRIX24_API_WEBHOOK_URL = os.getenv("BITRIX24_API_WEBHOOK_URL", "")
+BITRIX24_API_TIMEOUT = float(os.getenv("BITRIX24_API_TIMEOUT", "30"))
+BITRIX24_API_MAX_RETRIES = int(os.getenv("BITRIX24_API_MAX_RETRIES", "3"))
+
 
 
 
