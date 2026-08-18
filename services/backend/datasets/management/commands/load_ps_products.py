@@ -5,6 +5,9 @@ from datasets.services.parsers.product_key_selector import (
 )
 
 from datasets.services.parsers.ps_product_parser import parse_ps_products
+from datasets.services.parsers.product_image_sync import (
+    sync_parser_source_images,
+)
 
 
 class Command(BaseCommand):
@@ -48,6 +51,7 @@ class Command(BaseCommand):
             blocked_only=options["retry_blocked"],
             product_keys=product_keys,
         )
+        image_sync = sync_parser_source_images("ps")
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -61,3 +65,4 @@ class Command(BaseCommand):
                 f"prices={result['prices']}"
             )
         )
+        self.stdout.write(f"PS image sync: {image_sync}")

@@ -7,6 +7,9 @@ from datasets.services.parsers.product_key_selector import (
 )
 
 from datasets.services.parsers.tara_product_parser import parse_tara_products
+from datasets.services.parsers.product_image_sync import (
+    sync_parser_source_images,
+)
 
 
 class Command(BaseCommand):
@@ -97,11 +100,17 @@ class Command(BaseCommand):
         )
 
         if not options["retry_blocked"]:
+            self.stdout.write(
+                f"Tara image sync: {sync_parser_source_images('tara')}"
+            )
             return
 
         if result.get("blocked", 0) <= 0:
             self.stdout.write(
                 "No blocked Tara products to retry"
+            )
+            self.stdout.write(
+                f"Tara image sync: {sync_parser_source_images('tara')}"
             )
             return
 
@@ -143,3 +152,7 @@ class Command(BaseCommand):
 
             if retry_result.get("blocked", 0) <= 0:
                 break
+
+        self.stdout.write(
+            f"Tara image sync: {sync_parser_source_images('tara')}"
+        )

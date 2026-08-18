@@ -5,11 +5,10 @@ from django.utils import timezone
 from openpyxl import load_workbook
 
 from datasets.models import (
-    BaseProductPrice,
     ParserProductClassification,
-    PsProductPrice,
-    TaraProductPrice,
-    TtProductPrice,
+)
+from datasets.services.parsers.product_image_sync import (
+    sync_iprice_product_images,
 )
 
 
@@ -118,116 +117,14 @@ def enrich_classification_urls_and_images(
     product_keys,
 ):
     """
-    Заполняет url и image в ParserProductClassification
-    по данным соответствующих price-таблиц.
+    Обратная совместимость для прежних точек вызова.
 
-    Таблицы:
-
-        BaseProductPrice
-        TaraProductPrice
-        PsProductPrice
-        TtProductPrice
-
-    product_key считается уникальным между источниками.
-
-    Если для product_key существует несколько исторических
-    записей, используется самая свежая строка:
-
-        date_add DESC
-        id DESC
-
-    ВАЖНО:
-
-    Эта функция отвечает только за url и image.
-    Правило выбора расчетной final_price здесь не применяется.
+    URL намеренно не изменяется: новый URL означает новый
+    ParserProductUrl и новый product_key. Обновляется только
+    изменяемая внешняя ссылка image.
     """
-
-    product_keys = set(
-        product_keys
-    )
-
-    if not product_keys:
-        return 0
-
-    values_by_product_key = {}
-
-    price_models = (
-        BaseProductPrice,
-        TaraProductPrice,
-        PsProductPrice,
-        TtProductPrice,
-    )
-
-    for model in price_models:
-        rows = (
-            model.objects
-            .filter(
-                product_key__in=product_keys
-            )
-            .order_by(
-                "product_key",
-                "-date_add",
-                "-id",
-            )
-            .values(
-                "product_key",
-                "url",
-                "image",
-            )
-        )
-
-        for row in rows:
-            product_key = row[
-                "product_key"
-            ]
-
-            values = values_by_product_key.setdefault(
-                product_key,
-                {"url": None, "image": None},
-            )
-            if values["url"] is None:
-                values["url"] = clean_value(row.get("url"))
-            if values["image"] is None:
-                values["image"] = clean_value(row.get("image"))
-
-    classifications = list(
-        ParserProductClassification.objects.filter(
-            product_key__in=product_keys,
-        )
-    )
-
-    objects_to_update = []
-
-    for obj in classifications:
-        values = (
-            values_by_product_key.get(
-                obj.product_key
-            )
-        )
-
-        if not values:
-            continue
-
-        obj.url = values["url"] or obj.url
-        obj.image = values["image"] or obj.image
-
-        objects_to_update.append(
-            obj
-        )
-
-    if objects_to_update:
-        ParserProductClassification.objects.bulk_update(
-            objects_to_update,
-            fields=[
-                "url",
-                "image",
-            ],
-            batch_size=1000,
-        )
-
-    return len(
-        objects_to_update
-    )
+    result = sync_iprice_product_images(product_keys=product_keys)
+    return result["classifications_updated"]
 
 
 # ============================================================

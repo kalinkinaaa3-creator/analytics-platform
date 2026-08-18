@@ -1,6 +1,9 @@
 from django.core.management.base import BaseCommand
 
 from datasets.services.parsers.base_parser import load_base_products
+from datasets.services.parsers.product_image_sync import (
+    sync_parser_source_images,
+)
 
 
 class Command(BaseCommand):
@@ -11,6 +14,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         result = load_base_products(limit=options["limit"])
+        image_sync = sync_parser_source_images("base")
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -28,3 +32,4 @@ class Command(BaseCommand):
                 f"prices={result['prices']}"
             )
         )
+        self.stdout.write(f"Base image sync: {image_sync}")

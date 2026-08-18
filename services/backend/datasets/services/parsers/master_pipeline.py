@@ -238,6 +238,9 @@ def run_parser_master_pipeline(
             command_name=(
                 "report_base_parser_result"
             ),
+            command_options={
+                "skip_bitrix": True,
+            },
         )
         completed_steps.append(
             "base_report"
@@ -265,6 +268,9 @@ def run_parser_master_pipeline(
             command_name=(
                 "report_tt_parser_result"
             ),
+            command_options={
+                "skip_bitrix": True,
+            },
         )
         completed_steps.append(
             "tt_report"
@@ -292,6 +298,9 @@ def run_parser_master_pipeline(
             command_name=(
                 "report_ps_parser_result"
             ),
+            command_options={
+                "skip_bitrix": True,
+            },
         )
         completed_steps.append(
             "ps_report"
@@ -334,6 +343,9 @@ def run_parser_master_pipeline(
             command_name=(
                 "report_tara_parser_result"
             ),
+            command_options={
+                "skip_bitrix": True,
+            },
         )
         completed_steps.append(
             "tara_report"

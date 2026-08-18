@@ -138,6 +138,113 @@ def scalar(cursor, sql, params=None):
     return row[0] if row else None
 
 
+def check_base_parser_health(cursor, today, problems, ok):
+    name = "Base parser"
+    table = "parser_product_url"
+
+    if not table_exists(cursor, table):
+        problems.append(f"{name}: таблица {table} не существует")
+        return
+
+    total = scalar(
+        cursor,
+        f'SELECT COUNT(*) FROM "{table}" WHERE source = %s',
+        ["base"],
+    )
+    if not total:
+        problems.append(f"{name}: отсутствуют строки source=base")
+        return
+
+    active = scalar(
+        cursor,
+        f'''SELECT COUNT(*) FROM "{table}"
+            WHERE source = %s AND status = %s''',
+        ["base", "active"],
+    )
+    if not active:
+        problems.append(f"{name}: отсутствуют активные base-товары")
+
+    max_date_update = scalar(
+        cursor,
+        f'''SELECT MAX((date_update AT TIME ZONE 'Europe/Moscow')::date)
+            FROM "{table}" WHERE source = %s''',
+        ["base"],
+    )
+    if max_date_update != today:
+        problems.append(
+            f"{name}: date_update устарел. max={max_date_update}, нужно={today}"
+        )
+
+    active_unloaded = scalar(
+        cursor,
+        f'''SELECT COUNT(*) FROM "{table}"
+            WHERE source = %s AND status = %s AND is_loaded = FALSE''',
+        ["base", "active"],
+    )
+    if active_unloaded:
+        problems.append(
+            f"{name}: активных незагруженных товаров — {active_unloaded}"
+        )
+
+    unexpected_condition = """
+        source = %s
+        AND status = %s
+        AND (
+            last_error IS NULL
+            OR BTRIM(last_error) = ''
+            OR last_error NOT IN (%s)
+        )
+    """
+    unexpected_params = ["base", "inactive", "missing_from_map"]
+    unexpected_inactive = scalar(
+        cursor,
+        f'SELECT COUNT(*) FROM "{table}" WHERE {unexpected_condition}',
+        unexpected_params,
+    )
+    if unexpected_inactive:
+        problems.append(
+            f"{name}: неожиданных неактивных товаров — {unexpected_inactive}"
+        )
+
+    if active_unloaded or unexpected_inactive:
+        cursor.execute(
+            f'''
+            SELECT id, status, is_loaded, COALESCE(last_error, ''), url
+            FROM "{table}"
+            WHERE (
+                source = %s AND status = %s AND is_loaded = FALSE
+            ) OR ({unexpected_condition})
+            ORDER BY id
+            LIMIT 10
+            ''',
+            ["base", "active", *unexpected_params],
+        )
+        for product_key, status, is_loaded, last_error, url in cursor.fetchall():
+            problems.append(
+                f"{name}: product_key={product_key}, status={status}, "
+                f"is_loaded={is_loaded}, error={last_error or 'NULL'}, url={url}"
+            )
+
+    if (
+        active
+        and max_date_update == today
+        and not active_unloaded
+        and not unexpected_inactive
+    ):
+        ok.append(name)
+
+    logger.info(
+        "%s: total=%s active=%s max_date_update=%s active_unloaded=%s "
+        "unexpected_inactive=%s",
+        name,
+        total,
+        active,
+        max_date_update,
+        active_unloaded,
+        unexpected_inactive,
+    )
+
+
 class Command(BaseCommand):
     help = "Check freshness and data availability for analytics tables"
 
@@ -238,6 +345,13 @@ class Command(BaseCommand):
                             )
 
                 ok.append(name)
+
+            check_base_parser_health(
+                cursor,
+                today,
+                problems,
+                ok,
+            )
 
         if problems:
             message = (

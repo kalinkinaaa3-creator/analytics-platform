@@ -36,6 +36,9 @@ from datasets.services.parsers.product_match_loader import (
     build_competitor_url_groups,
     get_prefixes_by_source,
 )
+from datasets.services.parsers.product_image_sync import (
+    sync_iprice_product_images,
+)
 
 
 class AnalyticsProductClassificationApplyError(ValueError):
@@ -480,6 +483,10 @@ def _apply_analytics_product_classification_locked(
             )
             match_count += len(match_batch)
 
+        image_sync = sync_iprice_product_images(
+            product_keys=included_keys,
+        )
+
         result = {
             "run_id": run.id,
             "classifications_applied": len(included_keys),
@@ -488,6 +495,7 @@ def _apply_analytics_product_classification_locked(
             "weighted_candidates_eligible": eligible_matches,
             "weighted_pairs_eligible": len(eligible_pair_rows),
             "regional_pairs_added": len(expanded_pairs) - len(set(eligible_pair_rows)),
+            "image_sync": image_sync,
         }
         result["application_id"] = application.id
         application.classifications_applied = len(included_keys)

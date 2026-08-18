@@ -36,7 +36,8 @@ with DAG(
         task_id="report_base_parser_result",
         bash_command=(
             "docker exec analytics-django "
-            "python manage.py report_base_parser_result --limit 30"
+            "python manage.py report_base_parser_result "
+            "--limit 30 --skip-bitrix"
         ),
         execution_timeout=timedelta(minutes=15),
     )

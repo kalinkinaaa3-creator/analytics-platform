@@ -20,6 +20,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--limit", type=int, default=30)
+        parser.add_argument("--skip-bitrix", action="store_true")
 
     def handle(self, *args, **options):
         limit = options["limit"]
@@ -117,7 +118,8 @@ class Command(BaseCommand):
         logger.info(message)
         self.stdout.write(message)
 
-        send_bitrix_message(
-            message,
-            logger_name="parsers.base",
-        )
+        if not options["skip_bitrix"]:
+            send_bitrix_message(
+                message,
+                logger_name="parsers.base",
+            )

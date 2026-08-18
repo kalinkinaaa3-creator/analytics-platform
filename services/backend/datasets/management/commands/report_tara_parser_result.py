@@ -26,6 +26,7 @@ class Command(BaseCommand):
             default=30,
             help="How many problem URLs to include in message",
         )
+        parser.add_argument("--skip-bitrix", action="store_true")
 
     def handle(self, *args, **options):
         limit = options["limit"]
@@ -123,7 +124,8 @@ class Command(BaseCommand):
         logger.info(message)
         self.stdout.write(message)
 
-        send_bitrix_message(
-            message,
-            logger_name="parsers.tara",
-        )
+        if not options["skip_bitrix"]:
+            send_bitrix_message(
+                message,
+                logger_name="parsers.tara",
+            )
