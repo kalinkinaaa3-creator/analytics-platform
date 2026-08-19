@@ -1549,6 +1549,7 @@ export function IPriceCalculationTab({
 
     if (
       realtimeEvent.change_type === "approval_saved"
+      || realtimeEvent.change_type === "competitor_selection_changed"
       || realtimeEvent.change_type === "snapshot_finished"
       || realtimeEvent.change_type === "snapshot_activated"
       || realtimeEvent.change_type === "parameters_changed"

@@ -474,10 +474,14 @@ def _phrase_matches(value, expression):
 
 def _condition_matches(runtime, raw_value, expected, field_expression):
     expected_values = split_or(expected)
+    dimension_expected = False
+    scalar_expected_values = []
     for expected_value in expected_values:
         normalized_expected = normalize_text(expected_value)
         if "x" not in normalized_expected:
+            scalar_expected_values.append(expected_value)
             continue
+        dimension_expected = True
         expected_dimensions = [
             extract_dimension(expected_value, index) for index in range(3)
         ]
@@ -498,6 +502,15 @@ def _condition_matches(runtime, raw_value, expected, field_expression):
                 break
         if compared and matched:
             return True
+    # A failed compound dimension must never fall through to scalar matching:
+    # otherwise 1200x800 incorrectly satisfies 1200x1000 because their first
+    # numeric component is the same. Non-dimensional OR alternatives, if any,
+    # may still be evaluated by the ordinary logic below.
+    if dimension_expected and not scalar_expected_values:
+        return False
+    values_for_scalar_match = (
+        scalar_expected_values if dimension_expected else expected_values
+    )
     # Determine a metric from the normalization dictionary for this field.
     metric_name = None
     normalized_fields = {normalize_text(item) for item in split_or(field_expression)}
@@ -514,7 +527,7 @@ def _condition_matches(runtime, raw_value, expected, field_expression):
     if metric_name:
         actual = _numeric_property(runtime, metric_name, raw_value)
         metric = runtime.metrics[metric_name]
-        for expected_value in expected_values:
+        for expected_value in values_for_scalar_match:
             wanted = _numeric_property(runtime, metric_name, expected_value)
             if actual is not None and wanted is not None:
                 if abs(actual - wanted) <= metric.tolerance:
@@ -522,7 +535,7 @@ def _condition_matches(runtime, raw_value, expected, field_expression):
         return False
     return any(
         contains_phrase(raw_value, expected_value)
-        for expected_value in expected_values
+        for expected_value in values_for_scalar_match
     )
 
 

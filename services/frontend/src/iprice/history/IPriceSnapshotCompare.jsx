@@ -27,6 +27,7 @@ const MODE_REGIONS = "regions";
 const HISTORY_REFRESH_EVENTS = new Set([
   "parameters_changed",
   "approval_saved",
+  "competitor_selection_changed",
   "snapshot_finished",
   "snapshot_activated",
 ]);

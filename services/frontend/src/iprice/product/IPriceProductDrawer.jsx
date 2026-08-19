@@ -1670,6 +1670,7 @@ export function IPriceProductDrawer({
   productId,
   onClose,
   onRegionApprovalSaved,
+  onCompetitorSelectionChanged,
   realtimeEvent,
   pricingEditable = false,
   onOpenPricing,
@@ -2042,7 +2043,7 @@ export function IPriceProductDrawer({
     setSelectionBusyKey(groupKey);
     setError("");
     try {
-      await updateIPriceCompetitorSelection(
+      const response = await updateIPriceCompetitorSelection(
         snapshotId,
         productId,
         {
@@ -2050,6 +2051,11 @@ export function IPriceProductDrawer({
           selection_mode: selectionMode,
         },
       );
+      onCompetitorSelectionChanged?.({
+        snapshotId,
+        productId,
+        ...(response?.result || {}),
+      });
       await Promise.all([
         loadDetail(),
         loadMarket(),
@@ -2069,6 +2075,7 @@ export function IPriceProductDrawer({
     selectionBusyKey,
     loadDetail,
     loadMarket,
+    onCompetitorSelectionChanged,
   ]);
 
 

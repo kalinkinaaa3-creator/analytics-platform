@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -175,6 +176,7 @@ function MultiSelectFilter({
   onChange,
 }) {
   const rootRef = useRef(null);
+  const menuRef = useRef(null);
 
   const [
     opened,
@@ -185,6 +187,7 @@ function MultiSelectFilter({
     search,
     setSearch,
   ] = useState("");
+  const [menuLeft, setMenuLeft] = useState(0);
 
   const normalizedSelected = useMemo(
     () => normalizeArray(
@@ -272,6 +275,41 @@ function MultiSelectFilter({
     };
   }, [opened]);
 
+  useLayoutEffect(() => {
+    if (!opened) {
+      return undefined;
+    }
+
+    function updateMenuPosition() {
+      const root = rootRef.current;
+      const menu = menuRef.current;
+      if (!root || !menu) return;
+      const bounds = root.getBoundingClientRect();
+      const menuWidth = menu.getBoundingClientRect().width;
+      const viewportPadding = 12;
+      const fitsToRight = (
+        bounds.left + menuWidth <= window.innerWidth - viewportPadding
+      );
+      const nextLeft = fitsToRight
+        ? 0
+        : Math.max(
+            viewportPadding - bounds.left,
+            bounds.width - menuWidth,
+          );
+      setMenuLeft((current) => (
+        Math.abs(current - nextLeft) < 1 ? current : nextLeft
+      ));
+    }
+
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [opened, visibleOptions]);
+
 
   function toggleValue(value) {
     const normalizedValue = String(
@@ -348,7 +386,11 @@ function MultiSelectFilter({
       </button>
 
       {opened && !disabled && (
-        <div className="iprice-health-filter__menu">
+        <div
+          ref={menuRef}
+          className="iprice-health-filter__menu"
+          style={{ left: `${menuLeft}px` }}
+        >
           <input
             type="search"
             value={search}

@@ -1142,6 +1142,28 @@ export function IPricePage() {
     [showToast],
   );
 
+  const handleCompetitorSelectionChanged = useCallback((payload = {}) => {
+    setRealtimeEvent((current) => {
+      const snapshotId = Number(payload.snapshotId || payload.snapshot_id);
+      const productId = Number(payload.productId || payload.product_id);
+      if (
+        current?.change_type === "competitor_selection_changed"
+        && Number(current.snapshot_id) === snapshotId
+        && Number(current.product_id) === productId
+        && Date.now() - Number(current.receivedAt || 0) < 2000
+      ) {
+        return current;
+      }
+      return {
+        change_type: "competitor_selection_changed",
+        snapshot_id: snapshotId,
+        product_id: productId,
+        ...payload,
+        receivedAt: Date.now(),
+      };
+    });
+  }, []);
+
 
   /* ============================================================
      RUN SNAPSHOT
@@ -1566,6 +1588,9 @@ export function IPricePage() {
             }
             onRegionApprovalSaved={
               handleRegionApprovalSaved
+            }
+            onCompetitorSelectionChanged={
+              handleCompetitorSelectionChanged
             }
             realtimeEvent={realtimeEvent}
             pricingEditable={Boolean(

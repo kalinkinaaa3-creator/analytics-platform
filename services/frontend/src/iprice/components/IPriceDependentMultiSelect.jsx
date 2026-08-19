@@ -43,6 +43,7 @@ export function IPriceDependentMultiSelect({
   onChange,
 }) {
   const rootRef = useRef(null);
+  const dropdownRef = useRef(null);
 
   const [
     open,
@@ -53,10 +54,7 @@ export function IPriceDependentMultiSelect({
     search,
     setSearch,
   ] = useState("");
-  const [
-    alignEnd,
-    setAlignEnd,
-  ] = useState(false);
+  const [dropdownLeft, setDropdownLeft] = useState(0);
 
   const safeSelected = Array.isArray(
     selected
@@ -146,24 +144,38 @@ export function IPriceDependentMultiSelect({
       return undefined;
     }
 
-    function updateDropdownAlignment() {
+    function updateDropdownPosition() {
       const root = rootRef.current;
-      if (!root) {
+      const dropdown = dropdownRef.current;
+      if (!root || !dropdown) {
         return;
       }
       const bounds = root.getBoundingClientRect();
-      const dropdownWidth = Math.max(bounds.width, 290);
-      setAlignEnd(
-        bounds.left + dropdownWidth > window.innerWidth - 12
+      const dropdownWidth = dropdown.getBoundingClientRect().width;
+      const viewportPadding = 12;
+      const fitsToRight = (
+        bounds.left + dropdownWidth
+        <= window.innerWidth - viewportPadding
       );
+      const nextLeft = fitsToRight
+        ? 0
+        : Math.max(
+            viewportPadding - bounds.left,
+            bounds.width - dropdownWidth,
+          );
+      setDropdownLeft((current) => (
+        Math.abs(current - nextLeft) < 1 ? current : nextLeft
+      ));
     }
 
-    updateDropdownAlignment();
-    window.addEventListener("resize", updateDropdownAlignment);
+    updateDropdownPosition();
+    window.addEventListener("resize", updateDropdownPosition);
+    window.addEventListener("scroll", updateDropdownPosition, true);
     return () => {
-      window.removeEventListener("resize", updateDropdownAlignment);
+      window.removeEventListener("resize", updateDropdownPosition);
+      window.removeEventListener("scroll", updateDropdownPosition, true);
     };
-  }, [open]);
+  }, [open, visibleOptions, name]);
 
 
   function toggleValue(value) {
@@ -266,7 +278,11 @@ export function IPriceDependentMultiSelect({
       </button>
 
       {open && (
-        <div className={`iprice-multiselect__dropdown ${alignEnd ? "iprice-multiselect__dropdown--align-end" : ""}`}>
+        <div
+          ref={dropdownRef}
+          className="iprice-multiselect__dropdown"
+          style={{ left: `${dropdownLeft}px` }}
+        >
           <input
             type="text"
             value={search}
