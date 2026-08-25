@@ -10,14 +10,9 @@ from datasets.models import (
     IPriceSnapshotRegion,
     IPriceSnapshotCompetitor,
     IPriceSnapshotApproval,
-    AnalyticsProductClassificationApplication,
-    AnalyticsProductMatchCandidate,
     ParserProductClassification,
     ParserProductUrl,
 
-)
-from datasets.services.parsers.analytics_product_property_labels import (
-    label_match_evidence,
 )
 
 
@@ -76,10 +71,6 @@ class ParserPrefixUploadSerializer(serializers.Serializer):
 
 
 class ProductClassificationUploadSerializer(serializers.Serializer):
-    file = serializers.FileField()
-
-
-class AnalyticsProductDirectoryUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
 
 
@@ -1331,16 +1322,19 @@ class IPriceSnapshotCompareFiltersRequestSerializer(
 class IPriceSnapshotCompetitorSerializer(
     serializers.ModelSerializer
 ):
-    match_score = serializers.SerializerMethodField()
-    match_coverage = serializers.SerializerMethodField()
-    match_evidence = serializers.SerializerMethodField()
     is_price_used_in_calculation = serializers.SerializerMethodField()
     material = serializers.SerializerMethodField()
     color = serializers.SerializerMethodField()
     modification = serializers.SerializerMethodField()
+    article_number_analogs = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
     additional_property = serializers.SerializerMethodField()
 
     def _product_metadata(self, obj):
+        preloaded = self.context.get("competitor_product_metadata")
+        if preloaded is not None:
+            return preloaded.get(obj.competitor_product_key, {})
+
         cache = self.context.setdefault("_competitor_product_metadata_cache", {})
         product_key = obj.competitor_product_key
         if product_key not in cache:
@@ -1348,7 +1342,9 @@ class IPriceSnapshotCompetitorSerializer(
                 ParserProductClassification.objects.filter(
                     product_key=product_key,
                     status=ParserProductClassification.STATUS_ACTIVE,
-                ).values("material", "color", "modification").first()
+                ).values(
+                    "material", "color", "modification", "article_number_analogs", "image"
+                ).first()
                 or {}
             )
             product_url = (
@@ -1371,39 +1367,14 @@ class IPriceSnapshotCompetitorSerializer(
     def get_modification(self, obj):
         return self._product_metadata(obj).get("modification")
 
+    def get_article_number_analogs(self, obj):
+        return self._product_metadata(obj).get("article_number_analogs")
+
+    def get_image(self, obj):
+        return self._product_metadata(obj).get("image")
+
     def get_additional_property(self, obj):
         return self._product_metadata(obj).get("additional_property")
-
-    def _weighted_candidate(self, obj):
-        cache = self.context.setdefault("_weighted_candidate_cache", {})
-        key = (obj.snapshot_product_id, obj.competitor_product_key)
-        if key not in cache:
-            application = self.context.get("_classification_application")
-            if application is None:
-                application = AnalyticsProductClassificationApplication.objects.filter(
-                    date_add__lte=obj.snapshot_product.snapshot.created_at
-                ).order_by("-date_add", "-id").first()
-                self.context["_classification_application"] = application
-            cache[key] = None
-            if application is not None:
-                base_key = obj.snapshot_product.base_product_key
-                cache[key] = AnalyticsProductMatchCandidate.objects.filter(
-                    application=application,
-                    product_key_base=base_key,
-                    product_key_competitor=obj.competitor_product_key,
-                ).values("match_score", "match_coverage", "match_evidence").first()
-        return cache[key] or {}
-
-    def get_match_score(self, obj):
-        return self._weighted_candidate(obj).get("match_score")
-
-    def get_match_coverage(self, obj):
-        return self._weighted_candidate(obj).get("match_coverage")
-
-    def get_match_evidence(self, obj):
-        return label_match_evidence(
-            self._weighted_candidate(obj).get("match_evidence", {})
-        )
 
     def get_is_price_used_in_calculation(self, obj):
         return bool(
@@ -1432,13 +1403,12 @@ class IPriceSnapshotCompetitorSerializer(
             "calculation_status",
             "warning_codes",
             "error_codes",
-            "match_score",
-            "match_coverage",
-            "match_evidence",
             "is_price_used_in_calculation",
             "material",
             "color",
             "modification",
+            "article_number_analogs",
+            "image",
             "additional_property",
         ]
 

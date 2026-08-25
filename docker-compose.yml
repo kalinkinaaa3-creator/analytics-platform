@@ -142,6 +142,7 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
+      - ./services/backend/logs:/opt/analytics-platform/services/backend/logs
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - airflow-postgres
@@ -232,4 +233,3 @@ volumes:
   clickhouse_data:
   airflow_postgres_data:
   pgadmin_data:
-

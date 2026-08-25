@@ -2,7 +2,7 @@ from collections import Counter, defaultdict
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
 
-from django.db.models import Exists, Max, OuterRef, Subquery
+from django.db.models import Max
 from openpyxl import Workbook
 from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
@@ -20,11 +20,6 @@ from datasets.models import (
     TransportCost,
     IPriceCalculationConfig,
     IPriceCompetitorSelectionOverride,
-    AnalyticsProductClassificationApplication,
-    AnalyticsProductMatchCandidate,
-)
-from datasets.services.parsers.analytics_product_processor import (
-    MODIFICATION_NOT_DETERMINED,
 )
 ERROR = "ERROR"
 WARNING = "WARNING"
@@ -314,17 +309,6 @@ def check_classification():
                     field=field_name,
                 )
 
-        if row["modification"] == MODIFICATION_NOT_DETERMINED:
-            add_issue(
-                issues,
-                WARNING,
-                "MODIFICATION_NOT_DEFINED",
-                product_key,
-                "Модификация не определена автоматически",
-                product_key=product_key,
-                field="modification",
-            )
-
         # ----------------------------------------------------
         # Проверка item_type
         #
@@ -378,118 +362,13 @@ def check_matches(
         for base_key, competitor_key, selection_mode in override_rows
     }
 
-    application = AnalyticsProductClassificationApplication.objects.select_related(
-        "run"
-    ).order_by("-date_add", "-id").first()
-    if application is None and active_classification_keys:
-        add_issue(
-            issues, ERROR, "PRODUCT_CONTROL_APPLICATION_MISSING", "",
-            "Активная классификация не связана с применённым результатом Product Control",
-        )
-    eligible_candidates = AnalyticsProductMatchCandidate.objects.none()
-    if application is not None:
-        eligible_candidates = AnalyticsProductMatchCandidate.objects.filter(
-            application=application, is_eligible=True,
-            product_key_base__in=active_classification_keys,
-            product_key_competitor__in=active_classification_keys,
-        ).exclude(competitor_source="base")
-
-    active_match_for_candidate = ParserProductMatch.objects.filter(
-        status=ParserProductMatch.STATUS_ACTIVE,
-        product_key_base=OuterRef("product_key_base"),
-        product_key_competitor=OuterRef("product_key_competitor"),
-    )
-    for candidate in eligible_candidates.annotate(
-        has_active_match=Exists(active_match_for_candidate)
-    ).filter(has_active_match=False).values(
-        "product_key_base", "product_key_competitor"
-    ).iterator(chunk_size=500):
-        base_key = candidate["product_key_base"]
-        competitor_key = candidate["product_key_competitor"]
-        if override_modes.get((base_key, competitor_key)) == (
-            IPriceCompetitorSelectionOverride.MODE_EXCLUDE
-        ):
-            continue
-        add_issue(
-            issues,
-            ERROR,
-            "MATCH_EXPECTED_PAIR_MISSING",
-            f"{base_key}->{competitor_key}",
-            "Отсутствует активная связь, ожидаемая по классификации товаров",
-            product_key_base=base_key,
-            product_key_competitor=competitor_key,
-        )
-
-    weighted_for_match = eligible_candidates.filter(
-        product_key_base=OuterRef("product_key_base"),
-        product_key_competitor=OuterRef("product_key_competitor"),
-    )
     rows = list(
-        ParserProductMatch.objects.filter(status=ParserProductMatch.STATUS_ACTIVE)
-        .annotate(
-            weighted_score=Subquery(weighted_for_match.values("match_score")[:1]),
-            weighted_coverage=Subquery(
-                weighted_for_match.values("match_coverage")[:1]
-            ),
-            weighted_evidence=Subquery(
-                weighted_for_match.values("match_evidence")[:1]
-            ),
-            weighted_exists=Exists(weighted_for_match),
-        ).values(
+        ParserProductMatch.objects.filter(status=ParserProductMatch.STATUS_ACTIVE).values(
             "product_key_base",
             "product_key_competitor",
             "match_type",
-            "weighted_score",
-            "weighted_coverage",
-            "weighted_evidence",
-            "weighted_exists",
         )
     )
-
-    if not rows and eligible_candidates.exists():
-        add_issue(
-            issues,
-            ERROR,
-            "TABLE_EMPTY",
-            "",
-            (
-                "Нет активных строк "
-                "parser_product_match"
-            ),
-        )
-
-    for row in rows:
-        base_key = row["product_key_base"]
-        competitor_key = row["product_key_competitor"]
-        override_mode = override_modes.get(
-            (base_key, competitor_key)
-        )
-        is_manual_include = (
-            row["match_type"] == ParserProductMatch.MATCH_TYPE_MANUAL
-            and override_mode == IPriceCompetitorSelectionOverride.MODE_INCLUDE
-        )
-        if row["weighted_exists"] or is_manual_include:
-            continue
-        if (
-            override_mode == IPriceCompetitorSelectionOverride.MODE_EXCLUDE
-            or row["match_type"] == ParserProductMatch.MATCH_TYPE_MANUAL
-        ):
-            # A more precise error is emitted in the detailed validation below.
-            continue
-        add_issue(
-            issues,
-            ERROR,
-            "MATCH_UNEXPECTED_ACTIVE_PAIR",
-            f"{base_key}->{competitor_key}",
-            (
-                "Активная связь не входит в прошедший "
-                "весовые пороги результат Product Control"
-            ),
-            product_key_base=base_key,
-            product_key_competitor=(
-                competitor_key
-            ),
-        )
 
     all_keys = set()
 
@@ -547,10 +426,6 @@ def check_matches(
         override_mode = override_modes.get(
             (base_key, competitor_key)
         )
-        is_manual_include = (
-            row["match_type"] == ParserProductMatch.MATCH_TYPE_MANUAL
-            and override_mode == IPriceCompetitorSelectionOverride.MODE_INCLUDE
-        )
         if override_mode == IPriceCompetitorSelectionOverride.MODE_EXCLUDE:
             add_issue(
                 issues,
@@ -560,33 +435,6 @@ def check_matches(
                 "Исключённая вручную связь осталась активной",
                 product_key_base=base_key,
                 product_key_competitor=competitor_key,
-            )
-        elif (
-            row["match_type"] == ParserProductMatch.MATCH_TYPE_MANUAL
-            and not is_manual_include
-        ):
-            add_issue(
-                issues,
-                ERROR,
-                "MATCH_MANUAL_OVERRIDE_MISSING",
-                business_key,
-                "Для ручной активной связи отсутствует override=include",
-                product_key_base=base_key,
-                product_key_competitor=competitor_key,
-            )
-        elif not row["weighted_exists"]:
-            add_issue(
-                issues, ERROR, "MATCH_WEIGHTED_RESULT_MISSING", business_key,
-                "Для активной связи отсутствует подходящий весовой результат Product Control",
-                product_key_base=base_key, product_key_competitor=competitor_key,
-            )
-        elif (
-            row["match_type"] == ParserProductMatch.MATCH_TYPE_AUTO
-            and not row["weighted_evidence"]
-        ):
-            add_issue(
-                issues, WARNING, "MATCH_EVIDENCE_EMPTY", business_key,
-                "Для активной связи отсутствует детализация сравнения свойств",
             )
 
         base_classification = (

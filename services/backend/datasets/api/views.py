@@ -29,12 +29,13 @@ from datasets.models import (
     DatasetRow,
     PlanSales,
     ParserMasterPipelineRun,
-    AnalyticsProductProcessingRun,
     IPriceSnapshot,
     IPriceSnapshotRegion,
     IPriceSnapshotProduct,
     IPriceSnapshotApproval,
     IPriceCompetitorSelectionOverride,
+    BaseProductPrice,
+    ParserProductClassification,
 
 )
 
@@ -68,7 +69,6 @@ from .serializers import (
 
     ParserPrefixUploadSerializer,
     ProductClassificationUploadSerializer,
-    AnalyticsProductDirectoryUploadSerializer,
 
     ExcelUploadSerializer,
 
@@ -307,19 +307,9 @@ from dashboards.models import DashboardPublicGroup
 
 from datasets.services.parsers.prefix_loader import load_parser_prefixes_from_excel
 
-from datasets.services.parsers.analytics_product_directory_loader import (
-    ProductDirectoryValidationError,
-    load_analytics_product_directory,
-)
-from datasets.services.parsers.analytics_product_launcher import (
-    launch_analytics_product_processing,
-)
-from datasets.services.parsers.analytics_product_classification_applier import (
-    AnalyticsProductClassificationApplyError,
-    apply_analytics_product_classification,
-)
-from datasets.services.parsers.analytics_product_lock import (
-    analytics_product_operation_lock,
+from datasets.services.parsers.product_classification_match_loader import (
+    ProductClassificationMatchLoadError,
+    load_product_classification_matches,
 )
 
 from datasets.services.parsers.master_pipeline_launcher import (
@@ -1666,101 +1656,6 @@ class ParserMasterPipelineRunView(APIView):
         }
 
 
-class AnalyticsProductDirectoryUploadView(APIView):
-    permission_classes = [CanEditIPriceDashboard]
-    parser_classes = [MultiPartParser, FormParser]
-    serializer_class = AnalyticsProductDirectoryUploadSerializer
-
-    def get_serializer(self, *args, **kwargs):
-        return self.serializer_class(*args, **kwargs)
-
-    def get(self, request):
-        run = AnalyticsProductProcessingRun.objects.select_related(
-            "directory_load"
-        ).order_by("-date_add", "-id").first()
-        if run is None:
-            return Response({"status": "not_started"})
-        return Response({
-            "run_id": run.id,
-            "directory_load_id": run.directory_load_id,
-            "directory_filename": run.directory_load.filename,
-            "directory_checksum": run.directory_load.checksum,
-            "status": run.status,
-            "current_step": run.current_step,
-            "result": run.result,
-            "error": run.error_text,
-            "date_add": run.date_add.isoformat(),
-            "started_at": run.started_at.isoformat() if run.started_at else None,
-            "finished_at": run.finished_at.isoformat() if run.finished_at else None,
-        })
-
-    def post(self, request):
-        with analytics_product_operation_lock():
-            return self._post_locked(request)
-
-    def _post_locked(self, request):
-        if AnalyticsProductProcessingRun.objects.filter(
-            status__in=(
-                AnalyticsProductProcessingRun.STATUS_QUEUED,
-                AnalyticsProductProcessingRun.STATUS_RUNNING,
-            )
-        ).exists():
-            return Response(
-                {"status": "error", "error": "Обработка справочника уже выполняется"},
-                status=status.HTTP_409_CONFLICT,
-            )
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        uploaded_file = serializer.validated_data["file"]
-        if not uploaded_file.name.casefold().endswith(".xlsx"):
-            return Response(
-                {"status": "error", "error": "Ожидается файл .xlsx"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            directory_load = load_analytics_product_directory(
-                uploaded_file, filename=uploaded_file.name
-            )
-        except ProductDirectoryValidationError as exc:
-            return Response(
-                {"status": "error", "error": str(exc)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        run = AnalyticsProductProcessingRun.objects.create(
-            directory_load=directory_load,
-            status=AnalyticsProductProcessingRun.STATUS_QUEUED,
-            current_step="queued",
-        )
-        try:
-            pid = launch_analytics_product_processing(run.id)
-        except Exception as exc:
-            run.status = AnalyticsProductProcessingRun.STATUS_FAILED
-            run.current_step = "launch_failed"
-            run.error_text = str(exc)
-            run.finished_at = timezone.now()
-            run.save(update_fields=(
-                "status", "current_step", "error_text", "finished_at",
-            ))
-            raise
-        publish_iprice_update(
-            "product_classification_queued",
-            run_id=run.id,
-            directory_load_id=directory_load.id,
-            directory_checksum=directory_load.checksum,
-            status=run.status,
-            current_step=run.current_step,
-        )
-        return Response(
-            {
-                "status": "queued", "run_id": run.id,
-                "directory_load_id": directory_load.id,
-                "checksum": directory_load.checksum, "pid": pid,
-                "rows_loaded": directory_load.rows_loaded,
-            },
-            status=status.HTTP_202_ACCEPTED,
-        )
-
-
 class ProductClassificationUploadView(APIView):
     permission_classes = [CanEditIPriceDashboard]
     parser_classes = [MultiPartParser, FormParser]
@@ -1781,71 +1676,52 @@ class ProductClassificationUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if AnalyticsProductProcessingRun.objects.filter(
-            status__in=(
-                AnalyticsProductProcessingRun.STATUS_QUEUED,
-                AnalyticsProductProcessingRun.STATUS_RUNNING,
-            )
-        ).exists():
+        lock_key = IPRICE_PARAMETER_CHANGE_LOCK_KEY
+        if not cache.add(lock_key, True, timeout=60 * 30):
             return Response(
                 {
-                    "status": "error",
-                    "error": "Дождитесь завершения фонового расчёта Product Control",
+                    "status": "already_running",
+                    "message": (
+                        "Дождитесь завершения текущего изменения данных iPrice"
+                    ),
                 },
                 status=status.HTTP_409_CONFLICT,
             )
+
         try:
-            result = apply_analytics_product_classification(
-                uploaded_file,
-                filename=uploaded_file.name,
-                user=request.user,
+            if (
+                cache.get(IPRICE_SNAPSHOT_START_LOCK_KEY)
+                or IPriceSnapshot.objects.filter(
+                    status=IPriceSnapshot.STATUS_BUILDING,
+                ).exists()
+            ):
+                return Response(
+                    {
+                        "status": "calculation_running",
+                        "message": (
+                            "Дождитесь завершения текущего расчёта iPrice"
+                        ),
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            try:
+                result = load_product_classification_matches(
+                    uploaded_file,
+                    filename=uploaded_file.name,
+                )
+            except ProductClassificationMatchLoadError as exc:
+                return Response(
+                    {"status": "error", "error": str(exc)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            publish_iprice_update(
+                "product_classification_applied",
+                invalidate_health=True,
             )
-        except AnalyticsProductClassificationApplyError as exc:
-            return Response(
-                {"status": "error", "error": str(exc)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        publish_iprice_update(
-            "product_control_classification_applied",
-            invalidate_health=True,
-            run_id=result["run_id"],
-            application_id=result["application_id"],
-        )
-        return Response(result, status=status.HTTP_200_OK)
-
-
-
-
-class ProductUrlControlExportView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        file_path = os.path.join(
-            settings.BASE_DIR,
-            "media",
-            "datasets",
-            "parser_product_url_control_latest.xlsx",
-        )
-
-        if not os.path.exists(file_path):
-            raise Http404(
-                "Export file not found. Run build_product_url_control_export first."
-            )
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"parser_product_url_control_{timestamp}.xlsx"
-
-        file_obj = open(file_path, "rb")
-
-        return FileResponse(
-            file_obj,
-            as_attachment=True,
-            filename=filename,
-            content_type=(
-                "application/vnd.openxmlformats-officedocument."
-                "spreadsheetml.sheet"
-            ),
-        )
+            return Response(result, status=status.HTTP_200_OK)
+        finally:
+            cache.delete(lock_key)
 
 
 
@@ -2454,14 +2330,6 @@ class IPriceSnapshotRunView(APIView):
     )
 
     def post(self, request):
-        if cache.get(IPRICE_PARAMETER_CHANGE_LOCK_KEY):
-            return Response(
-                {
-                    "status": "parameters_changing",
-                    "message": "Дождитесь завершения изменения параметров iPrice",
-                },
-                status=status.HTTP_409_CONFLICT,
-            )
         serializer = self.serializer_class(
             data=request.data,
         )
@@ -2494,6 +2362,22 @@ class IPriceSnapshotRunView(APIView):
                 ),
             )
 
+        operation_lock_acquired = cache.add(
+            IPRICE_PARAMETER_CHANGE_LOCK_KEY,
+            True,
+            timeout=60 * 30,
+        )
+        if not operation_lock_acquired:
+            return Response(
+                {
+                    "status": "parameters_changing",
+                    "message": (
+                        "Дождитесь завершения текущего изменения данных iPrice"
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
         lock_acquired = cache.add(
             IPRICE_SNAPSHOT_START_LOCK_KEY,
             True,
@@ -2503,6 +2387,7 @@ class IPriceSnapshotRunView(APIView):
         )
 
         if not lock_acquired:
+            cache.delete(IPRICE_PARAMETER_CHANGE_LOCK_KEY)
             return Response(
                 {
                     "status": (
@@ -2529,6 +2414,9 @@ class IPriceSnapshotRunView(APIView):
         finally:
             cache.delete(
                 IPRICE_SNAPSHOT_START_LOCK_KEY
+            )
+            cache.delete(
+                IPRICE_PARAMETER_CHANGE_LOCK_KEY
             )
 
     def _start_snapshot(
@@ -4196,7 +4084,7 @@ class IPriceSnapshotProductDetailView(APIView):
             ),
         }
         cached = get_iprice_cache(
-            "postgres:product:v5",
+            "postgres:product:v6",
             cache_payload,
         )
         if cached is not None:
@@ -4338,7 +4226,7 @@ class IPriceSnapshotProductDetailView(APIView):
             )
         )
 
-        competitors_queryset = (
+        competitors = list(
             product.competitors
             .all()
             .order_by(
@@ -4348,6 +4236,35 @@ class IPriceSnapshotProductDetailView(APIView):
             )
         )
 
+        competitor_product_keys = {
+            row.competitor_product_key
+            for row in competitors
+        }
+        competitor_product_metadata = {
+            product_key: {}
+            for product_key in competitor_product_keys
+        }
+        for row in ParserProductClassification.objects.filter(
+            product_key__in=competitor_product_keys,
+            status=ParserProductClassification.STATUS_ACTIVE,
+        ).values(
+            "product_key",
+            "material",
+            "color",
+            "modification",
+            "article_number_analogs",
+            "image",
+        ):
+            competitor_product_metadata[row["product_key"]].update(row)
+        for product_key, additional_property in (
+            ParserProductUrl.objects.filter(
+                id__in=competitor_product_keys,
+            ).values_list("id", "additional_property")
+        ):
+            competitor_product_metadata[product_key][
+                "additional_property"
+            ] = additional_property
+
         product_serializer = (
             IPriceSnapshotProductSerializer(
                 product,
@@ -4356,8 +4273,11 @@ class IPriceSnapshotProductDetailView(APIView):
 
         competitor_serializer = (
             IPriceSnapshotCompetitorSerializer(
-                competitors_queryset,
+                competitors,
                 many=True,
+                context={
+                    "competitor_product_metadata": competitor_product_metadata,
+                },
             )
         )
         competitor_cards = group_snapshot_competitor_cards(
@@ -4382,6 +4302,21 @@ class IPriceSnapshotProductDetailView(APIView):
                 regions_queryset,
                 many=True,
             )
+        )
+
+        product_payload = dict(product_serializer.data)
+        product_payload["site_name"] = (
+            BaseProductPrice.objects.filter(
+                product_key=product.base_product_key,
+            ).exclude(name__isnull=True).exclude(name="").order_by(
+                "-date_add", "-id",
+            ).values_list("name", flat=True).first()
+        )
+        product_payload["article_number_analogs"] = (
+            ParserProductClassification.objects.filter(
+                product_key=product.base_product_key,
+                status=ParserProductClassification.STATUS_ACTIVE,
+            ).values_list("article_number_analogs", flat=True).first()
         )
 
         result = {
@@ -4409,7 +4344,7 @@ class IPriceSnapshotProductDetailView(APIView):
                         product.snapshot,
                     ),
             },
-            "product": product_serializer.data,
+            "product": product_payload,
             "competitors": competitor_cards,
             "regions": region_serializer.data,
             "counts": {
@@ -4418,7 +4353,7 @@ class IPriceSnapshotProductDetailView(APIView):
             },
         }
         set_iprice_cache(
-            "postgres:product:v5",
+            "postgres:product:v6",
             cache_payload,
             result,
         )

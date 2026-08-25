@@ -2,9 +2,10 @@ import {
   IPriceProductImage,
 } from "../components/IPriceProductImage";
 import {
-  formatMatchPropertyValue,
+  getIPriceCompetitorPriceProperties,
   getIPriceCompetitorSourceLabel,
 } from "./ipriceProductLabels";
+import {IPriceColorSwatch} from "./IPriceColorSwatch";
 
 
 function formatNumber(value, digits = 2) {
@@ -41,7 +42,7 @@ export function IPriceCompetitorCard({
     : [];
   const image = variants.find(
     (variant) => variant.image
-  )?.image;
+  )?.image || competitor?.image;
   const snapshotRegionalEntries = Array.isArray(
     competitor?.regional_entries,
   ) ? competitor.regional_entries : [];
@@ -84,20 +85,25 @@ export function IPriceCompetitorCard({
         }))
   ).sort((left, right) => left.region.localeCompare(right.region, "ru"));
   const prices = regionalRows
-    .map((row) => Number(row.price))
+    .map((row) => row.price)
+    .filter((price) => price !== null && price !== undefined && price !== "")
+    .map(Number)
     .filter(Number.isFinite)
     .sort((left, right) => left - right);
   const middle = Math.floor(prices.length / 2);
   const medianPrice = competitor?.competitor_final_price_median ?? (prices.length
     ? (prices.length % 2 ? prices[middle] : (prices[middle - 1] + prices[middle]) / 2)
     : competitor?.competitor_final_price_max);
-  const evidenceRows = Object.entries(competitor?.match_evidence || {});
-
+  const priceProperties = getIPriceCompetitorPriceProperties(
+    competitor?.source,
+    variants,
+  );
   return (
     <article className="iprice-market-card">
       <IPriceProductImage
         src={image}
         alt={variants[0]?.name}
+        caption={variants[0]?.name}
         className="iprice-product-drawer__image"
         placeholderClassName="iprice-product-drawer__image-placeholder"
         placeholderText="Нет изображения"
@@ -106,31 +112,6 @@ export function IPriceCompetitorCard({
       <div className="iprice-market-card__body">
         <div className="iprice-market-card__header">
           <strong>{getIPriceCompetitorSourceLabel(competitor?.source)}</strong>
-          <span>
-            Сходство: {competitor?.match_score === null || competitor?.match_score === undefined
-              ? "—"
-              : `${formatNumber(competitor.match_score, 1)}%`}
-          </span>
-        </div>
-        <div className="iprice-market-card__similarity">
-          <span className="iprice-similarity">
-            Покрытие свойств: {competitor?.match_coverage === null || competitor?.match_coverage === undefined
-              ? "—"
-              : `${formatNumber(competitor.match_coverage, 1)}%`}
-          </span>
-          {evidenceRows.length ? evidenceRows.map(([name, item]) => (
-            <span
-              key={name}
-              className={item?.matched
-                ? "iprice-similarity iprice-similarity--matched"
-                : "iprice-similarity iprice-similarity--not-matched"}
-              title={`Наше: ${formatMatchPropertyValue(item?.base)}; конкурент: ${formatMatchPropertyValue(item?.competitor)}`}
-            >
-              {item?.matched ? "✓" : "×"} {item?.label || "Свойство товара"}
-            </span>
-          )) : (
-            <span className="iprice-similarity">Сравнение свойств не рассчитано</span>
-          )}
         </div>
         <details className="iprice-market-price-details">
           <summary className="iprice-market-card__price">
@@ -151,32 +132,35 @@ export function IPriceCompetitorCard({
           <span>
             Материал iPrice: {competitor?.material || "—"}
           </span>
-          <span>
-            Цвет iPrice: {competitor?.color || "—"}
+          <span className="iprice-market-card__property-row">
+            Цвет iPrice: <IPriceColorSwatch color={competitor?.color} />
           </span>
           <span>
             Модификация iPrice: {competitor?.modification || "—"}
           </span>
+          {competitor?.article_number_analogs && (
+            <span className="iprice-market-card__description">
+              {competitor.article_number_analogs}
+            </span>
+          )}
           {competitor?.additional_property && (
             <span>
               Вариант товара: {competitor.additional_property}
             </span>
           )}
+          {priceProperties.map((property) => (
+            <span key={`${property.label}|${property.value}`}>
+              {property.label}: {property.value}
+            </span>
+          ))}
         </div>
         {competitor?.is_price_used_in_calculation === false && (
           <div className="iprice-market-card__flags">
-            <span className="iprice-market-card__flag--not-used">
-              Цена отсутствует
+            <span className="iprice-market-card__flag--warning">
+              Цена аналога отсутствует — эта цена не используется
             </span>
           </div>
         )}
-        <div className="iprice-market-card__flags">
-          <span>
-            {competitor?.selection_mode === "include"
-              ? "Включён вручную"
-              : "Автоматически прошёл пороги"}
-          </span>
-        </div>
         {onSelectionChange && (
           <div className="iprice-market-card__actions">
             <button
@@ -185,22 +169,16 @@ export function IPriceCompetitorCard({
               disabled={!selectionEditable || selectionBusy}
               title={!selectionEditable
                 ? "Состав конкурентов зафиксирован для этого снапшота"
-                : competitor?.selection_mode === "auto"
-                  ? "Исключить конкурента и пересчитать цены"
-                  : "Снова применять автоматические пороги"}
+                : "Исключить конкурента и пересчитать цены"}
               onClick={() => onSelectionChange(
                 competitor?.competitor_product_keys
                   || [competitor?.competitor_product_key],
-                competitor?.selection_mode === "auto"
-                  ? "exclude"
-                  : "auto",
+                "exclude",
               )}
             >
               {selectionBusy
                 ? "Пересчёт…"
-                : competitor?.selection_mode === "auto"
-                  ? "Исключить из расчёта"
-                  : "Вернуть автоматический выбор"}
+                : "Исключить из расчёта"}
             </button>
           </div>
         )}

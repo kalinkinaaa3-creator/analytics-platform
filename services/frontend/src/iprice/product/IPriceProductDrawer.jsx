@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -21,9 +22,10 @@ import {
   IPriceCompetitorCard,
 } from "./IPriceCompetitorCard";
 import {
-  formatMatchPropertyValue,
+  getIPriceCompetitorPriceProperties,
   getIPriceCompetitorSourceLabel,
 } from "./ipriceProductLabels";
+import {IPriceColorSwatch} from "./IPriceColorSwatch";
 
 import {
   IPriceProductImage,
@@ -436,7 +438,7 @@ function PriceRangeChart({ product }) {
                 style={{ left: `${metric.position}%`, "--marker-color": metric.color, "--marker-lane": metric.lane }}
               >
                 <i />
-                {(isExclusive || metric.field !== "current_retail_median") && (
+                {isExclusive && metric.field === "current_retail_median" && (
                   <strong>{formatWholeMoney(metric.value)}</strong>
                 )}
                 <small>{metric.label}</small>
@@ -769,7 +771,14 @@ function OverviewTab({
           <strong>
             {product.modification || "—"}
           </strong>
-          </div>
+        </div>
+
+        <div>
+          <span>Описание</span>
+          <strong className="iprice-product-overview__description">
+            {product.article_number_analogs || "—"}
+          </strong>
+        </div>
         </div>
 
         {Array.isArray(product.error_codes)
@@ -1113,26 +1122,6 @@ function CompetitorsTab({
 }
 
 
-function WeightedSimilarity({ evidence }) {
-  const rows = Object.entries(evidence || {});
-  if (!rows.length) {
-    return <span className="iprice-similarity">Сравнение свойств не рассчитано</span>;
-  }
-  return rows.map(([name, item]) => (
-    <span
-      key={name}
-      className={item?.matched
-        ? "iprice-similarity iprice-similarity--matched"
-        : "iprice-similarity iprice-similarity--not-matched"}
-      title={`Наше: ${formatMatchPropertyValue(item?.base)}; конкурент: ${formatMatchPropertyValue(item?.competitor)}`}
-    >
-      {item?.matched ? "✓" : "×"}{" "}
-      {item?.label || "Свойство товара"}
-    </span>
-  ));
-}
-
-
 function MarketMedianPrice({ item }) {
   const rows = (Array.isArray(item.variants) ? item.variants : [])
     .flatMap((variant) => {
@@ -1192,6 +1181,10 @@ function ModificationFilter({
   onChange,
   competitorValue = "",
   onCompetitorChange = null,
+  materialValue = "",
+  onMaterialChange = null,
+  colorValue = "",
+  onColorChange = null,
 }) {
   const modifications = Array.from(new Set(
     items
@@ -1211,6 +1204,26 @@ function ModificationFilter({
       "ru",
     )
   ));
+  const materials = Array.from(new Set(
+    items
+      .map((item) => String(item.material || "").trim())
+      .filter(Boolean),
+  )).sort((left, right) => left.localeCompare(right, "ru"));
+  const colors = Array.from(new Set(
+    items
+      .map((item) => String(item.color || "").trim())
+      .filter(Boolean),
+  )).sort((left, right) => left.localeCompare(right, "ru"));
+  const hasActiveFilters = Boolean(
+    value || competitorValue || materialValue || colorValue,
+  );
+
+  function clearFilters() {
+    onChange("");
+    onCompetitorChange?.("");
+    onMaterialChange?.("");
+    onColorChange?.("");
+  }
 
   return (
     <div className="iprice-assortment-filter">
@@ -1249,6 +1262,42 @@ function ModificationFilter({
           </select>
         </label>
       )}
+      {onMaterialChange && (
+        <label className="iprice-assortment-filter__material">
+          <span>Материал</span>
+          <select
+            value={materialValue}
+            onChange={(event) => onMaterialChange(event.target.value)}
+          >
+            <option value="">Все материалы</option>
+            {materials.map((material) => (
+              <option key={material} value={material}>{material}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      {onColorChange && (
+        <label className="iprice-assortment-filter__color">
+          <span>Цвет</span>
+          <select
+            value={colorValue}
+            onChange={(event) => onColorChange(event.target.value)}
+          >
+            <option value="">Все цвета</option>
+            {colors.map((color) => (
+              <option key={color} value={color}>{color}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      <button
+        type="button"
+        className="iprice-table-action iprice-assortment-filter__clear"
+        disabled={!hasActiveFilters}
+        onClick={clearFilters}
+      >
+        Очистить фильтры
+      </button>
       <span className="iprice-assortment-filter__count">
         Показано {items.filter((item) => (
           (
@@ -1260,6 +1309,14 @@ function ModificationFilter({
           && (
             !competitorValue
             || String(item.source || "").trim().toLowerCase() === competitorValue
+          )
+          && (
+            !materialValue
+            || String(item.material || "").trim() === materialValue
+          )
+          && (
+            !colorValue
+            || String(item.color || "").trim() === colorValue
           )
         )).length} из {items.length}
       </span>
@@ -1278,6 +1335,8 @@ function MarketTab({
 }) {
   const [modificationFilter, setModificationFilter] = useState("");
   const [competitorFilter, setCompetitorFilter] = useState("");
+  const [materialFilter, setMaterialFilter] = useState("");
+  const [colorFilter, setColorFilter] = useState("");
   const results = Array.isArray(data?.results) ? data.results : [];
   const filteredResults = results.filter((item) => (
     (
@@ -1289,6 +1348,14 @@ function MarketTab({
     && (
       !competitorFilter
       || String(item.source || "").trim().toLowerCase() === competitorFilter
+    )
+    && (
+      !materialFilter
+      || String(item.material || "").trim() === materialFilter
+    )
+    && (
+      !colorFilter
+      || String(item.color || "").trim() === colorFilter
     )
   ));
 
@@ -1308,11 +1375,6 @@ function MarketTab({
     );
   }
 
-  const eligibleCount = results.filter((item) => item.match_eligible).length;
-  const calculatedCount = results.filter(
-    (item) => item.similarity_score !== null && item.similarity_score !== undefined
-  ).length;
-
   if (!results.length) {
     return (
       <div className="iprice-product-empty">
@@ -1323,35 +1385,16 @@ function MarketTab({
 
   return (
     <>
-      <div className="iprice-market-summary">
-        <div>
-          <span>Аналогов</span>
-          <strong>
-            {results.length}
-          </strong>
-        </div>
-
-        <div>
-          <span>Прошли пороги</span>
-          <strong>
-            {eligibleCount}
-          </strong>
-        </div>
-
-        <div>
-          <span>Сходство рассчитано</span>
-          <strong>
-            {calculatedCount}
-          </strong>
-        </div>
-      </div>
-
       <ModificationFilter
         items={results}
         value={modificationFilter}
         onChange={setModificationFilter}
         competitorValue={competitorFilter}
         onCompetitorChange={setCompetitorFilter}
+        materialValue={materialFilter}
+        onMaterialChange={setMaterialFilter}
+        colorValue={colorFilter}
+        onColorChange={setColorFilter}
       />
 
       {filteredResults.length ? (
@@ -1363,7 +1406,8 @@ function MarketTab({
           >
             <IPriceProductImage
               src={item.image}
-              alt={item.subcategory}
+              alt={item.name || item.subcategory}
+              caption={item.name || item.subcategory}
               className="iprice-product-drawer__image"
               placeholderClassName="iprice-product-drawer__image-placeholder"
               placeholderText="Нет изображения"
@@ -1376,13 +1420,6 @@ function MarketTab({
                     item.source
                   )}
                 </strong>
-
-                <span>
-                  Сходство:{" "}
-                  {item.similarity_score === null || item.similarity_score === undefined
-                    ? "—"
-                    : `${Number(item.similarity_score).toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%`}
-                </span>
               </div>
 
               <h4>
@@ -1403,9 +1440,8 @@ function MarketTab({
                   {item.material || "—"}
                 </span>
 
-                <span>
-                  Цвет iPrice:{" "}
-                  {item.color || "—"}
+                <span className="iprice-market-card__property-row">
+                  Цвет iPrice: <IPriceColorSwatch color={item.color} />
                 </span>
 
                 <span>
@@ -1413,20 +1449,25 @@ function MarketTab({
                   {item.modification || "—"}
                 </span>
 
+                {item.article_number_analogs && (
+                  <span className="iprice-market-card__description">
+                    {item.article_number_analogs}
+                  </span>
+                )}
+
                 {item.additional_property && (
                   <span>
                     Вариант товара: {item.additional_property}
                   </span>
                 )}
-              </div>
-
-              <div className="iprice-market-card__similarity">
-                <span className="iprice-similarity">
-                  Покрытие свойств: {item.match_coverage === null || item.match_coverage === undefined
-                    ? "—"
-                    : `${Number(item.match_coverage).toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%`}
-                </span>
-                <WeightedSimilarity evidence={item.similarity} />
+                {getIPriceCompetitorPriceProperties(
+                  item.source,
+                  item.price_variants,
+                ).map((property) => (
+                  <span key={`${property.label}|${property.value}`}>
+                    {property.label}: {property.value}
+                  </span>
+                ))}
               </div>
 
               <div className="iprice-market-card__flags">
@@ -1435,46 +1476,15 @@ function MarketTab({
                     Участвует в расчёте
                   </span>
                 )}
-                {item.selection_mode === "include" && (
-                  <span>Включён вручную</span>
-                )}
-                {item.selection_mode === "exclude" && (
-                  <span className="iprice-market-card__flag--not-used">
-                    Исключён вручную
-                  </span>
-                )}
-                {item.selection_mode === "auto" && item.match_eligible && (
-                  <span>Автоматически прошёл пороги</span>
-                )}
-                {item.selection_mode === "auto" && !item.match_eligible && (
-                  <span className="iprice-market-card__flag--not-used">
-                    Не прошёл автоматические пороги
-                  </span>
-                )}
                 {item.is_price_used_in_calculation === false && (
-                  <span className="iprice-market-card__flag--not-used">
-                    Цена отсутствует
+                  <span className="iprice-market-card__flag--warning">
+                    Цена аналога отсутствует — в расчёте не используется
                   </span>
                 )}
               </div>
 
               <div className="iprice-market-card__actions">
-                {item.selection_mode !== "auto" ? (
-                  <button
-                    type="button"
-                    className="iprice-table-action"
-                    disabled={!selectionEditable || selectionBusyKey === item.group_key}
-                    onClick={() => onSelectionChange?.(
-                      item.competitor_product_keys,
-                      "auto",
-                      item.group_key,
-                    )}
-                  >
-                    {selectionBusyKey === item.group_key
-                      ? "Пересчёт…"
-                      : "Вернуть автоматический выбор"}
-                  </button>
-                ) : item.is_used_in_snapshot ? (
+                {item.is_used_in_snapshot ? (
                   <button
                     type="button"
                     className="iprice-table-action"
@@ -1527,12 +1537,24 @@ function OwnAssortmentTab({
   data,
 }) {
   const [modificationFilter, setModificationFilter] = useState("");
+  const [materialFilter, setMaterialFilter] = useState("");
+  const [colorFilter, setColorFilter] = useState("");
   const results = Array.isArray(data?.results) ? data.results : [];
   const filteredResults = results.filter((item) => (
-    !modificationFilter
-    || (modificationFilter === EMPTY_MODIFICATION_FILTER
-      ? !String(item.modification || "").trim()
-      : String(item.modification || "").trim() === modificationFilter)
+    (
+      !modificationFilter
+      || (modificationFilter === EMPTY_MODIFICATION_FILTER
+        ? !String(item.modification || "").trim()
+        : String(item.modification || "").trim() === modificationFilter)
+    )
+    && (
+      !materialFilter
+      || String(item.material || "").trim() === materialFilter
+    )
+    && (
+      !colorFilter
+      || String(item.color || "").trim() === colorFilter
+    )
   ));
 
   if (loading) {
@@ -1561,25 +1583,14 @@ function OwnAssortmentTab({
 
   return (
     <>
-      <div className="iprice-market-summary">
-        <div>
-          <span>Товаров</span>
-          <strong>{data.counts?.cards ?? 0}</strong>
-        </div>
-        <div>
-          <span>Прошли пороги</span>
-          <strong>{data.counts?.eligible ?? 0}</strong>
-        </div>
-        <div>
-          <span>Сходство рассчитано</span>
-          <strong>{data.counts?.calculated ?? 0}</strong>
-        </div>
-      </div>
-
       <ModificationFilter
         items={results}
         value={modificationFilter}
         onChange={setModificationFilter}
+        materialValue={materialFilter}
+        onMaterialChange={setMaterialFilter}
+        colorValue={colorFilter}
+        onColorChange={setColorFilter}
       />
 
       {filteredResults.length ? (
@@ -1592,6 +1603,7 @@ function OwnAssortmentTab({
             <IPriceProductImage
               src={item.image}
               alt={item.name}
+              caption={item.site_name || item.name}
               className="iprice-product-drawer__image"
               placeholderClassName="iprice-product-drawer__image-placeholder"
               placeholderText="Нет изображения"
@@ -1599,11 +1611,6 @@ function OwnAssortmentTab({
             <div className="iprice-market-card__body">
               <div className="iprice-market-card__header">
                 <strong>Ключ системы: {item.product_key}</strong>
-                <span>
-                  Сходство: {item.similarity_score === null || item.similarity_score === undefined
-                    ? "—"
-                    : `${Number(item.similarity_score).toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%`}
-                </span>
               </div>
               <h4>{item.name || "Без наименования"}</h4>
               <details className="iprice-market-price-details">
@@ -1634,16 +1641,15 @@ function OwnAssortmentTab({
                 <span>Код 1С: {item.code_1c || "—"}</span>
                 <span>Медиана рынка: {formatWholeMoney(item.market_price)}</span>
                 <span>Материал iPrice: {item.material || "—"}</span>
-                <span>Цвет iPrice: {item.color || "—"}</span>
-                <span>Модификация iPrice: {item.modification || "—"}</span>
-              </div>
-              <div className="iprice-market-card__similarity">
-                <span className="iprice-similarity">
-                  Покрытие свойств: {item.match_coverage === null || item.match_coverage === undefined
-                    ? "—"
-                    : `${Number(item.match_coverage).toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%`}
+                <span className="iprice-market-card__property-row">
+                  Цвет iPrice: <IPriceColorSwatch color={item.color} />
                 </span>
-                <WeightedSimilarity evidence={item.similarity} />
+                <span>Модификация iPrice: {item.modification || "—"}</span>
+                {item.article_number_analogs && (
+                  <span className="iprice-market-card__description">
+                    {item.article_number_analogs}
+                  </span>
+                )}
               </div>
               {item.url && (
                 <a href={item.url} target="_blank" rel="noreferrer">
@@ -1714,6 +1720,8 @@ export function IPriceProductDrawer({
   const [ownLoading, setOwnLoading] = useState(false);
   const [ownError, setOwnError] = useState("");
   const [selectionBusyKey, setSelectionBusyKey] = useState("");
+  const marketRequestIdRef = useRef(0);
+  const ownRequestIdRef = useRef(0);
 
 
   const loadDetail = useCallback(
@@ -1768,6 +1776,8 @@ export function IPriceProductDrawer({
         return;
       }
 
+      const requestId = marketRequestIdRef.current + 1;
+      marketRequestIdRef.current = requestId;
       setMarketLoading(true);
       setMarketError("");
 
@@ -1779,20 +1789,26 @@ export function IPriceProductDrawer({
           )
         );
 
-        setMarketData(result);
+        if (marketRequestIdRef.current === requestId) {
+          setMarketData(result);
+        }
       } catch (requestError) {
-        setMarketError(
-          requestError.response
-            ?.data?.message
-          || requestError.response
-            ?.data?.detail
-          || (
-            "Не удалось загрузить "
-            + "рыночный ассортимент."
-          )
-        );
+        if (marketRequestIdRef.current === requestId) {
+          setMarketError(
+            requestError.response
+              ?.data?.message
+            || requestError.response
+              ?.data?.detail
+            || (
+              "Не удалось загрузить "
+              + "рыночный ассортимент."
+            )
+          );
+        }
       } finally {
-        setMarketLoading(false);
+        if (marketRequestIdRef.current === requestId) {
+          setMarketLoading(false);
+        }
       }
     },
     [
@@ -1806,20 +1822,27 @@ export function IPriceProductDrawer({
       if (!snapshotId || !productId) {
         return;
       }
+      const requestId = ownRequestIdRef.current + 1;
+      ownRequestIdRef.current = requestId;
       setOwnLoading(true);
       setOwnError("");
       try {
-        setOwnData(
-          await getIPriceOwnAssortment(snapshotId, productId)
-        );
+        const result = await getIPriceOwnAssortment(snapshotId, productId);
+        if (ownRequestIdRef.current === requestId) {
+          setOwnData(result);
+        }
       } catch (requestError) {
-        setOwnError(
-          requestError.response?.data?.message
-          || requestError.response?.data?.detail
-          || "Не удалось загрузить собственные аналоги."
-        );
+        if (ownRequestIdRef.current === requestId) {
+          setOwnError(
+            requestError.response?.data?.message
+            || requestError.response?.data?.detail
+            || "Не удалось загрузить собственные аналоги."
+          );
+        }
       } finally {
-        setOwnLoading(false);
+        if (ownRequestIdRef.current === requestId) {
+          setOwnLoading(false);
+        }
       }
     },
     [snapshotId, productId],
@@ -1868,15 +1891,13 @@ export function IPriceProductDrawer({
 
   useEffect(() => {
     if (
-      activeTab === TAB_OWN
-      && !ownData
+      !ownData
       && !ownLoading
       && !ownError
     ) {
       loadOwnAssortment();
     }
   }, [
-    activeTab,
     ownData,
     ownLoading,
     ownError,
@@ -1886,15 +1907,13 @@ export function IPriceProductDrawer({
 
   useEffect(() => {
     if (
-      activeTab === TAB_MARKET
-      && !marketData
+      !marketData
       && !marketLoading
       && !marketError
     ) {
       loadMarket();
     }
   }, [
-    activeTab,
     marketData,
     marketLoading,
     marketError,
@@ -2150,6 +2169,7 @@ export function IPriceProductDrawer({
               <IPriceProductImage
                 src={product.image}
                 alt={product.nom}
+                caption={product.site_name || product.nom}
                 className="iprice-product-drawer__image"
                 placeholderClassName="iprice-product-drawer__image-placeholder"
                 placeholderText="Нет изображения"
@@ -2201,6 +2221,18 @@ export function IPriceProductDrawer({
                 <strong>{product.modification || "—"}</strong>
               </div>
 
+              <div className="iprice-product-drawer__color">
+                <span>Цвет iPrice</span>
+                <strong className="iprice-product-drawer__color-value">
+                  <IPriceColorSwatch color={product.color} />
+                </strong>
+              </div>
+
+              <div className="iprice-product-drawer__description">
+                <span>Описание</span>
+                <strong>{product.article_number_analogs || "—"}</strong>
+              </div>
+
               <button
                 type="button"
                 className="iprice-action-button iprice-action-button--primary iprice-product-drawer__pricing-button"
@@ -2249,6 +2281,18 @@ export function IPriceProductDrawer({
                     === TAB_COMPETITORS && (
                     <span>
                       {competitors.length}
+                    </span>
+                  )}
+
+                  {tab.id === TAB_MARKET && (
+                    <span>
+                      {marketLoading ? "…" : (marketData?.counts?.cards ?? "—")}
+                    </span>
+                  )}
+
+                  {tab.id === TAB_OWN && (
+                    <span>
+                      {ownLoading ? "…" : (ownData?.counts?.cards ?? "—")}
                     </span>
                   )}
                 </button>

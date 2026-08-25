@@ -18,6 +18,7 @@ import {useSearchParams} from "react-router-dom";
 import {
   IPriceDependentMultiSelect,
 } from "../components/IPriceDependentMultiSelect";
+import {clearIPriceFilterSearches} from "../components/ipriceFilterEvents";
 
 import {
   IPriceProductImage,
@@ -1581,6 +1582,7 @@ export function IPriceCalculationTab({
     filtersRequestIdRef.current += 1;
 
     setMode(nextMode);
+    clearIPriceFilterSearches();
     setFilters({});
     setFilterOptions({});
 
@@ -1638,6 +1640,7 @@ export function IPriceCalculationTab({
     rowsRequestIdRef.current += 1;
     filtersRequestIdRef.current += 1;
 
+    clearIPriceFilterSearches();
     setFilters({});
     setTransferredSelection(null);
     setSearchParams((previous) => {
@@ -2000,11 +2003,6 @@ export function IPriceCalculationTab({
           <div className="iprice-filters-actions">
             <button
               type="button"
-              disabled={
-                selectedFiltersCount === 0
-                && !appliedSearch
-                && !searchInput
-              }
               onClick={clearAll}
             >
               Очистить фильтры

@@ -4,11 +4,6 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
 
-from datasets.services.parsers.product_url_export import (
-    IPRICE_CLASSIFICATION_COLUMNS,
-)
-
-
 EXCEL_CONTENT_TYPE = (
     "application/vnd.openxmlformats-officedocument."
     "spreadsheetml.sheet"
@@ -46,7 +41,17 @@ UPLOAD_TEMPLATE_HEADERS = {
         "prefix",
         "shipp_region",
     ),
-    "product_classification": IPRICE_CLASSIFICATION_COLUMNS,
+    "product_classification": (
+        "product_key",
+        "category",
+        "subcategory",
+        "subcategory_type",
+        "color",
+        "material",
+        "modification",
+        "article_number_analogs",
+        "item_type",
+    ),
 }
 
 

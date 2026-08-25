@@ -3,6 +3,7 @@ from datetime import datetime
 from io import BytesIO
 
 from django.utils import timezone
+from django.db.models import Exists, Max, OuterRef
 
 from openpyxl import Workbook
 from openpyxl.cell import WriteOnlyCell
@@ -1146,8 +1147,7 @@ def _add_active_product_classification_sheet(
     """
     Выгружает действующую классификацию товаров.
 
-    В лист входят ручные и автоматически созданные
-    активные классификации.
+    В лист входят только действующие классификации.
     """
 
     worksheet = workbook.create_sheet(
@@ -1156,22 +1156,16 @@ def _add_active_product_classification_sheet(
 
     headers = [
         "product_key",
-        "source",
-        "prefix",
         "category",
         "subcategory",
         "subcategory_type",
-        "material",
         "color",
+        "material",
         "modification",
-        "item_type",
-        "url",
+        "article_number_analogs",
         "image",
-        "match_type",
-        "match_type_name",
-        "status",
-        "date_add",
-        "date_update",
+        "url",
+        "item_type",
     ]
 
     worksheet.append([
@@ -1201,89 +1195,35 @@ def _add_active_product_classification_sheet(
             "material",
             "color",
             "modification",
+            "article_number_analogs",
             "item_type",
             "url",
             "image",
-            "match_type",
-            "status",
-            "date_add",
-            "date_update",
         )
     )
 
     if not classification_rows:
         return
 
-    product_keys = {
-        row["product_key"]
-        for row in classification_rows
-    }
-
-    url_rows = {
-        row["id"]: row
-        for row in (
-            ParserProductUrl.objects
-            .filter(
-                id__in=product_keys,
-            )
-            .values(
-                "id",
-                "source",
-                "prefix",
-            )
-        )
-    }
-
-    match_type_labels = dict(
-        ParserProductClassification
-        .MATCH_TYPE_CHOICES
-    )
-
     for classification in (
         classification_rows
     ):
-        product_key = (
-            classification[
-                "product_key"
-            ]
-        )
-
-        url_row = url_rows.get(
-            product_key,
-            {},
-        )
-
-        match_type = (
-            classification[
-                "match_type"
-            ]
-        )
-
         row = [
-            product_key,
-            url_row.get("source"),
-            url_row.get("prefix"),
+            classification["product_key"],
             classification["category"],
             classification["subcategory"],
             classification[
                 "subcategory_type"
             ],
-            classification["material"],
             classification["color"],
+            classification["material"],
             classification[
                 "modification"
             ],
-            classification["item_type"],
-            classification["url"],
+            classification["article_number_analogs"],
             classification["image"],
-            match_type,
-            match_type_labels.get(
-                match_type,
-                match_type,
-            ),
-            classification["status"],
-            classification["date_add"],
-            classification["date_update"],
+            classification["url"],
+            classification["item_type"],
         ]
 
         worksheet.append([
@@ -1453,6 +1393,74 @@ def _add_active_product_match_sheet(
         worksheet.append([
             _excel_value(value)
             for value in row
+        ])
+
+
+# ============================================================
+# ACTIVE PRODUCT CLASSIFICATION STATUS
+# ============================================================
+
+
+def _add_classification_status_sheet(workbook):
+    """Выгружает активные URL с состоянием относительно классификации.
+
+    Контрольная точка — последняя загрузка файла классификации. URL, который
+    существовал до неё и ни разу не классифицировался, считается сознательно
+    оставленным без классификации. URL, добавленный позже, считается новым
+    товаром следующего полного прохода парсеров.
+
+    Активно классифицированные товары также включаются в лист с состоянием
+    ``Текущая классификация``. История неактивной классификации отдельно не
+    выделяется, чтобы не смешивать её с актуальным состоянием товара.
+    """
+    worksheet = workbook.create_sheet(title="classification_status")
+    headers = [
+        "classification_status",
+        "product_key",
+        "source",
+        "prefix",
+        "url",
+        "additional_property",
+        "date_add",
+        "date_update",
+        "is_loaded",
+        "last_error",
+    ]
+    worksheet.append([_header_cell(worksheet, value) for value in headers])
+
+    classification_boundary = ParserProductClassification.objects.aggregate(
+        value=Max("date_update"),
+    )["value"]
+    active_classification = ParserProductClassification.objects.filter(
+        product_key=OuterRef("id"),
+        status=ParserProductClassification.STATUS_ACTIVE,
+    )
+    rows = ParserProductUrl.objects.filter(
+        status=ParserProductUrl.STATUS_ACTIVE,
+    ).annotate(
+        has_active_classification=Exists(active_classification),
+    ).order_by("source", "id")
+
+    for row in rows.iterator(chunk_size=1000):
+        if row.has_active_classification:
+            group = "Текущая классификация"
+        elif classification_boundary is None:
+            group = "Сознательно не классифицирован ранее"
+        elif row.date_add and row.date_add > classification_boundary:
+            group = "Новый после последней загрузки классификации"
+        else:
+            group = "Сознательно не классифицирован ранее"
+        worksheet.append([
+            group,
+            row.id,
+            row.source,
+            row.prefix,
+            row.url,
+            row.additional_property,
+            _excel_value(row.date_add),
+            _excel_value(row.date_update),
+            row.is_loaded,
+            row.last_error,
         ])
 
 
@@ -1664,6 +1672,10 @@ def export_iprice_parser_products():
         workbook,
         base_url_objects,
     )
+
+    _add_active_product_classification_sheet(workbook)
+    _add_active_product_match_sheet(workbook)
+    _add_classification_status_sheet(workbook)
 
     # --------------------------------------------------------
     # Сохраняем workbook в память

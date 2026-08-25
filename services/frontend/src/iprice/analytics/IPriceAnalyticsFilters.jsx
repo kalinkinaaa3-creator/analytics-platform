@@ -6,6 +6,7 @@ import {
 import {
   IPriceDependentMultiSelect,
 } from "../components/IPriceDependentMultiSelect";
+import {clearIPriceFilterSearches} from "../components/ipriceFilterEvents";
 
 import {
   IPRICE_REGION_FILTERS,
@@ -19,7 +20,6 @@ export function IPriceAnalyticsFilters({
   error = "",
   onChange,
   onClear,
-  canClear = false,
 }) {
   const [expanded, setExpanded] = useState(true);
 
@@ -90,8 +90,11 @@ export function IPriceAnalyticsFilters({
           <div className="iprice-filters-actions">
             <button
               type="button"
-              disabled={loading || (selectedCount === 0 && !canClear)}
-              onClick={() => onClear?.()}
+              disabled={loading}
+              onClick={() => {
+                clearIPriceFilterSearches();
+                onClear?.();
+              }}
             >
               Очистить фильтры
             </button>

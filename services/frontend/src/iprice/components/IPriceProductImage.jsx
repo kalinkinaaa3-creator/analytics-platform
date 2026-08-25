@@ -17,6 +17,7 @@ const VIEWPORT_PADDING = 16;
 export function IPriceProductImage({
   src,
   alt,
+  caption,
   className = "iprice-row-image",
   placeholderClassName = "iprice-row-image-placeholder",
   placeholderText = "Нет фото",
@@ -147,9 +148,9 @@ export function IPriceProductImage({
         >
           <img src={src} alt="" />
 
-          {alt && (
+          {(caption || alt) && (
             <div className="iprice-product-image-preview__caption">
-              {alt}
+              {caption || alt}
             </div>
           )}
         </div>,

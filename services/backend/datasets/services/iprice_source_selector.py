@@ -383,8 +383,11 @@ def get_competitor_price_data(
        положительной final_price, не превышающий calculation_date.
     4. Сохранить все строки этого дня как variants.
     5. Для расчета выбрать MAX(final_price).
+    6. Если положительной цены нет, вернуть информационные варианты
+       последнего доступного дня с calculation_price=None. Они нужны для
+       изображения и свойств карточки, но в расчёте не участвуют.
 
-    Если URL, модель источника или цена отсутствуют,
+    Если URL, модель источника или любые строки товара отсутствуют,
     возвращается None.
     """
 
@@ -422,37 +425,32 @@ def get_competitor_price_data(
     if price_model is None:
         return None
 
-    candidate_rows = list(
-        price_model.objects
-        .filter(
-            product_key=product_key,
-            date_add__date__lte=calculation_date,
-            final_price__gt=0,
-        )
-        .order_by(
-            "-date_add",
-            "-id",
-        )
+    base_queryset = price_model.objects.filter(
+        product_key=product_key,
+        date_add__date__lte=calculation_date,
     )
-
-    if not candidate_rows:
+    latest_positive_row = (
+        base_queryset.filter(final_price__gt=0)
+        .order_by("-date_add", "-id")
+        .first()
+    )
+    latest_any_row = latest_positive_row or (
+        base_queryset.order_by("-date_add", "-id").first()
+    )
+    if latest_any_row is None or latest_any_row.date_add is None:
         return None
 
-    latest_day = max(
-        get_local_date(row.date_add)
-        for row in candidate_rows
-        if row.date_add is not None
-    )
+    latest_day = get_local_date(latest_any_row.date_add)
+    latest_rows_queryset = base_queryset.filter(date_add__date=latest_day)
+    if latest_positive_row is not None:
+        latest_rows_queryset = latest_rows_queryset.filter(final_price__gt=0)
+    latest_rows = list(latest_rows_queryset.order_by("id"))
 
-    latest_rows = [
-        row
-        for row in candidate_rows
-        if get_local_date(
-            row.date_add
-        ) == latest_day
+    valid_final_prices = [
+        row.final_price
+        for row in latest_rows
+        if positive_price_or_none(row.final_price) is not None
     ]
-
-    valid_final_prices = [row.final_price for row in latest_rows]
 
     calculation_price = (
         max(valid_final_prices)
@@ -471,16 +469,13 @@ def get_competitor_price_data(
     calculation_row = None
 
     if calculation_price is not None:
-        calculation_row = max(
+        calculation_row = min(
             (
                 row
                 for row in latest_rows
-                if row.final_price is not None
+                if row.final_price == calculation_price
             ),
-            key=lambda row: (
-                row.final_price,
-                row.id,
-            ),
+            key=lambda row: row.id,
         )
 
     return {
@@ -599,7 +594,7 @@ def get_base_product_price(
     2. За этот день:
        - сначала строки с заполненным code_1c;
        - затем максимальная final_price;
-       - при равенстве — максимальный id.
+       - при равенстве — минимальный id.
     """
 
     rows = list(
@@ -645,15 +640,20 @@ def get_base_product_price(
     ]
 
     if rows_with_final_price:
-        return max(
-            rows_with_final_price,
-            key=lambda row: (
-                row.final_price,
-                row.id,
+        max_final_price = max(
+            row.final_price
+            for row in rows_with_final_price
+        )
+        return min(
+            (
+                row
+                for row in rows_with_final_price
+                if row.final_price == max_final_price
             ),
+            key=lambda row: row.id,
         )
 
-    return max(
+    return min(
         rows_with_code,
         key=lambda row: row.id,
     )

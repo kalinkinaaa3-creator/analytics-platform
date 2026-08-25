@@ -1155,7 +1155,7 @@ def build_iprice_snapshot_products(
 
                 if price_data is None:
                     missing_competitor_price += 1
-                    error_codes.append(
+                    warning_codes.append(
                         "MISSING_COMPETITOR_PRICE"
                     )
 
@@ -1167,7 +1167,7 @@ def build_iprice_snapshot_products(
                     )
 
                     if calculation_price is None:
-                        error_codes.append(
+                        warning_codes.append(
                             "MISSING_FINAL_PRICE"
                         )
 
@@ -1236,7 +1236,11 @@ def build_iprice_snapshot_products(
                         calculation_status=(
                             "error"
                             if error_codes
-                            else "success"
+                            else (
+                                "warning"
+                                if warning_codes
+                                else "success"
+                            )
                         ),
                         warning_codes=(
                             warning_codes
@@ -1316,26 +1320,20 @@ def build_iprice_snapshot_products(
                 .PRICING_METHOD_ANALOG
                 and not rrp_values
             ):
+                snapshot_product.pricing_method = (
+                    IPriceSnapshotProduct.PRICING_METHOD_EXCLUSIVE
+                )
                 snapshot_product.calculation_status = (
-                    IPriceSnapshotProduct
-                    .STATUS_ERROR
+                    IPriceSnapshotProduct.STATUS_WARNING
                 )
-
-                error_codes = list(
-                    snapshot_product.error_codes
-                )
-
-                if (
-                    "NO_VALID_COMPETITOR_PRICES"
-                    not in error_codes
-                ):
-                    error_codes.append(
-                        "NO_VALID_COMPETITOR_PRICES"
-                    )
-
-                snapshot_product.error_codes = (
-                    error_codes
-                )
+                warning_codes = list(snapshot_product.warning_codes or [])
+                if "NO_VALID_COMPETITOR_PRICES" not in warning_codes:
+                    warning_codes.append("NO_VALID_COMPETITOR_PRICES")
+                snapshot_product.warning_codes = warning_codes
+                snapshot_product.error_codes = [
+                    code for code in (snapshot_product.error_codes or [])
+                    if code != "NO_VALID_COMPETITOR_PRICES"
+                ]
 
             products_to_update.append(
                 snapshot_product
@@ -1360,6 +1358,8 @@ def build_iprice_snapshot_products(
                             "competitor_percent"
                         ),
                         "calculation_status",
+                        "pricing_method",
+                        "warning_codes",
                         "error_codes",
                     ],
                     batch_size=1000,
@@ -1646,6 +1646,10 @@ def build_iprice_snapshot_regions(
                 warning_codes = []
                 error_codes = []
                 calculation_details = {}
+                if "NO_VALID_COMPETITOR_PRICES" in (
+                    snapshot_product.warning_codes or []
+                ):
+                    warning_codes.append("NO_VALID_COMPETITOR_PRICES")
 
                 route_key = (
                     int(product_key),
@@ -1715,7 +1719,7 @@ def build_iprice_snapshot_regions(
 
                 if nomenclature_price_row is None:
                     missing_nomenclature_price += 1
-                    error_codes.append(
+                    warning_codes.append(
                         "MISSING_NOMENCLATURE_PRICE"
                     )
 
@@ -1831,7 +1835,7 @@ def build_iprice_snapshot_regions(
                     and not competitor_rrps
                 ):
                     no_regional_competitors += 1
-                    error_codes.append(
+                    warning_codes.append(
                         "NO_REGIONAL_COMPETITORS"
                     )
 
@@ -1853,9 +1857,11 @@ def build_iprice_snapshot_regions(
                     )
 
                 elif (
-                    snapshot_product.pricing_method
-                    == IPriceSnapshotProduct
-                    .PRICING_METHOD_EXCLUSIVE
+                    (
+                        snapshot_product.pricing_method
+                        == IPriceSnapshotProduct.PRICING_METHOD_EXCLUSIVE
+                        or not competitor_rrps
+                    )
                     and cost_with_logistics is not None
                     and config is not None
                 ):

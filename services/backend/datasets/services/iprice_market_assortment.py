@@ -8,8 +8,6 @@ from typing import Any
 from django.db.models import Q
 
 from datasets.models import (
-    AnalyticsProductClassificationApplication,
-    AnalyticsProductMatchCandidate,
     IPriceSnapshotProduct,
     ParserPrefix,
     ParserProductClassification,
@@ -17,16 +15,13 @@ from datasets.models import (
     ParserProductUrl,
 )
 
-from datasets.services.parsers.product_match_loader import (
+from datasets.services.parsers.regional_product_groups import (
     build_competitor_url_groups,
     get_prefixes_by_source,
 )
 from datasets.services.iprice_source_selector import (
     get_competitor_price_data,
     positive_price_or_none,
-)
-from datasets.services.parsers.analytics_product_property_labels import (
-    label_match_evidence,
 )
 
 
@@ -572,19 +567,11 @@ def choose_representative_variant(
         variant: dict,
     ):
         return (
-            -(variant.get("similarity_score") or 0),
             -int(
                 variant["is_used_in_snapshot"]
             ),
             -int(
                 variant["is_matched_current"]
-            ),
-            -int(
-                variant["classification_match_type"]
-                == (
-                    ParserProductClassification
-                    .MATCH_TYPE_MANUAL
-                )
             ),
             variant["product_key"],
         )
@@ -674,6 +661,8 @@ def build_market_card(
             representative["source"]
         ),
 
+        "name": representative.get("name"),
+
         "product_key": (
             representative["product_key"]
         ),
@@ -708,6 +697,7 @@ def build_market_card(
         "modification": (
             representative["modification"]
         ),
+        "article_number_analogs": representative.get("article_number_analogs"),
         "additional_property": (
             representative.get("additional_property")
         ),
@@ -716,20 +706,6 @@ def build_market_card(
         "image": representative["image"],
         "price": market_median,
 
-        "similarity_score": (
-            representative[
-                "similarity_score"
-            ]
-        ),
-        "similarity": (
-            representative["similarity"]
-        ),
-        "match_coverage": representative.get("match_coverage"),
-        "match_eligible": any(
-            variant.get("match_eligible", False) for variant in variants
-        ),
-        "match_threshold_status": representative.get("match_threshold_status", ""),
-        "match_reasons": representative.get("match_reasons", []),
 
         "is_matched_any": any(
             variant["is_matched_any"]
@@ -762,6 +738,12 @@ def build_market_card(
         ),
 
         "regions": regions,
+
+        "price_variants": [
+            price_variant
+            for variant in variants
+            for price_variant in variant.get("price_variants", [])
+        ],
 
         "regional_variants_count": len(
             variants
@@ -820,7 +802,6 @@ def market_card_sort_key(
     """
 
     return (
-        -(card.get("similarity_score") or 0),
         -int(
             card["is_used_in_snapshot"]
         ),
@@ -878,22 +859,6 @@ def build_iprice_market_assortment(
         )
     )
 
-    application = AnalyticsProductClassificationApplication.objects.select_related(
-        "run"
-    ).order_by("-date_add", "-id").first()
-    weighted_matches = {}
-    if application is not None:
-        weighted_matches = {
-            row["product_key_competitor"]: row
-            for row in AnalyticsProductMatchCandidate.objects.filter(
-                application=application,
-                product_key_base=snapshot_product.base_product_key,
-            ).values(
-                "product_key_competitor", "match_score", "match_coverage",
-                "is_eligible", "threshold_status", "control_reasons",
-                "match_evidence",
-            )
-        }
 
     if not classifications:
         return {
@@ -1112,18 +1077,6 @@ def build_iprice_market_assortment(
             },
         )
 
-        weighted = weighted_matches.get(product_key)
-        similarity = {
-            "score": weighted["match_score"] if weighted else None,
-            "coverage": weighted["match_coverage"] if weighted else None,
-            "eligible": weighted["is_eligible"] if weighted else False,
-            "threshold_status": weighted["threshold_status"] if weighted else "",
-            "reasons": weighted["control_reasons"] if weighted else ["MATCH_NOT_CALCULATED"],
-            "evidence": label_match_evidence(
-                weighted["match_evidence"] if weighted else {}
-            ),
-        }
-
         variants_by_group[
             group_key
         ].append({
@@ -1154,6 +1107,7 @@ def build_iprice_market_assortment(
             "modification": (
                 classification.modification
             ),
+            "article_number_analogs": classification.article_number_analogs,
             "additional_property": (
                 price_data_by_product[product_key].get("additional_property")
                 if price_data_by_product[product_key]
@@ -1168,6 +1122,33 @@ def build_iprice_market_assortment(
             ),
             "image": (
                 classification.image
+            ),
+            "name": (
+                price_data_by_product[product_key]["variants"][0].get("name")
+                if price_data_by_product[product_key]
+                and price_data_by_product[product_key].get("variants")
+                else None
+            ),
+            "price_variants": (
+                [
+                    {
+                        **price_variant,
+                        "is_selected_price_row": (
+                            price_data_by_product[product_key].get(
+                                "calculation_row_id"
+                            ) is not None
+                            and price_variant.get("id")
+                            == price_data_by_product[product_key].get(
+                                "calculation_row_id"
+                            )
+                        ),
+                    }
+                    for price_variant in price_data_by_product[product_key].get(
+                        "variants", []
+                    )
+                ]
+                if price_data_by_product[product_key]
+                else []
             ),
             "price": (
                 price_data_by_product[
@@ -1185,18 +1166,6 @@ def build_iprice_market_assortment(
                 ) is not None
             ),
 
-            "classification_match_type": (
-                classification.match_type
-            ),
-
-            "similarity_score": (
-                similarity["score"]
-            ),
-            "match_coverage": similarity["coverage"],
-            "match_eligible": similarity["eligible"],
-            "match_threshold_status": similarity["threshold_status"],
-            "match_reasons": similarity["reasons"],
-            "similarity": similarity["evidence"],
 
             "is_matched_any": (
                 match_item[
@@ -1386,7 +1355,17 @@ def group_snapshot_competitor_cards(items: list[dict]) -> list[dict]:
                         normalized_region.casefold()
                     ] = normalized_region
             item_variants = item.get("price_variants") or []
-            all_variants.extend(item_variants)
+            selected_price_row_id = item.get("source_price_row_id")
+            all_variants.extend(
+                {
+                    **variant,
+                    "is_selected_price_row": (
+                        selected_price_row_id is not None
+                        and variant.get("id") == selected_price_row_id
+                    ),
+                }
+                for variant in item_variants
+            )
             market_regions = []
             for variant in item_variants:
                 market_regions.extend(variant.get("market_regions") or [])

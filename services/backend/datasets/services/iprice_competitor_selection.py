@@ -5,8 +5,6 @@ from decimal import Decimal
 from django.db import transaction
 
 from datasets.models import (
-    AnalyticsProductClassificationApplication,
-    AnalyticsProductMatchCandidate,
     IPriceCompetitorSelectionOverride,
     IPriceCompetitorSelectionChange,
     IPriceSnapshot,
@@ -31,12 +29,6 @@ from datasets.services.iprice_source_selector import (
     get_competitor_price_data,
     get_competitor_regions,
 )
-from datasets.services.parsers.product_match_loader import (
-    build_competitor_url_groups,
-    get_prefixes_by_source,
-)
-
-
 class IPriceCompetitorSelectionError(ValueError):
     pass
 
@@ -80,29 +72,12 @@ def _same_class(left, right) -> bool:
 
 
 def _automatic_keys(base_product_key: int) -> set[int]:
-    application = AnalyticsProductClassificationApplication.objects.order_by(
-        "-date_add", "-id"
-    ).first()
-    if application is None:
-        return set()
-    eligible_keys = set(
-        AnalyticsProductMatchCandidate.objects.filter(
-            application=application,
+    return set(
+        ParserProductMatch.objects.filter(
             product_key_base=base_product_key,
-            is_eligible=True,
-        ).exclude(competitor_source="base").values_list(
-            "product_key_competitor", flat=True
-        )
+            status=ParserProductMatch.STATUS_ACTIVE,
+        ).values_list("product_key_competitor", flat=True)
     )
-    groups, group_by_product = build_competitor_url_groups(
-        prefixes_by_source=get_prefixes_by_source(),
-    )
-    result = set()
-    for competitor_key in eligible_keys:
-        group_key = group_by_product.get(competitor_key)
-        result.update(groups.get(group_key, {competitor_key}))
-        result.add(competitor_key)
-    return result
 
 
 def _effective_keys(base_product_key: int) -> tuple[set[int], dict[int, str]]:
@@ -111,17 +86,6 @@ def _effective_keys(base_product_key: int) -> tuple[set[int], dict[int, str]]:
         IPriceCompetitorSelectionOverride.objects.filter(
             product_key_base=base_product_key,
         ).values_list("product_key_competitor", "selection_mode")
-    )
-    # Сохраняем совместимость с активными связями, созданными до Product
-    # Control. Как только для пары появляется явный override, источником
-    # решения становится override/актуальный weighted candidate.
-    automatic.update(
-        key
-        for key in ParserProductMatch.objects.filter(
-            product_key_base=base_product_key,
-            status=ParserProductMatch.STATUS_ACTIVE,
-        ).values_list("product_key_competitor", flat=True)
-        if key not in modes
     )
     effective = set(automatic)
     effective.update(
@@ -136,8 +100,10 @@ def _effective_keys(base_product_key: int) -> tuple[set[int], dict[int, str]]:
 
 
 def _replace_operational_matches(
-    *, base_product_key: int, competitor_keys: set[int], modes: dict[int, str]
+    *, base_product_key: int, competitor_keys: set[int], modes: dict[int, str],
+    manual_keys: set[int] | None = None,
 ) -> None:
+    manual_keys = manual_keys or set()
     ParserProductMatch.objects.filter(
         product_key_base=base_product_key,
         status=ParserProductMatch.STATUS_ACTIVE,
@@ -149,7 +115,10 @@ def _replace_operational_matches(
             status=ParserProductMatch.STATUS_ACTIVE,
             match_type=(
                 ParserProductMatch.MATCH_TYPE_MANUAL
-                if modes.get(key) == IPriceCompetitorSelectionOverride.MODE_INCLUDE
+                if (
+                    key in manual_keys
+                    or modes.get(key) == IPriceCompetitorSelectionOverride.MODE_INCLUDE
+                )
                 else ParserProductMatch.MATCH_TYPE_AUTO
             ),
         )
@@ -188,10 +157,11 @@ def _replace_snapshot_competitors(
         region_data = get_competitor_regions(source=url.source, prefix=url.prefix)
         calculation_price = price_data["calculation_price"] if price_data else None
         error_codes = []
+        warning_codes = []
         if price_data is None:
-            error_codes.append("MISSING_COMPETITOR_PRICE")
+            warning_codes.append("MISSING_COMPETITOR_PRICE")
         elif calculation_price is None:
-            error_codes.append("MISSING_FINAL_PRICE")
+            warning_codes.append("MISSING_FINAL_PRICE")
         if calculation_price is not None:
             prices.append(Decimal(calculation_price))
         rows.append(IPriceSnapshotCompetitor(
@@ -209,8 +179,11 @@ def _replace_snapshot_competitors(
             ] if price_data else [],
             is_all_regions=region_data["is_all_regions"],
             applicable_regions=region_data["regions"],
-            calculation_status="error" if error_codes else "success",
-            warning_codes=[],
+            calculation_status=(
+                "error" if error_codes
+                else ("warning" if warning_codes else "success")
+            ),
+            warning_codes=warning_codes,
             error_codes=error_codes,
         ))
     IPriceSnapshotCompetitor.objects.filter(snapshot_product=product).delete()
@@ -250,6 +223,10 @@ def apply_competitor_selection(
             raise IPriceCompetitorSelectionError(
                 "Для части товаров отсутствует активная классификация"
             )
+        manual_keys = set(ParserProductMatch.objects.filter(
+            product_key_base=product.base_product_key,
+            match_type=ParserProductMatch.MATCH_TYPE_MANUAL,
+        ).values_list("product_key_competitor", flat=True))
         if any(not _same_class(base_classification, target) for target in targets):
             raise IPriceCompetitorSelectionError(
                 "В расчёт можно включать только товары той же полной классификации"
@@ -304,6 +281,7 @@ def apply_competitor_selection(
             base_product_key=product.base_product_key,
             competitor_keys=effective_keys,
             modes=modes,
+            manual_keys=manual_keys,
         )
 
         saved_approvals = _approval_snapshot(snapshot, product_ids={product.id})
@@ -314,7 +292,7 @@ def apply_competitor_selection(
         previous_method = product.pricing_method
         product.pricing_method = (
             IPriceSnapshotProduct.PRICING_METHOD_ANALOG
-            if effective_keys
+            if prices
             else IPriceSnapshotProduct.PRICING_METHOD_EXCLUSIVE
         )
         product.competitor_count = len(prices)
@@ -332,11 +310,17 @@ def apply_competitor_selection(
             code for code in (product.error_codes or [])
             if code != "NO_VALID_COMPETITOR_PRICES"
         ]
+        product.warning_codes = [
+            code for code in (product.warning_codes or [])
+            if code != "NO_VALID_COMPETITOR_PRICES"
+        ]
+        if effective_keys and not prices:
+            product.warning_codes.append("NO_VALID_COMPETITOR_PRICES")
         product.save(update_fields=(
             "pricing_method", "competitor_count", "competitor_rrp_min",
             "competitor_rrp_max", "competitor_rrp_median",
             "current_vs_competitor_amount", "current_vs_competitor_percent",
-            "error_codes",
+            "warning_codes", "error_codes",
         ))
 
         original_status = snapshot.status

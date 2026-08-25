@@ -6,6 +6,7 @@ import {
 import {
   IPriceDependentMultiSelect,
 } from "../components/IPriceDependentMultiSelect";
+import {clearIPriceFilterSearches} from "../components/ipriceFilterEvents";
 
 import {
   IPRICE_PRODUCT_FILTERS,
@@ -123,8 +124,9 @@ export function IPriceHistoryFilters({
           <div className="iprice-filters-actions">
             <button
               type="button"
-              disabled={loading || selectedCount === 0}
+              disabled={loading}
               onClick={() => {
+                clearIPriceFilterSearches();
                 onClear?.();
               }}
             >

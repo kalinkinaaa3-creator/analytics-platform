@@ -562,19 +562,10 @@ const IPRICE_UPLOAD_URLS = {
     + "/parsers/product-classification/upload/"
   ),
 
-  product_directory: (
-    `${DATASETS_BASE_URL}`
-    + "/parsers/product-directory/upload/"
-  ),
 };
 
 
 const IPRICE_EXPORT_URLS = {
-  product_control: (
-    `${DATASETS_BASE_URL}`
-    + "/parsers/product-url-control/export/"
-  ),
-
   product_cost_template: (
     `${IPRICE_BASE_URL}`
     + "/product-cost-template/export/"
@@ -601,9 +592,6 @@ function buildDefaultExportFilename(
     .replaceAll(":", "-");
 
   const filenames = {
-    product_control: (
-      `parser_product_url_control_${timestamp}.xlsx`
-    ),
     product_cost_template: (
       `iprice_product_cost_template_${timestamp}.xlsx`
     ),
@@ -694,15 +682,6 @@ export async function uploadIPriceDataFile(
   );
 
   return response.data;
-}
-
-
-export async function getProductClassificationRunStatus() {
-  const response = await api.get(
-    `${DATASETS_BASE_URL}/parsers/product-directory/upload/`,
-  );
-
-  return response.data || { status: "not_started" };
 }
 
 

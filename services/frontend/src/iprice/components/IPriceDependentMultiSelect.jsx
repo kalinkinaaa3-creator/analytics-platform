@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
+import {CLEAR_FILTER_SEARCH_EVENT} from "./ipriceFilterEvents";
 
 
 const FILTER_VALUE_LABELS = {
@@ -18,8 +19,6 @@ const FILTER_VALUE_LABELS = {
     error: "Ошибка",
   },
 };
-
-
 function getValueLabel(
   filterName,
   value,
@@ -56,17 +55,15 @@ export function IPriceDependentMultiSelect({
   ] = useState("");
   const [dropdownLeft, setDropdownLeft] = useState(0);
 
-  const safeSelected = Array.isArray(
-    selected
-  )
-    ? selected
-    : [];
+  const safeSelected = useMemo(
+    () => (Array.isArray(selected) ? selected : []),
+    [selected],
+  );
 
-  const safeOptions = Array.isArray(
-    options
-  )
-    ? options
-    : [];
+  const safeOptions = useMemo(
+    () => (Array.isArray(options) ? options : []),
+    [options],
+  );
 
   const selectedSet = useMemo(
     () => new Set(safeSelected),
@@ -138,6 +135,15 @@ export function IPriceDependentMultiSelect({
     };
   }, []);
 
+  useEffect(() => {
+    function handleClearSearch() {
+      setSearch("");
+    }
+    window.addEventListener(CLEAR_FILTER_SEARCH_EVENT, handleClearSearch);
+    return () => {
+      window.removeEventListener(CLEAR_FILTER_SEARCH_EVENT, handleClearSearch);
+    };
+  }, []);
 
   useLayoutEffect(() => {
     if (!open) {
@@ -216,6 +222,7 @@ export function IPriceDependentMultiSelect({
 
 
   function clearFilter() {
+    setSearch("");
     onChange(
       name,
       [],
@@ -306,7 +313,7 @@ export function IPriceDependentMultiSelect({
             <button
               type="button"
               disabled={
-                safeSelected.length === 0
+                safeSelected.length === 0 && !search
               }
               onClick={clearFilter}
             >

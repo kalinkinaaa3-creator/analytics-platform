@@ -40,8 +40,6 @@ from .views import (
 
     ParserPrefixUploadView,
     ProductClassificationUploadView,
-    AnalyticsProductDirectoryUploadView,
-    ProductUrlControlExportView,
 
     YdWordstatPhraseRefUploadView,
     YdWordstatDeviceRefUploadView,
@@ -208,17 +206,6 @@ urlpatterns = [
         "parsers/product-classification/upload/",
         ProductClassificationUploadView.as_view(),
     ),
-
-    path(
-        "parsers/product-directory/upload/",
-        AnalyticsProductDirectoryUploadView.as_view(),
-    ),
-
-    path(
-        "parsers/product-url-control/export/",
-        ProductUrlControlExportView.as_view(),
-    ),
-
 
     path(
         "yd-wordstat/phrase-ref-upload/",

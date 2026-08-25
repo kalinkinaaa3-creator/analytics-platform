@@ -5,7 +5,6 @@ from django.db.models import Case, F, TextField, Value, When, Window
 from django.db.models.functions import RowNumber, TruncDate
 
 from datasets.models import (
-    AnalyticsProductAnalysisResult,
     BaseProductPrice,
     IPriceSnapshotProduct,
     ParserProductClassification,
@@ -52,7 +51,7 @@ def _selected_images(model, product_keys):
                 order_by=(
                     F("price_day").desc(),
                     F("final_price").desc(),
-                    F("id").desc(),
+                    F("id").asc(),
                 ),
             )
         )
@@ -75,7 +74,7 @@ def _selected_images(model, product_keys):
                 partition_by=(F("product_key"),),
                 order_by=(
                     F("price_day").desc(),
-                    F("id").desc(),
+                    F("id").asc(),
                 ),
             )
         )
@@ -124,8 +123,8 @@ def sync_iprice_product_images(
 
     Selection per product key:
       latest available calendar day with a positive final_price;
-      MAX(final_price); MAX(id). If no positive final_price exists,
-      use MAX(id) from the latest available calendar day.
+      MAX(final_price); MIN(id). If no positive final_price exists,
+      use MIN(id) from the latest available calendar day.
     """
     requested_keys = set(product_keys or ())
     url_rows = ParserProductUrl.objects.all()
@@ -154,18 +153,12 @@ def sync_iprice_product_images(
             "selected": 0,
             "without_price_rows": sum(len(keys) for keys in keys_by_source.values()),
             "classifications_updated": 0,
-            "analysis_results_updated": 0,
             "snapshot_products_updated": 0,
         }
 
     with transaction.atomic():
         classifications_updated = _update_image_mapping(
             ParserProductClassification,
-            "product_key",
-            images,
-        )
-        analysis_results_updated = _update_image_mapping(
-            AnalyticsProductAnalysisResult,
             "product_key",
             images,
         )
@@ -180,7 +173,6 @@ def sync_iprice_product_images(
         "selected": len(images),
         "without_price_rows": total_requested - len(images),
         "classifications_updated": classifications_updated,
-        "analysis_results_updated": analysis_results_updated,
         "snapshot_products_updated": snapshot_products_updated,
     }
 

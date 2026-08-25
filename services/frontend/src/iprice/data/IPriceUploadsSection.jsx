@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useRef,
   useState,
 } from "react";
@@ -9,19 +8,10 @@ import {
   exportIPriceDataFile,
   exportIPriceUploadTemplate,
   uploadIPriceDataFile,
-  getProductClassificationRunStatus,
 } from "../api/ipriceApi";
 
 
 const UPLOAD_DEFINITIONS = [
-  {
-    id: "product_directory",
-    hasTemplate: false,
-    title: "Справочник автоматической классификации и matching",
-    accept: ".xlsx",
-    fileHint: "directory.xlsx",
-  },
-
   {
     id: "product_classification",
     hasTemplate: true,
@@ -65,11 +55,6 @@ const UPLOAD_DEFINITIONS = [
 
 
 const EXPORT_DEFINITIONS = [
-  {
-    id: "product_control",
-    title: "Product Control — результат автоматической обработки",
-  },
-
   {
     id: "parser_products",
     title: "1. Данные для продуктового анализа",
@@ -191,25 +176,6 @@ function formatResultValue(value) {
 }
 
 
-function getClassificationStepLabel(step) {
-  const labels = {
-    queued: "В очереди",
-    loading_directory: "Подготовка правил",
-    matching: "Сопоставление товаров",
-    building_export: "Формирование файла",
-    completed: "Готово",
-    failed: "Ошибка",
-  };
-  if (labels[step]) {
-    return labels[step];
-  }
-  if (String(step || "").startsWith("classifying_")) {
-    return `Классификация: ${String(step).replace("classifying_", "").toUpperCase()}`;
-  }
-  return step || "";
-}
-
-
 function getVisibleResultEntries(result) {
   if (
     !result
@@ -232,6 +198,10 @@ function getVisibleResultEntries(result) {
     "deleted",
     "errors",
     "warnings",
+    "input_rows",
+    "classifications_loaded",
+    "automatic_matches_loaded",
+    "excluded_matches_preserved",
     "success",
     "message",
   ];
@@ -263,12 +233,10 @@ function getVisibleResultEntries(result) {
 
 
 const RESULT_FIELD_LABELS = {
-  run_id: "Версия расчёта",
-  application_id: "Версия применения",
-  classifications_applied: "Применено классификаций",
-  classifications_excluded: "Исключено товаров",
-  matches_applied: "Записано совпадений",
-  weighted_candidates_eligible: "Кандидатов выше порога",
+  input_rows: "Строк в файле",
+  classifications_loaded: "Действующих классификаций",
+  automatic_matches_loaded: "Связей из файла",
+  excluded_matches_preserved: "Сохранено исключений",
 };
 
 
@@ -570,7 +538,6 @@ function createInitialExportStates() {
 export function IPriceUploadsSection({
   canEdit = false,
   onSnapshotsChanged,
-  realtimeEvent,
 }) {
   const [
     uploadStates,
@@ -578,48 +545,6 @@ export function IPriceUploadsSection({
   ] = useState(
     createInitialUploadStates,
   );
-
-  const [
-    classificationRun,
-    setClassificationRun,
-  ] = useState({ status: "not_started" });
-  const classificationReady = (
-    classificationRun.status === "success"
-    && classificationRun.result?.export_ready === true
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-    let timeoutId = null;
-
-    async function loadStatus() {
-      let nextDelay = 30000;
-      try {
-        const result = await getProductClassificationRunStatus();
-        if (!cancelled) {
-          setClassificationRun(result);
-          nextDelay = ["queued", "running"].includes(result?.status)
-            ? 5000
-            : 30000;
-        }
-      } catch {
-        // The operation cards retain their own request errors. A transient
-        // status failure must not hide the upload controls.
-        nextDelay = 10000;
-      }
-      if (!cancelled) {
-        timeoutId = window.setTimeout(loadStatus, nextDelay);
-      }
-    }
-
-    loadStatus();
-    return () => {
-      cancelled = true;
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, [realtimeEvent?.receivedAt]);
 
   const [
     exportStates,
@@ -765,25 +690,9 @@ export function IPriceUploadsSection({
           progress: 100,
           result,
           error: "",
-          successMessage: (
-            uploadType === "product_directory"
-              ? (
-                "Справочник загружен. "
-                + `Фоновая обработка запущена (run #${result.run_id}). `
-                + "После завершения Product Control обновится автоматически."
-              )
-              : "Файл успешно обработан."
-          ),
+          successMessage: "Файл успешно обработан.",
         },
       );
-
-      if (uploadType === "product_directory") {
-        setClassificationRun({
-          ...result,
-          status: result.status || "queued",
-          current_step: "queued",
-        });
-      }
 
       onSnapshotsChanged?.();
     } catch (requestError) {
@@ -936,9 +845,7 @@ export function IPriceUploadsSection({
         </div>
 
         <div className="iprice-data-operation-grid iprice-data-operation-grid--exports">
-          {EXPORT_DEFINITIONS.filter(
-            (definition) => definition.id !== "product_control"
-          ).map(
+          {EXPORT_DEFINITIONS.map(
             (definition) => (
                 <ExportCard
                   key={definition.id}
@@ -972,9 +879,7 @@ export function IPriceUploadsSection({
         </div>
 
         <div className="iprice-data-operation-grid iprice-data-operation-grid--uploads">
-          {UPLOAD_DEFINITIONS.filter(
-            (definition) => definition.id !== "product_directory"
-          ).map(
+          {UPLOAD_DEFINITIONS.map(
             (definition) => (
               <UploadCard
                 canEdit={canEdit}
@@ -1003,67 +908,6 @@ export function IPriceUploadsSection({
         </div>
       </section>
 
-      <section className="iprice-classification-automation">
-        <div className="iprice-classification-automation__heading">
-          <div>
-            <h3>Автоматическая классификация</h3>
-          </div>
-          <div className={`iprice-classification-status iprice-classification-status--${classificationRun.status || "not_started"}`}>
-            <strong>{classificationReady
-              ? "Актуальный результат готов"
-              : classificationRun.status === "success"
-                ? "Требуется новый расчёт Product Control"
-              : classificationRun.status === "failed"
-                ? "Расчёт завершён с ошибкой"
-                : ["queued", "running"].includes(classificationRun.status)
-                  ? "Выполняется расчёт"
-                  : "Расчёт ещё не запускался"}</strong>
-            {classificationRun.run_id && (
-              <span>
-                Версия #{classificationRun.run_id}
-                {classificationRun.finished_at
-                  ? ` · ${new Date(classificationRun.finished_at).toLocaleString("ru-RU")}`
-                  : classificationRun.current_step
-                    ? ` · ${getClassificationStepLabel(classificationRun.current_step)}`
-                    : ""}
-              </span>
-            )}
-            {classificationReady && classificationRun.result && (
-              <span>
-                Товаров: {Object.values(classificationRun.result.source_products || {})
-                  .reduce((sum, value) => sum + Number(value || 0), 0)
-                  .toLocaleString("ru-RU")}
-                {" · "}Совпадений: {Number(classificationRun.result.auto_matches || 0)
-                  .toLocaleString("ru-RU")}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="iprice-classification-automation__actions">
-          <UploadCard
-            canEdit={canEdit}
-            definition={{
-              ...UPLOAD_DEFINITIONS.find((item) => item.id === "product_directory"),
-              title: "Загрузить справочник и настройки автоматической классификации",
-            }}
-            state={uploadStates.product_directory}
-            onFileChange={handleFileChange}
-            onUpload={handleUpload}
-            onTemplateExport={handleTemplateExport}
-            onClear={handleUploadClear}
-          />
-          <ExportCard
-            definition={{
-              ...EXPORT_DEFINITIONS.find((item) => item.id === "product_control"),
-              title: "Выгрузить результат автоматической классификации",
-            }}
-            exporting={exportStates.product_control?.exporting}
-            error={exportStates.product_control?.error}
-            disabled={!classificationReady}
-            onExport={handleExport}
-          />
-        </div>
-      </section>
     </section>
   );
 }
