@@ -36,6 +36,7 @@ from datasets.models import (
     IPriceCompetitorSelectionOverride,
     BaseProductPrice,
     ParserProductClassification,
+    ParserProductUrl,
 
 )
 
