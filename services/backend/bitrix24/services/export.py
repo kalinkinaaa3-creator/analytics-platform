@@ -19,7 +19,7 @@ HEADERS = (
     "ID",
     "Название лида",
     "Наименование контрагента",
-    "Тип контрагента",
+    "Повторное обращение",
     "Менеджер",
     "Стадия",
     "Источник",
@@ -147,7 +147,7 @@ def export_leads_xlsx(filters: LeadDashboardFilters, **query_options) -> tuple[P
                 item.title,
                 item.company_name,
                 (
-                    "Вернувшийся" if item.is_return_customer is True
+                    "Повторный" if item.is_return_customer is True
                     else ("Новый" if item.is_return_customer is False else "Не определён")
                 ),
                 item.manager_name,
