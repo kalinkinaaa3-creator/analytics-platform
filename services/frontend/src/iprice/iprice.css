@@ -1000,6 +1000,7 @@
   color: #444841;
   font-size: 12px;
   font-weight: 700;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

@@ -1,4 +1,6 @@
 from django.core.cache import cache
+from django.core.management.base import CommandError
+from django.db import connection
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
@@ -18,7 +20,13 @@ from bitrix24.services.loaders import (
     load_stage_history,
     load_users,
 )
-from bitrix24.services.refresh import LOCK_KEY, STATE_KEY
+from bitrix24.services.refresh import (
+    ADVISORY_LOCK_NAME,
+    LOCK_KEY,
+    STATE_KEY,
+    acquire_refresh_cache_lock,
+)
+from bitrix24.services.sync_state import recover_interrupted_sync_runs
 from dashboards.realtime import notify_dashboard_updated
 
 
@@ -27,9 +35,24 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--skip-bitrix", action="store_true")
+        parser.add_argument("--lock-acquired", action="store_true")
 
     def handle(self, *args, **options):
+        owns_cache_lock = not options["lock_acquired"]
+        if owns_cache_lock and not acquire_refresh_cache_lock():
+            raise CommandError("Обновление Аналитики CRM уже выполняется.")
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT pg_try_advisory_lock(hashtext(%s))",
+                [ADVISORY_LOCK_NAME],
+            )
+            advisory_lock = bool(cursor.fetchone()[0])
+        if not advisory_lock:
+            if owns_cache_lock:
+                cache.delete(LOCK_KEY)
+            raise CommandError("Обновление Аналитики CRM уже выполняется.")
         try:
+            recover_interrupted_sync_runs()
             if not options["skip_bitrix"]:
                 client = Bitrix24Client()
                 load_departments(client, mode=BitrixSyncRun.Mode.FULL)
@@ -63,3 +86,8 @@ class Command(BaseCommand):
             raise
         finally:
             cache.delete(LOCK_KEY)
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT pg_advisory_unlock(hashtext(%s))",
+                    [ADVISORY_LOCK_NAME],
+                )

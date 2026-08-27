@@ -2,19 +2,50 @@ from __future__ import annotations
 
 from django.utils import timezone
 
+import json
+
 from bitrix24.models import (
     BitrixCrmDictionary,
-    BitrixDashboardStatusMap,
-    BitrixDepartment,
+    BitrixCrmField,
     BitrixLead,
     BitrixLeadAnalytics,
     BitrixLeadProcessing,
     BitrixManagerTracking,
     BitrixUser,
 )
+from bitrix24.services.dashboard_query import UNTRACKED_DEPARTMENT_NAME
 
 
-UNMAPPED = BitrixDashboardStatusMap.DashboardStatus.UNMAPPED
+APM_STATUS_ID = "5"
+
+
+def _stage_group(lead):
+    if lead.status_id == APM_STATUS_ID:
+        return "apm"
+    semantic = (lead.status_semantic_id or "").strip().upper()
+    return {
+        "S": "target",
+        "F": "low_quality",
+        "P": "in_progress",
+    }.get(semantic, "unknown")
+
+
+def _activity_names():
+    row = BitrixCrmField.objects.filter(
+        entity_type_id=1,
+        field_code="UF_CRM_1680165215489",
+        is_deleted=False,
+    ).values_list("raw_payload", flat=True).first() or {}
+    if isinstance(row, str):
+        try:
+            row = json.loads(row)
+        except (TypeError, ValueError):
+            row = {}
+    return {
+        str(item.get("ID")): str(item.get("VALUE") or "")
+        for item in row.get("items", [])
+        if item.get("ID") is not None
+    }
 
 
 def rebuild_lead_analytics(*, lead_ids=None, calculated_at=None) -> int:
@@ -31,13 +62,7 @@ def rebuild_lead_analytics(*, lead_ids=None, calculated_at=None) -> int:
         BitrixCrmDictionary.objects.filter(entity_id="SOURCE", is_deleted=False)
         .values_list("status_id", "name")
     )
-    status_maps = {
-        item.status_id: item
-        for item in BitrixDashboardStatusMap.objects.filter(
-            entity_id="STATUS",
-            is_active=True,
-        )
-    }
+    activity_names = _activity_names()
     users = {
         item.user_id: item
         for item in BitrixUser.objects.filter(is_deleted=False).only(
@@ -46,22 +71,8 @@ def rebuild_lead_analytics(*, lead_ids=None, calculated_at=None) -> int:
             "primary_department_id",
         )
     }
-    departments = dict(
-        BitrixDepartment.objects.filter(is_deleted=False).values_list(
-            "department_id",
-            "name",
-        )
-    )
-    tracking_rows = list(
-        BitrixManagerTracking.objects.select_related("department").all()
-    )
+    tracking_rows = list(BitrixManagerTracking.objects.all())
     tracking_by_user = {item.user_id: item for item in tracking_rows}
-    if tracking_rows:
-        leads = leads.filter(
-            assigned_by_id__in=[
-                item.user_id for item in tracking_rows if item.is_tracked
-            ]
-        )
     update_fields = tuple(
         field.name
         for field in BitrixLeadAnalytics._meta.fields
@@ -79,17 +90,13 @@ def rebuild_lead_analytics(*, lead_ids=None, calculated_at=None) -> int:
         }
         objects = []
         for lead in batch:
-            status_map = status_maps.get(lead.status_id)
             user = users.get(lead.assigned_by_id)
             tracking = tracking_by_user.get(lead.assigned_by_id)
             primary_department_id = (
-                tracking.department.department_id
-                if tracking is not None
-                else (user.primary_department_id if user else None)
+                user.primary_department_id if user else None
             )
             lead_processing = processing.get(lead.lead_id)
-            is_apm = status_map.is_apm if status_map else False
-            is_low_quality = status_map.is_low_quality if status_map else False
+            stage_group = _stage_group(lead)
             objects.append(
                 BitrixLeadAnalytics(
                     lead_id=lead.lead_id,
@@ -101,20 +108,25 @@ def rebuild_lead_analytics(*, lead_ids=None, calculated_at=None) -> int:
                     source_name=source_names.get(lead.source_id, ""),
                     status_id=lead.status_id,
                     status_name=status_names.get(lead.status_id, ""),
-                    dashboard_status=(status_map.dashboard_status if status_map else UNMAPPED),
+                    status_semantic_id=lead.status_semantic_id,
+                    dashboard_status=stage_group,
                     manager_id=lead.assigned_by_id,
                     manager_name=user.full_name if user else "",
                     primary_department_id=primary_department_id,
                     department_name=(
-                        tracking.department.name
+                        tracking.department_name
                         if tracking is not None
-                        else departments.get(primary_department_id, "")
+                        else UNTRACKED_DEPARTMENT_NAME
                     ),
-                    is_apm=is_apm,
-                    is_low_quality=is_low_quality and not is_apm,
-                    is_unmapped=status_map is None,
-                    is_processed=status_map.is_processed if status_map else False,
-                    is_final=status_map.is_final if status_map else False,
+                    company_name=lead.company_title or lead.name or lead.title,
+                    is_return_customer=lead.is_return_customer,
+                    activity_name=activity_names.get(lead.activity_event_id, ""),
+                    last_activity_time=lead.last_activity_time,
+                    is_apm=stage_group == "apm",
+                    is_low_quality=stage_group == "low_quality",
+                    is_unmapped=stage_group == "unknown",
+                    is_processed=stage_group in {"target", "low_quality", "apm"},
+                    is_final=stage_group in {"target", "low_quality", "apm"},
                     first_processing_at=(
                         lead_processing.first_processing_at if lead_processing else None
                     ),

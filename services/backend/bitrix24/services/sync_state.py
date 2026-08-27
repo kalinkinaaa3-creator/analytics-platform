@@ -16,6 +16,12 @@ class BitrixSyncAlreadyRunning(RuntimeError):
     pass
 
 
+INTERRUPTED_ERROR = (
+    "Предыдущий процесс завершился аварийно; "
+    "состояние восстановлено следующим запуском."
+)
+
+
 @dataclass(frozen=True)
 class BitrixSyncStats:
     rows_received: int = 0
@@ -31,6 +37,44 @@ def get_incremental_from(entity: str, overlap: timedelta) -> datetime | None:
     if state is None or state.last_source_updated_at is None:
         return None
     return state.last_source_updated_at - overlap
+
+
+@transaction.atomic
+def recover_interrupted_sync_runs(*, entities=None) -> int:
+    """Close orphaned running states after the caller has acquired the advisory lock."""
+    states = BitrixSyncState.objects.select_for_update().filter(
+        status=BitrixSyncState.Status.RUNNING
+    )
+    if entities is not None:
+        states = states.filter(entity__in=entities)
+    locked_states = list(states)
+    runs_by_id = BitrixSyncRun.objects.select_for_update().in_bulk(
+        state.last_run_id
+        for state in locked_states
+        if state.last_run_id is not None
+    )
+    recovered = 0
+    finished_at = timezone.now()
+    for state in locked_states:
+        run = runs_by_id.get(state.last_run_id)
+        if run is not None and run.status == BitrixSyncRun.Status.RUNNING:
+            run.status = BitrixSyncRun.Status.FAILED
+            run.finished_at = finished_at
+            run.error_text = INTERRUPTED_ERROR
+            run.save(update_fields=("status", "finished_at", "error_text"))
+        state.status = BitrixSyncState.Status.FAILED
+        state.finished_at = finished_at
+        state.error_text = INTERRUPTED_ERROR
+        state.save(
+            update_fields=(
+                "status",
+                "finished_at",
+                "error_text",
+                "date_update",
+            )
+        )
+        recovered += 1
+    return recovered
 
 
 @transaction.atomic

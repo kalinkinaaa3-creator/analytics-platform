@@ -8,20 +8,12 @@ from .stage_intervals import duration_days
 
 
 LEAD_ENTITY_TYPE_ID = 1
-INITIAL_STATUS_ID = "NEW"
+APM_STATUS_ID = "5"
+FINAL_SEMANTIC_IDS = {"S", "F"}
 
 
 def _processing_result(lead, intervals, calculated_at):
-    if not intervals:
-        return BitrixLeadProcessing(
-            lead_id=lead.lead_id,
-            processing_started_at=lead.source_created_at,
-            processing_state=BitrixLeadProcessing.ProcessingState.NO_HISTORY,
-            current_status_id=lead.status_id,
-            calculated_at=calculated_at,
-        )
-
-    started_at = lead.source_created_at or intervals[0].entered_at
+    started_at = lead.source_created_at or (intervals[0].entered_at if intervals else None)
     first_stage_change_at = next(
         (
             interval.entered_at
@@ -29,47 +21,59 @@ def _processing_result(lead, intervals, calculated_at):
             if interval.stage_id != intervals[0].stage_id
         ),
         None,
-    )
-    first_processing_at = None
-    state = BitrixLeadProcessing.ProcessingState.INVALID_HISTORY
-    if intervals[0].stage_id == INITIAL_STATUS_ID:
-        first_processing_at = next(
+    ) if intervals else None
+
+    semantic_id = (lead.status_semantic_id or "").strip().upper()
+    is_apm = lead.status_id == APM_STATUS_ID
+    is_completed = is_apm or semantic_id in FINAL_SEMANTIC_IDS
+    completed_at = None
+    if is_completed:
+        completed_at = next(
             (
                 interval.entered_at
-                for interval in intervals[1:]
-                if interval.stage_id != INITIAL_STATUS_ID
+                for interval in reversed(intervals)
+                if interval.stage_id == lead.status_id
             ),
             None,
-        )
-        state = (
-            BitrixLeadProcessing.ProcessingState.COMPLETED
-            if first_processing_at is not None
-            else BitrixLeadProcessing.ProcessingState.IN_PROGRESS
-        )
+        ) or lead.closed_time
+        if completed_at is None and intervals:
+            completed_at = intervals[-1].entered_at
 
-    duration_end = first_processing_at
-    if state == BitrixLeadProcessing.ProcessingState.IN_PROGRESS:
-        duration_end = calculated_at
+    state = (
+        BitrixLeadProcessing.ProcessingState.COMPLETED
+        if is_completed and completed_at is not None
+        else BitrixLeadProcessing.ProcessingState.IN_PROGRESS
+    )
+    duration_end = completed_at if state == BitrixLeadProcessing.ProcessingState.COMPLETED else calculated_at
     processing_seconds = None
-    if duration_end is not None and started_at is not None:
+    if duration_end is not None and started_at is not None and duration_end >= started_at:
         processing_seconds = max(0, int((duration_end - started_at).total_seconds()))
 
-    current = intervals[-1]
-    current_seconds = max(0, int((calculated_at - current.entered_at).total_seconds()))
+    current = intervals[-1] if intervals else None
+    current_since = current.entered_at if current else started_at
+    current_seconds = (
+        max(0, int((calculated_at - current_since).total_seconds()))
+        if current_since is not None and calculated_at >= current_since
+        else None
+    )
     return BitrixLeadProcessing(
         lead_id=lead.lead_id,
         processing_started_at=started_at,
         first_stage_change_at=first_stage_change_at,
-        first_processing_at=first_processing_at,
+        # Existing storage column retained for compatibility. It now contains
+        # the completion time of the full lead lifecycle.
+        first_processing_at=completed_at,
         processing_duration_seconds=processing_seconds,
         processing_duration_days=(
             duration_days(processing_seconds) if processing_seconds is not None else None
         ),
         processing_state=state,
-        current_status_id=current.stage_id,
-        current_status_since=current.entered_at,
+        current_status_id=current.stage_id if current else lead.status_id,
+        current_status_since=current_since,
         current_status_duration_seconds=current_seconds,
-        current_status_duration_days=duration_days(current_seconds),
+        current_status_duration_days=(
+            duration_days(current_seconds) if current_seconds is not None else None
+        ),
         calculated_at=calculated_at,
     )
 

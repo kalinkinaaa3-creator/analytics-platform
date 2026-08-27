@@ -1,8 +1,8 @@
 import { api } from "../../api/client";
 
 
-export async function fetchCrmFilters() {
-  const response = await api.get("/v1/bitrix24/dashboard/filters/");
+export async function fetchCrmFilters(payload) {
+  const response = await api.post("/v1/bitrix24/dashboard/filters/", payload);
   return response.data;
 }
 
@@ -19,7 +19,7 @@ export async function fetchCrmRows(payload) {
 }
 
 
-export async function exportCrmRows(payload) {
+export async function exportCrmRows(payload, filename = "bitrix24_lead_generation.xlsx") {
   const response = await api.post(
     "/v1/bitrix24/dashboard/export/",
     payload,
@@ -28,7 +28,7 @@ export async function exportCrmRows(payload) {
   const url = window.URL.createObjectURL(response.data);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "bitrix24_lead_generation.xlsx";
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   link.remove();

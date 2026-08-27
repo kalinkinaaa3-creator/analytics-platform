@@ -48,6 +48,7 @@ LEAD_SELECT = (
     "OPPORTUNITY",
     "CURRENCY_ID",
     "IS_RETURN_CUSTOMER",
+    "UF_CRM_1680165215489",
     "ORIGINATOR_ID",
     "ADDRESS_CITY",
     "ADDRESS_PROVINCE",
@@ -93,6 +94,9 @@ def _normalize_lead(row, *, seen_at):
         is_return_customer=as_bool(
             source_value(row, "IS_RETURN_CUSTOMER", "isReturnCustomer")
         ),
+        activity_event_id=text(
+            source_value(row, "UF_CRM_1680165215489", "ufCrm1680165215489")
+        ),
         originator_id=text(source_value(row, "ORIGINATOR_ID", "originatorId")),
         address_city=text(source_value(row, "ADDRESS_CITY", "addressCity")),
         address_province=text(
@@ -125,16 +129,32 @@ def load_leads(
     mode: str = BitrixSyncRun.Mode.INCREMENTAL,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
     overlap: timedelta = timedelta(minutes=10),
 ) -> BitrixSyncRun:
     if mode not in BitrixSyncRun.Mode.values:
         raise ValueError(f"Unsupported Bitrix24 sync mode: {mode}.")
 
+    is_window_reconciliation = mode == BitrixSyncRun.Mode.REPAIR
+    if is_window_reconciliation:
+        if created_from is None or created_to is None:
+            raise ValueError("Repair mode requires created_from and created_to.")
+        if created_to <= created_from:
+            raise ValueError("created_to must be later than created_from.")
+        if date_from is not None or date_to is not None:
+            raise ValueError("Repair mode cannot use DATE_MODIFY boundaries.")
+    elif created_from is not None or created_to is not None:
+        raise ValueError("Creation boundaries are supported only in repair mode.")
+
     if date_from is None and mode == BitrixSyncRun.Mode.INCREMENTAL:
         date_from = get_incremental_from("leads", overlap)
 
     filters = {}
-    if date_from is not None:
+    if is_window_reconciliation:
+        filters[">=DATE_CREATE"] = created_from.isoformat()
+        filters["<DATE_CREATE"] = created_to.isoformat()
+    elif date_from is not None:
         filters[">=DATE_MODIFY"] = date_from.isoformat()
     if date_to is not None:
         filters["<=DATE_MODIFY"] = date_to.isoformat()
@@ -178,6 +198,7 @@ def load_leads(
                     "opportunity",
                     "currency_id",
                     "is_return_customer",
+                    "activity_event_id",
                     "originator_id",
                     "address_city",
                     "address_province",
@@ -206,9 +227,22 @@ def load_leads(
             ).filter(
                 Q(last_seen_at__lt=run.started_at) | Q(last_seen_at__isnull=True)
             ).update(is_deleted=True)
+        elif is_window_reconciliation:
+            window_queryset = BitrixLead.objects.filter(
+                is_deleted=False,
+                source_created_at__gte=created_from,
+                source_created_at__lt=created_to,
+            )
+            if received == 0 and window_queryset.exists():
+                raise Bitrix24ResponseError(
+                    "Bitrix24 returned no leads for a non-empty reconciliation window."
+                )
+            deactivated = window_queryset.filter(
+                Q(last_seen_at__lt=run.started_at) | Q(last_seen_at__isnull=True)
+            ).update(is_deleted=True)
 
         finish_kwargs = {}
-        if max_source_position is not None:
+        if max_source_position is not None and not is_window_reconciliation:
             finish_kwargs = {
                 "last_source_updated_at": max_source_position[0],
                 "last_source_id": max_source_position[1],
@@ -222,3 +256,17 @@ def load_leads(
     except BaseException as exc:
         fail_sync(run, exc)
         raise
+
+
+def reconcile_leads_window(
+    client: Bitrix24Client,
+    *,
+    created_from: datetime,
+    created_to: datetime,
+) -> BitrixSyncRun:
+    return load_leads(
+        client,
+        mode=BitrixSyncRun.Mode.REPAIR,
+        created_from=created_from,
+        created_to=created_to,
+    )

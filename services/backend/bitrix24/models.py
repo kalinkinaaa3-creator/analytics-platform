@@ -166,12 +166,7 @@ class BitrixUserDepartment(models.Model):
 class BitrixManagerTracking(models.Model):
     user_id = models.BigIntegerField(unique=True)
     manager_name = models.CharField(max_length=767)
-    department = models.ForeignKey(
-        BitrixDepartment,
-        on_delete=models.PROTECT,
-        related_name="manager_tracking_rows",
-    )
-    is_tracked = models.BooleanField(default=True, db_index=True)
+    department_name = models.CharField(max_length=255)
     date_add = models.DateTimeField(auto_now_add=True)
     date_update = models.DateTimeField(auto_now=True)
 
@@ -244,6 +239,7 @@ class BitrixLead(BitrixRawBase):
     opportunity = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     currency_id = models.CharField(max_length=16, blank=True, default="")
     is_return_customer = models.BooleanField(null=True, blank=True)
+    activity_event_id = models.CharField(max_length=128, blank=True, default="")
     originator_id = models.CharField(max_length=255, blank=True, default="")
     address_city = models.CharField(max_length=255, blank=True, default="")
     address_province = models.CharField(max_length=255, blank=True, default="")
@@ -336,52 +332,6 @@ class BitrixStageInterval(models.Model):
         ]
 
 
-class BitrixDashboardStatusMap(models.Model):
-    class DashboardStatus(models.TextChoices):
-        UNPROCESSED = "unprocessed", "Не обработан"
-        ASSIGNED = "assigned", "Назначен"
-        IN_PROGRESS = "in_progress", "В работе"
-        CONVERTED = "converted", "Конвертирован"
-        LOW_QUALITY = "low_quality", "Некачественный"
-        OTHER = "other", "Прочее"
-        UNMAPPED = "unmapped", "Не настроен"
-
-    entity_id = models.CharField(max_length=64, default="STATUS", db_index=True)
-    status_id = models.CharField(max_length=128)
-    dashboard_status = models.CharField(
-        max_length=32,
-        choices=DashboardStatus.choices,
-        default=DashboardStatus.OTHER,
-        db_index=True,
-    )
-    display_name = models.CharField(max_length=255, blank=True, default="")
-    is_apm = models.BooleanField(default=False, db_index=True)
-    is_low_quality = models.BooleanField(default=False, db_index=True)
-    is_processed = models.BooleanField(default=False)
-    is_final = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True, db_index=True)
-    sort = models.IntegerField(default=0)
-    date_add = models.DateTimeField(auto_now_add=True)
-    date_update = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "bitrix24_dashboard_status_map"
-        ordering = ("sort", "status_id")
-        constraints = [
-            models.UniqueConstraint(
-                fields=("entity_id", "status_id"),
-                name="bitrix24_dashboard_status_uniq",
-            ),
-            models.CheckConstraint(
-                condition=~(models.Q(is_apm=True) & models.Q(is_low_quality=True)),
-                name="bitrix24_status_apm_not_lowq",
-            ),
-        ]
-
-    def __str__(self):
-        return self.display_name or self.status_id
-
-
 class BitrixLeadProcessing(models.Model):
     class ProcessingState(models.TextChoices):
         IN_PROGRESS = "in_progress", "Обработка продолжается"
@@ -454,11 +404,16 @@ class BitrixLeadAnalytics(models.Model):
     source_name = models.CharField(max_length=255, blank=True, default="")
     status_id = models.CharField(max_length=128, blank=True, default="", db_index=True)
     status_name = models.CharField(max_length=255, blank=True, default="")
+    status_semantic_id = models.CharField(max_length=32, blank=True, default="")
     dashboard_status = models.CharField(max_length=32, db_index=True)
     manager_id = models.BigIntegerField(null=True, blank=True, db_index=True)
     manager_name = models.CharField(max_length=767, blank=True, default="")
     primary_department_id = models.BigIntegerField(null=True, blank=True, db_index=True)
     department_name = models.CharField(max_length=255, blank=True, default="")
+    company_name = models.TextField(blank=True, default="")
+    is_return_customer = models.BooleanField(null=True, blank=True)
+    activity_name = models.TextField(blank=True, default="")
+    last_activity_time = models.DateTimeField(null=True, blank=True)
     is_apm = models.BooleanField(default=False, db_index=True)
     is_low_quality = models.BooleanField(default=False, db_index=True)
     is_unmapped = models.BooleanField(default=False, db_index=True)
