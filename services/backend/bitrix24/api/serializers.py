@@ -15,7 +15,7 @@ class LeadDashboardRequestSerializer(serializers.Serializer):
         default=list,
     )
     source_ids = serializers.ListField(
-        child=serializers.CharField(max_length=128),
+        child=serializers.CharField(max_length=128, allow_blank=True),
         required=False,
         default=list,
     )
@@ -25,7 +25,7 @@ class LeadDashboardRequestSerializer(serializers.Serializer):
         default=list,
     )
     status_ids = serializers.ListField(
-        child=serializers.CharField(max_length=128),
+        child=serializers.CharField(max_length=128, allow_blank=True),
         required=False,
         default=list,
     )
@@ -54,7 +54,10 @@ class LeadDashboardRowsRequestSerializer(LeadDashboardRequestSerializer):
     )
     segment_key = serializers.CharField(required=False, allow_blank=True, default="")
     segment_keys = serializers.ListField(
-        child=serializers.CharField(max_length=255),
+        # Empty source/status identifiers are valid Bitrix24 data. Such rows
+        # can be included in the aggregated "Остальные" chart segment and
+        # therefore must survive request validation for detail/export views.
+        child=serializers.CharField(max_length=255, allow_blank=True),
         required=False,
         default=list,
     )
