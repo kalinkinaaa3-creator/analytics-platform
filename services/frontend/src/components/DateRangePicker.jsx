@@ -234,48 +234,20 @@ export function DateRangePicker({ start, end, onChange, label = "Период", 
   }, [applyInputs, calendarMenu, end, open, start]);
 
 
-  const selectDate = (side, iso) => {
+  const selectDate = (_side, iso) => {
     setCalendarMenu(null);
 
-    const currentStart = draft.start || start;
-    const currentEnd = draft.end || end;
-
-    if (side === "left") {
-      if (currentEnd && iso <= currentEnd) {
-        setAnchor("");
-        setHover("");
-        setPreserveEnd(false);
-        setDraft({ start: iso, end: currentEnd });
-        setStartInput(displayDate(iso));
-        setEndInput(displayDate(currentEnd));
-        return;
-      }
-
-      setAnchor(iso);
-      setHover(iso);
-      setPreserveEnd(false);
-      setDraft({ start: iso, end: "" });
-      setStartInput(displayDate(iso));
-      setEndInput("");
-      return;
-    }
-
-    if (currentStart && iso >= currentStart) {
-      setAnchor("");
-      setHover("");
-      setPreserveEnd(false);
-      setDraft({ start: currentStart, end: iso });
-      setStartInput(displayDate(currentStart));
-      setEndInput(displayDate(iso));
+    if (anchor) {
+      applyRange({ start: anchor, end: iso });
       return;
     }
 
     setAnchor(iso);
     setHover(iso);
     setPreserveEnd(false);
-    setDraft({ start: "", end: iso });
-    setStartInput("");
-    setEndInput(displayDate(iso));
+    setDraft({ start: iso, end: "" });
+    setStartInput(displayDate(iso));
+    setEndInput("");
   };
 
 
