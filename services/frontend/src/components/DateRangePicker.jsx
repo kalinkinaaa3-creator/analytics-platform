@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import "./date_range_picker.css";
+import { useDropdownPosition } from "./useDropdownPosition";
 
 
 const MONTHS = [
@@ -91,6 +92,11 @@ function startOfWeek(value) {
 }
 
 
+function calendarPopoverWidth() {
+  return window.innerWidth <= 900 ? 720 : 980;
+}
+
+
 function normalizedRange(start, end) {
   if (!start || !end) return null;
   return start <= end ? { start, end } : { start: end, end: start };
@@ -154,6 +160,7 @@ function CalendarMonth({ month, side, start, end, selecting, hover, preserveEnd,
 
 export function DateRangePicker({ start, end, onChange, label = "Период", resetRange = null }) {
   const root = useRef(null);
+  const popover = useRef(null);
   const initialMonths = useMemo(() => initialCalendarMonths(start, end), [start, end]);
   const [open, setOpen] = useState(false);
   const [popoverSide, setPopoverSide] = useState("right");
@@ -166,6 +173,13 @@ export function DateRangePicker({ start, end, onChange, label = "Период", 
   const [leftViewMonth, setLeftViewMonth] = useState(initialMonths.left);
   const [rightViewMonth, setRightViewMonth] = useState(initialMonths.right);
   const [calendarMenu, setCalendarMenu] = useState(null);
+  const { menuStyle, resetPosition } = useDropdownPosition({
+    open,
+    rootRef: root,
+    menuRef: popover,
+    contentKey: `${popoverSide}:${leftViewMonth.getTime()}:${rightViewMonth.getTime()}`,
+    preferredWidth: calendarPopoverWidth,
+  });
 
 
   const applyRange = useCallback((nextRange, close = true) => {
@@ -197,6 +211,7 @@ export function DateRangePicker({ start, end, onChange, label = "Период", 
     const spaceRight = rootBounds ? window.innerWidth - rootBounds.left - edgePadding : popoverWidth;
     const spaceLeft = rootBounds ? rootBounds.right - edgePadding : popoverWidth;
     const months = initialCalendarMonths(start, end);
+    resetPosition();
     setPopoverSide(spaceRight >= popoverWidth || spaceRight >= spaceLeft ? "right" : "left");
     setDraft({ start, end }); setStartInput(displayDate(start)); setEndInput(displayDate(end)); setAnchor(""); setHover(""); setPreserveEnd(false); setCalendarMenu(null); setLeftViewMonth(months.left); setRightViewMonth(months.right); setOpen(true);
   };
@@ -339,5 +354,5 @@ export function DateRangePicker({ start, end, onChange, label = "Период", 
   const selectedText = draft.start && draft.end ? `${displayDate(draft.start)} — ${displayDate(draft.end)}` : "Выберите период";
 
 
-  return <div className={`crm-filter date-range-picker${open ? " date-range-picker--open" : ""}`} ref={root}><span>{label}</span><div className="date-range-picker__control" onClick={openPicker}><input value={startInput} maxLength={10} inputMode="numeric" aria-label="Дата начала" onFocus={openPicker} onChange={(event) => setStartInput(maskDisplayDate(event.target.value, startInput))} onKeyDown={inputKeyDown} /><b>—</b><input value={endInput} maxLength={10} inputMode="numeric" aria-label="Дата окончания" onFocus={openPicker} onChange={(event) => setEndInput(maskDisplayDate(event.target.value, endInput))} onKeyDown={inputKeyDown} /><button type="button" aria-label={open ? "Закрыть календарь" : "Открыть календарь"} onClick={(event) => { event.stopPropagation(); if (open) applyInputs(true); else openPicker(); }}><CalendarIcon /></button></div>{open && <div className={`date-range-picker__popover date-range-picker__popover--${popoverSide}`} onMouseDownCapture={closePeriodMenuOutside}><aside className="date-range-picker__presets"><button type="button" onClick={() => preset("today")}><PresetIcon />Сегодня</button><button type="button" onClick={() => preset("yesterday")}><PresetIcon />Вчера</button><button type="button" onClick={() => preset("current-week")}><PresetIcon list />Текущая неделя</button><button type="button" onClick={() => preset("previous-week")}><PresetIcon list />Прошлая неделя</button><button type="button" onClick={() => preset("current-month")}><PresetIcon />Текущий месяц</button><button type="button" onClick={() => preset("previous-month")}><PresetIcon />Прошлый месяц</button><hr /><button type="button" onClick={() => preset("reset")}><PresetIcon reset />Сбросить</button></aside><div className="date-range-picker__calendars"><button type="button" className="date-range-picker__nav date-range-picker__nav--previous" aria-label="Предыдущий месяц" onClick={() => moveLeftMonth(-1)}>‹</button><CalendarMonth month={leftViewMonth} side="left" start={draft.start} end={draft.end} selecting={anchor} hover={hover} preserveEnd={preserveEnd} menu={calendarMenu} onMenu={setCalendarMenu} onMonthChange={selectVisibleMonth} onYearChange={selectVisibleYear} onHover={setHover} onSelect={selectDate} /><CalendarMonth month={rightViewMonth} side="right" start={draft.start} end={draft.end} selecting={anchor} hover={hover} preserveEnd={preserveEnd} menu={calendarMenu} onMenu={setCalendarMenu} onMonthChange={selectVisibleMonth} onYearChange={selectVisibleYear} onHover={setHover} onSelect={selectDate} /><button type="button" className="date-range-picker__nav date-range-picker__nav--next" aria-label="Следующий месяц" onClick={() => moveRightMonth(1)}>›</button></div><footer>Выбрано: <strong>{selectedText}</strong></footer></div>}</div>;
+  return <div className={`crm-filter date-range-picker${open ? " date-range-picker--open" : ""}`} ref={root}><span>{label}</span><div className="date-range-picker__control" onClick={openPicker}><input value={startInput} maxLength={10} inputMode="numeric" aria-label="Дата начала" onFocus={openPicker} onChange={(event) => setStartInput(maskDisplayDate(event.target.value, startInput))} onKeyDown={inputKeyDown} /><b>—</b><input value={endInput} maxLength={10} inputMode="numeric" aria-label="Дата окончания" onFocus={openPicker} onChange={(event) => setEndInput(maskDisplayDate(event.target.value, endInput))} onKeyDown={inputKeyDown} /><button type="button" aria-label={open ? "Закрыть календарь" : "Открыть календарь"} onClick={(event) => { event.stopPropagation(); if (open) applyInputs(true); else openPicker(); }}><CalendarIcon /></button></div>{open && <div ref={popover} className={`date-range-picker__popover date-range-picker__popover--${popoverSide}`} style={{ ...menuStyle, right: "auto" }} onMouseDownCapture={closePeriodMenuOutside}><aside className="date-range-picker__presets"><button type="button" onClick={() => preset("today")}><PresetIcon />Сегодня</button><button type="button" onClick={() => preset("yesterday")}><PresetIcon />Вчера</button><button type="button" onClick={() => preset("current-week")}><PresetIcon list />Текущая неделя</button><button type="button" onClick={() => preset("previous-week")}><PresetIcon list />Прошлая неделя</button><button type="button" onClick={() => preset("current-month")}><PresetIcon />Текущий месяц</button><button type="button" onClick={() => preset("previous-month")}><PresetIcon />Прошлый месяц</button><hr /><button type="button" onClick={() => preset("reset")}><PresetIcon reset />Сбросить</button></aside><div className="date-range-picker__calendars"><button type="button" className="date-range-picker__nav date-range-picker__nav--previous" aria-label="Предыдущий месяц" onClick={() => moveLeftMonth(-1)}>‹</button><CalendarMonth month={leftViewMonth} side="left" start={draft.start} end={draft.end} selecting={anchor} hover={hover} preserveEnd={preserveEnd} menu={calendarMenu} onMenu={setCalendarMenu} onMonthChange={selectVisibleMonth} onYearChange={selectVisibleYear} onHover={setHover} onSelect={selectDate} /><CalendarMonth month={rightViewMonth} side="right" start={draft.start} end={draft.end} selecting={anchor} hover={hover} preserveEnd={preserveEnd} menu={calendarMenu} onMenu={setCalendarMenu} onMonthChange={selectVisibleMonth} onYearChange={selectVisibleYear} onHover={setHover} onSelect={selectDate} /><button type="button" className="date-range-picker__nav date-range-picker__nav--next" aria-label="Следующий месяц" onClick={() => moveRightMonth(1)}>›</button></div><footer>Выбрано: <strong>{selectedText}</strong></footer></div>}</div>;
 }

@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
+import { DashboardMultiSelect } from "../../components/DashboardMultiSelect";
+import { DateRangePicker } from "../../components/DateRangePicker";
 import "./purchases.css";
 
 function formatNumber(value) {
@@ -29,12 +31,19 @@ function buildParams(filters) {
   const params = new URLSearchParams();
 
   Object.entries(filters || {}).forEach(([key, value]) => {
-    if (value) {
+    if (Array.isArray(value)) {
+      value.filter(Boolean).forEach((item) => params.append(key, item));
+    } else if (value) {
       params.set(key, value);
     }
   });
 
   return params;
+}
+
+function normalizeList(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).map(String);
+  return value ? [String(value)] : [];
 }
 
 function IndicatorCard({ title, value }) {
@@ -450,7 +459,12 @@ export function PurchasesDashboard({
   const chart = data?.chart || null;
   const purchasesTree = data?.purchases_tree || [];
 
-  const [localFilters, setLocalFilters] = useState(filters);
+  const [localFilters, setLocalFilters] = useState({
+    ...filters,
+    nomenclature_code: normalizeList(filters.nomenclature_code),
+    nomenclature: normalizeList(filters.nomenclature),
+    partner: normalizeList(filters.partner),
+  });
   const [expandedMonths, setExpandedMonths] = useState(new Set());
   const [expandedCodes, setExpandedCodes] = useState(new Set());
   const [exporting, setExporting] = useState(false);
@@ -460,9 +474,9 @@ export function PurchasesDashboard({
     const year = now.getFullYear();
 
     return {
-      nomenclature_code: "",
-      nomenclature: "",
-      partner: "",
+      nomenclature_code: [],
+      nomenclature: [],
+      partner: [],
       date_start: `${year}-01-01`,
       date_end: now.toISOString().slice(0, 10),
     };
@@ -485,58 +499,19 @@ export function PurchasesDashboard({
     }
   }
 
-  function handleFilterChange(name, value) {
-    applyFilters({
-      ...localFilters,
-      [name]: value,
-    });
-  }
-
-  const applyFiltersFromDom = useCallback(() => {
-    const form = document.getElementById("filterForm");
-    if (!form) return;
-
-    const formData = new FormData(form);
-
-    applyFilters({
-      nomenclature_code: formData.get("nomenclature_code") || "",
-      nomenclature: formData.get("nomenclature") || "",
-      partner: formData.get("partner") || "",
-      date_start: formData.get("date_start") || "",
-      date_end: formData.get("date_end") || "",
-    });
-  }, [onFiltersChange]);
-
+  /* Данные виджета приходят асинхронно и намеренно синхронизируют локальную форму. */
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    setLocalFilters(filters);
+    setLocalFilters({
+      ...filters,
+      nomenclature_code: normalizeList(filters.nomenclature_code),
+      nomenclature: normalizeList(filters.nomenclature),
+      partner: normalizeList(filters.partner),
+    });
     setExpandedMonths(new Set());
     setExpandedCodes(new Set());
   }, [filters, purchasesTree]);
-
-  useEffect(() => {
-    const ids = [
-      "date_start_filter",
-      "date_end_filter",
-    ];
-
-    ids.forEach((id) => {
-      const el = document.getElementById(id);
-
-      if (el) {
-        el.addEventListener("change", applyFiltersFromDom);
-      }
-    });
-
-    return () => {
-      ids.forEach((id) => {
-        const el = document.getElementById(id);
-
-        if (el) {
-          el.removeEventListener("change", applyFiltersFromDom);
-        }
-      });
-    };
-  }, [applyFiltersFromDom]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function resetFilters() {
     applyFilters(defaultFilters);
@@ -642,96 +617,8 @@ export function PurchasesDashboard({
     <div className="purchases">
       <h2>Сырье</h2>
 
-      <form id="filterForm">
-        <div className="filter">
-          <label htmlFor="filter_nomenclature_code_list">Группа</label>
-          <select
-            id="filter_nomenclature_code_list"
-            name="nomenclature_code"
-            value={localFilters.nomenclature_code || ""}
-            onChange={(event) =>
-              handleFilterChange("nomenclature_code", event.target.value)
-            }
-          >
-            <option value=""></option>
-            {(filterValues.nomenclature_code || []).map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="filter">
-          <label htmlFor="filter_nomenclature_list">Номенклатура</label>
-          <select
-            id="filter_nomenclature_list"
-            name="nomenclature"
-            value={localFilters.nomenclature || ""}
-            onChange={(event) =>
-              handleFilterChange("nomenclature", event.target.value)
-            }
-          >
-            <option value=""></option>
-            {(filterValues.nomenclature || []).map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="filter">
-          <label htmlFor="filter_partner_list">Контрагент</label>
-          <select
-            id="filter_partner_list"
-            name="partner"
-            value={localFilters.partner || ""}
-            onChange={(event) =>
-              handleFilterChange("partner", event.target.value)
-            }
-          >
-            <option value=""></option>
-            {(filterValues.partner || []).map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="filter">
-          <label htmlFor="date_start_filter">Дата начала</label>
-          <input
-            type="date"
-            id="date_start_filter"
-            name="date_start"
-            value={localFilters.date_start || ""}
-            onChange={(event) =>
-              setLocalFilters((prev) => ({
-                ...prev,
-                date_start: event.target.value,
-              }))
-            }
-          />
-        </div>
-
-        <div className="filter">
-          <label htmlFor="date_end_filter">Дата окончания</label>
-          <input
-            type="date"
-            id="date_end_filter"
-            name="date_end"
-            value={localFilters.date_end || ""}
-            onChange={(event) =>
-              setLocalFilters((prev) => ({
-                ...prev,
-                date_end: event.target.value,
-              }))
-            }
-          />
-        </div>
-
+      <form id="filterForm" onSubmit={(event) => event.preventDefault()}>
+        <div className="dashboard-filter-actions">
         <button
           type="button"
           className="filters-export"
@@ -749,6 +636,11 @@ export function PurchasesDashboard({
         >
           Очистить
         </button>
+        </div>
+        <div className="dashboard-filter-grid">
+          {[['nomenclature_code', 'Группа'], ['nomenclature', 'Номенклатура'], ['partner', 'Контрагент']].map(([name, label]) => <DashboardMultiSelect key={name} label={label} options={filterValues[name] || []} selected={localFilters[name] || []} onApply={(value) => applyFilters({ ...localFilters, [name]: value })} />)}
+          <DateRangePicker start={localFilters.date_start} end={localFilters.date_end} resetRange={{ start: defaultFilters.date_start, end: defaultFilters.date_end }} onChange={({ start, end }) => applyFilters({ ...localFilters, date_start: start, date_end: end })} />
+        </div>
       </form>
 
       <PurchasesIndicators indicators={indicators} />

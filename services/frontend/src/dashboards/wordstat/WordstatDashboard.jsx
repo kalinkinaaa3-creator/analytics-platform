@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
+import { useDropdownPosition } from "../../components/useDropdownPosition";
 import "./wordstat.css";
 import "../spinner.css";
 
@@ -144,50 +145,66 @@ function DataCell({ row, field, index, thick = false }) {
   );
 }
 
-function MultiSelect({
-  name,
-  label,
-  options,
-  selected,
-  onChange,
-  onApply,
-}) {
+function MultiSelect({ label, options, selected, onApply }) {
   const rootRef = useRef(null);
+  const menuRef = useRef(null);
+  const selectedRef = useRef(selected);
+  const draftRef = useRef(selected);
+  const onApplyRef = useRef(onApply);
+  const openRef = useRef(false);
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(selected);
   const [search, setSearch] = useState("");
-  const [pending, setPending] = useState(false);
+  const safeOptions = useMemo(() => options || [], [options]);
+  const safeSelected = useMemo(() => normalizeList(selected), [selected]);
 
-  const safeOptions = options || [];
-  const safeSelected = selected || [];
-
-  const selectedSet = useMemo(() => new Set(safeSelected), [safeSelected]);
+  useEffect(() => {
+    selectedRef.current = safeSelected;
+    onApplyRef.current = onApply;
+    if (!open) draftRef.current = safeSelected;
+  }, [safeSelected, onApply, open]);
 
   const visibleOptions = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim().toLocaleLowerCase("ru-RU");
 
     if (!q) return safeOptions;
 
     return safeOptions.filter((item) =>
-      String(item).toLowerCase().includes(q)
+      String(item).toLocaleLowerCase("ru-RU").includes(q)
     );
   }, [safeOptions, search]);
 
-  const allVisibleSelected =
-    visibleOptions.length > 0 &&
-    visibleOptions.every((item) => selectedSet.has(item));
+  function updateDraft(next) {
+    draftRef.current = next;
+    setDraft(next);
+  }
+
+  function commit() {
+    const current = selectedRef.current;
+    const next = draftRef.current;
+    if (current.length !== next.length || current.some((value, index) => value !== next[index])) {
+      onApplyRef.current(next);
+    }
+  }
+
+  function closeMenu() {
+    commit();
+    openRef.current = false;
+    setOpen(false);
+    setSearch("");
+  }
 
   useEffect(() => {
     function handleDocumentClick(event) {
-      if (!rootRef.current) return;
-
-      if (!rootRef.current.contains(event.target)) {
+      if (openRef.current && !rootRef.current?.contains(event.target)) {
+        const current = selectedRef.current;
+        const next = draftRef.current;
+        if (current.length !== next.length || current.some((value, index) => value !== next[index])) {
+          onApplyRef.current(next);
+        }
+        openRef.current = false;
         setOpen(false);
         setSearch("");
-
-        if (pending) {
-          setPending(false);
-          onApply();
-        }
       }
     }
 
@@ -196,125 +213,66 @@ function MultiSelect({
     return () => {
       document.removeEventListener("mousedown", handleDocumentClick);
     };
-  }, [pending, onApply]);
+  }, []);
 
-  function updateSelected(next) {
-    onChange(next);
-    setPending(true);
+  const { menuStyle, resetPosition } = useDropdownPosition({
+    open,
+    rootRef,
+    menuRef,
+    contentKey: `${visibleOptions.length}:${search}`,
+  });
+
+  function toggleMenu() {
+    if (open) {
+      closeMenu();
+      return;
+    }
+    updateDraft(safeSelected);
+    resetPosition();
+    openRef.current = true;
+    setOpen(true);
   }
 
   function toggleItem(item) {
-    if (selectedSet.has(item)) {
-      updateSelected(safeSelected.filter((value) => value !== item));
-      return;
-    }
-
-    updateSelected([...safeSelected, item]);
+    updateDraft(draft.includes(item) ? draft.filter((value) => value !== item) : [...draft, item]);
   }
 
-  function toggleAllVisible() {
-    if (allVisibleSelected) {
-      updateSelected(
-        safeSelected.filter((item) => !visibleOptions.includes(item))
-      );
-      return;
-    }
-
-    updateSelected(Array.from(new Set([...safeSelected, ...visibleOptions])));
+  function selectVisible() {
+    updateDraft([...new Set([...draft, ...visibleOptions])]);
   }
 
-  function removeItem(item) {
-    updateSelected(safeSelected.filter((value) => value !== item));
-  }
-
-  function handleInputKeyDown(event) {
-    if (event.key !== "Enter") return;
-
-    event.preventDefault();
-
-    const value = search.trim();
-
-    if (!value) return;
-
-    if (!selectedSet.has(value)) {
-      updateSelected([...safeSelected, value]);
-    }
-
-    setSearch("");
-  }
-
-  function renderSelectedTags() {
-    if (safeSelected.length === 0) return null;
-
-    if (safeSelected.length > 1) {
-      return <div className="tag">...</div>;
-    }
-
-    return (
-      <div className="tag">
-        {safeSelected[0]}
-        <button type="button" onClick={() => removeItem(safeSelected[0])}>
-          ×
-        </button>
-      </div>
-    );
-  }
+  const shownSelection = open ? draft : safeSelected;
 
   return (
-    <div className="filter">
-      <label htmlFor={`filter_${name}_list`}>{label}</label>
-
-      <div
-        ref={rootRef}
-        className={`multi-select ${open ? "open" : ""}`}
-        id={`multiSelect_${name}`}
+    <div className={`wordstat-filter${open ? " wordstat-filter--open" : ""}`} ref={rootRef}>
+      <label>{label}</label>
+      <button
+        type="button"
+        className="wordstat-multiselect__control"
+        aria-expanded={open}
+        onClick={toggleMenu}
       >
-        <div className="top-bar">
-          <div className="selected-items">
-            {renderSelectedTags()}
+        <span>{shownSelection.length ? `Выбрано: ${shownSelection.length}` : "Все"}</span>
+        <i aria-hidden="true">▾</i>
+      </button>
+      {open && (
+        <div ref={menuRef} className="wordstat-multiselect__menu" style={menuStyle}>
+          <input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Поиск…" />
+          <div className="wordstat-multiselect__actions">
+            <button type="button" disabled={!visibleOptions.length} onClick={selectVisible}>Выбрать найденные</button>
+            <button type="button" disabled={!draft.length && !search} onClick={() => { updateDraft([]); setSearch(""); }}>Очистить</button>
           </div>
-
-          <input
-            type="text"
-            id={`filter_${name}_list`}
-            name={name}
-            value={search}
-            onFocus={() => setOpen(true)}
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder=""
-          />
-        </div>
-
-        <div className="dropdown">
-          <div className="dropdown-item select-all">
-            <label>
-              <input
-                type="checkbox"
-                checked={allVisibleSelected}
-                onChange={toggleAllVisible}
-              />
-              <span>Выбрать все</span>
-            </label>
-          </div>
-
-          <div>
+          <div className="wordstat-multiselect__options">
             {visibleOptions.map((item) => (
-              <div className="dropdown-item" key={item}>
-                <label>
-                  <input
-                    type="checkbox"
-                    value={item}
-                    checked={selectedSet.has(item)}
-                    onChange={() => toggleItem(item)}
-                  />
-                  <span>{item}</span>
-                </label>
-              </div>
+              <label key={item}>
+                <input type="checkbox" checked={draft.includes(item)} onChange={() => toggleItem(item)} />
+                <span>{item}</span>
+              </label>
             ))}
+            {!visibleOptions.length && <p>Нет значений</p>}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -496,6 +454,7 @@ export function WordstatDashboard({ data }) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setRows(data?.rows || []);
     setPagination(data?.pagination || {});
@@ -507,6 +466,7 @@ export function WordstatDashboard({ data }) {
       phrase: normalizeList(data?.filters?.phrase),
     });
   }, [data]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const currentFilters = useMemo(
     () => ({
@@ -547,21 +507,14 @@ export function WordstatDashboard({ data }) {
     setFilterValues(nextData.filter_values || {});
   }
 
-  async function applyFilters() {
+  async function applyFilters(next = currentFilters) {
     setIsApplyingFilters(true);
 
     try {
-      await fetchWordstat(currentFilters, 1, false);
+      await fetchWordstat(next, 1, false);
     } finally {
       setIsApplyingFilters(false);
     }
-  }
-
-  function changeFilter(name, value) {
-    setLocalFilters((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
   }
 
   async function resetFilters() {
@@ -642,37 +595,43 @@ export function WordstatDashboard({ data }) {
     <div className="wordstat-dashboard">
       <h2>Тренды и сезонность</h2>
 
-      <form id="filterForm">
-        {FILTERS.map(([name, label]) => (
-          <MultiSelect
-            key={name}
-            name={name}
-            label={label}
-            options={filterValues[name] || []}
-            selected={localFilters[name] || []}
-            onChange={(value) => changeFilter(name, value)}
-            onApply={applyFilters}
-          />
-        ))}
+      <form id="filterForm" onSubmit={(event) => event.preventDefault()}>
+        <div className="wordstat-filter-actions">
+          <button
+            type="button"
+            className="filters-export"
+            onClick={exportExcel}
+            disabled={isExporting || isApplyingFilters}
+          >
+            {isExporting ? "Экспорт..." : "Экспорт"}
+          </button>
 
-        <button
-          type="button"
-          className="filters-export"
-          onClick={exportExcel}
-          disabled={isExporting}
-        >
-          {isExporting ? "Экспорт..." : "Экспорт"}
-        </button>
+          <button
+            type="button"
+            id="resetFilters"
+            className="filters-reset"
+            onClick={resetFilters}
+            disabled={isApplyingFilters}
+          >
+            Очистить
+          </button>
+        </div>
 
-        <button
-          type="button"
-          id="resetFilters"
-          className="filters-reset"
-          onClick={resetFilters}
-          disabled={isApplyingFilters}
-        >
-          Очистить
-        </button>
+        <div className="wordstat-filter-grid">
+          {FILTERS.map(([name, label]) => (
+            <MultiSelect
+              key={name}
+              label={label}
+              options={filterValues[name] || []}
+              selected={localFilters[name] || []}
+              onApply={(value) => {
+                const next = { ...currentFilters, [name]: value };
+                setLocalFilters(next);
+                applyFilters(next);
+              }}
+            />
+          ))}
+        </div>
       </form>
 
       <div

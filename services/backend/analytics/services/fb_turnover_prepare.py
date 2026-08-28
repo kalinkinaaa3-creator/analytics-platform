@@ -543,6 +543,30 @@ def build_turnover_tree(turnover_list):
     return result
 
 
+def build_turnover_month_nodes(turnover_list):
+    grouped = defaultdict(lambda: {"mutual_finstock": Decimal("0"), "final_stock": Decimal("0")})
+
+    for row in turnover_list:
+        month = row.get("month_year")
+        if not month:
+            continue
+        grouped[month]["mutual_finstock"] += to_decimal(row.get("middle_stock"))
+        grouped[month]["final_stock"] += to_decimal(row.get("middle_rubstock"))
+
+    result = [
+        serialize_row({
+            "month_year": month,
+            "mutual_finstock": values["mutual_finstock"],
+            "final_stock": values["final_stock"],
+            "children": [],
+            "children_loaded": False,
+        })
+        for month, values in grouped.items()
+    ]
+    result.sort(key=lambda row: row["month_year"], reverse=True)
+    return result
+
+
 def build_turnover_indicators(chart_data):
     if (
         not chart_data
@@ -571,10 +595,29 @@ def build_turnover_indicators(chart_data):
     }
 
 
-def prepare_fb_turnover_dashboard(rows, indicator_rows, filters=None):
+def prepare_fb_turnover_dashboard(
+    rows,
+    indicator_rows,
+    filters=None,
+    filter_options=None,
+    tree_only=False,
+):
     filters = get_default_turnover_filters(filters)
 
-    filter_values = build_filter_values(rows)
+    turnover_list = group_turnover_monthly(rows)
+
+    if tree_only:
+        turnover_tree = build_turnover_tree(turnover_list)
+        for month_node in turnover_tree:
+            month_node["children_loaded"] = True
+        return {
+            "filters": filters,
+            "turnover_tree": turnover_tree,
+            "total_rows": len(rows),
+            "tree_only": True,
+        }
+
+    filter_values = filter_options or build_filter_values(rows)
 
     chart = build_turnover_chart_data(
         rows=rows,
@@ -585,8 +628,7 @@ def prepare_fb_turnover_dashboard(rows, indicator_rows, filters=None):
 
     indicators = build_turnover_indicators(chart)
 
-    turnover_list = group_turnover_monthly(rows)
-    turnover_tree = build_turnover_tree(turnover_list)
+    turnover_tree = build_turnover_month_nodes(turnover_list)
 
     return {
         "filters": filters,

@@ -4,7 +4,18 @@
 	overflow-x: hidden;
 }
 
-
+.turnover #filterForm { position:relative; display:block; margin-bottom:10px; padding:10px; background:#fff; border:1px solid #d5d8d1; border-radius:8px; }
+.turnover .dashboard-filter-actions { display:flex; margin-bottom:14px; flex-wrap:wrap; justify-content:flex-end; gap:14px; }
+.turnover .dashboard-filter-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); align-items:end; gap:10px; }
+.turnover .dashboard-filter-grid .dropdown { width:max-content; min-width:100%; max-width:min(440px,90vw); }
+.turnover .dashboard-filter-grid > .filter { position:relative; min-width:0; flex-basis:auto; }
+.turnover .dashboard-filter-grid > .filter > label { color:#444841; font-size:12px; }
+.turnover .dashboard-filter-grid .top-bar { min-height:34px; border:1px solid #aeb3aa; border-radius:5px; }
+.turnover .filters-reset,.turnover .filters-export { min-height:44px; height:auto; box-sizing:border-box; margin:0; padding:8px 14px; background:linear-gradient(90deg,#6c6c5a,#4e4e43); border:1px solid #4d5747; border-radius:4px; color:#fff; font:700 12px Helvetica,sans-serif; }
+.turnover .date-range-picker { width:260px; }
+@media (max-width:768px) { .turnover .dashboard-filter-grid { grid-template-columns:1fr; } .turnover .dashboard-filter-actions { flex-direction:column; gap:8px; } .turnover .filters-reset,.turnover .filters-export,.turnover .date-range-picker { width:100%; } }
+/* Архивные правила старой формы оставлены изолированными от нового компонента. */
+@media not all {
 /* ФИЛЬТРЫ */
 .turnover #filterForm {
     display: flex;
@@ -292,6 +303,7 @@
 
 
 /* КОНЕЦ ФИЛЬТРОВ */
+}
 
 
 
@@ -896,3 +908,8 @@
         font-size: 24px;
     }
 }
+.turnover #filterForm { display:block; margin-bottom:10px; padding:10px; background:#fff; border:1px solid #d5d8d1; }
+.turnover .dashboard-filter-actions { display:flex; margin:0 0 14px; flex-direction:row; justify-content:flex-end; gap:14px; }
+.turnover .dashboard-filter-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); align-items:end; gap:10px; }
+.turnover .filters-reset,.turnover .filters-export { min-height:44px; height:auto; margin:0; padding:8px 14px; border:1px solid #4d5747; }
+@media(max-width:768px){.turnover .dashboard-filter-grid{grid-template-columns:1fr}.turnover .dashboard-filter-actions{flex-direction:column}.turnover .date-range-picker,.turnover .filters-reset,.turnover .filters-export{width:100%}}

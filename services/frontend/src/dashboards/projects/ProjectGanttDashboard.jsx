@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { DateRangePicker } from "../../components/DateRangePicker";
+import { useDropdownPosition } from "../../components/useDropdownPosition";
 import "./list_project.css";
 
 const FILTERS = [
   ["folder_lvl1", "Группы", "folder_lvl1"],
-  ["folder_lvl2", "", "folder_lvl2"],
-  ["folder_lvl3", "", "folder_lvl3"],
+  ["folder_lvl2", "Группа (уровень 2)", "folder_lvl2"],
+  ["folder_lvl3", "Группа (уровень 3)", "folder_lvl3"],
   ["project_name", "Наименование", "name"],
   ["project_type", "Тип", "type"],
   ["department", "Подразделение", "department"],
@@ -12,6 +14,134 @@ const FILTERS = [
   ["project_status", "Статус", "statuses"],
   ["deviation_project", "Выполнение", "deviation"],
 ];
+
+function normalizeSelected(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).map(String);
+  return value ? [String(value)] : [];
+}
+
+function ProjectMultiSelect({ label, options, selected, onChange }) {
+  const rootRef = useRef(null);
+  const menuRef = useRef(null);
+  const selectedRef = useRef(selected);
+  const draftRef = useRef(selected);
+  const onChangeRef = useRef(onChange);
+  const openRef = useRef(false);
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(selected);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    selectedRef.current = selected;
+    onChangeRef.current = onChange;
+    if (!open) {
+      draftRef.current = selected;
+    }
+  }, [selected, onChange, open]);
+
+  const visible = useMemo(() => {
+    const needle = search.trim().toLocaleLowerCase("ru-RU");
+    return options.filter((value) => !needle || String(value).toLocaleLowerCase("ru-RU").includes(needle));
+  }, [options, search]);
+
+  function updateDraft(next) {
+    draftRef.current = next;
+    setDraft(next);
+  }
+
+  function commit() {
+    const current = selectedRef.current;
+    const next = draftRef.current;
+    if (current.length !== next.length || current.some((value, index) => value !== next[index])) {
+      onChangeRef.current(next);
+    }
+  }
+
+  function closeMenu() {
+    commit();
+    openRef.current = false;
+    setOpen(false);
+    setSearch("");
+  }
+
+  useEffect(() => {
+    function closeOutside(event) {
+      if (openRef.current && !rootRef.current?.contains(event.target)) {
+        const current = selectedRef.current;
+        const next = draftRef.current;
+        if (current.length !== next.length || current.some((value, index) => value !== next[index])) {
+          onChangeRef.current(next);
+        }
+        openRef.current = false;
+        setOpen(false);
+        setSearch("");
+      }
+    }
+    document.addEventListener("mousedown", closeOutside);
+    return () => document.removeEventListener("mousedown", closeOutside);
+  }, []);
+
+  const { menuStyle, resetPosition } = useDropdownPosition({
+    open,
+    rootRef,
+    menuRef,
+    contentKey: `${visible.length}:${search}`,
+  });
+
+  function toggleMenu() {
+    if (open) {
+      closeMenu();
+      return;
+    }
+    updateDraft(selected);
+    resetPosition();
+    openRef.current = true;
+    setOpen(true);
+  }
+
+  function toggleValue(value) {
+    updateDraft(draft.includes(value) ? draft.filter((item) => item !== value) : [...draft, value]);
+  }
+
+  function selectVisible() {
+    updateDraft([...new Set([...draft, ...visible])]);
+  }
+
+  const shownSelection = open ? draft : selected;
+
+  return (
+    <div className={`project-filter${open ? " project-filter--open" : ""}`} ref={rootRef}>
+      <label>{label}</label>
+      <button
+        type="button"
+        className="project-multiselect__control"
+        aria-expanded={open}
+        onClick={toggleMenu}
+      >
+        <span>{shownSelection.length ? `Выбрано: ${shownSelection.length}` : "Все"}</span>
+        <i aria-hidden="true">▾</i>
+      </button>
+      {open && (
+        <div ref={menuRef} className="project-multiselect__menu" style={menuStyle}>
+          <input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Поиск…" />
+          <div className="project-multiselect__actions">
+            <button type="button" disabled={!visible.length} onClick={selectVisible}>Выбрать найденные</button>
+            <button type="button" disabled={!draft.length && !search} onClick={() => { updateDraft([]); setSearch(""); }}>Очистить</button>
+          </div>
+          <div className="project-multiselect__options">
+            {visible.map((value) => (
+              <label key={value}>
+                <input type="checkbox" checked={draft.includes(value)} onChange={() => toggleValue(value)} />
+                <span>{value}</span>
+              </label>
+            ))}
+            {!visible.length && <p>Нет значений</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function formatDate(value) {
   if (!value) return "";
@@ -314,9 +444,9 @@ function collectHierarchyIds(nodes, result = []) {
 }
 
 export function ProjectGanttDashboard({ data, onFiltersChange }) {
-  const projects = data?.projects_tree || [];
+  const projects = useMemo(() => data?.projects_tree || [], [data?.projects_tree]);
   const months = data?.months_list || [];
-  const filters = data?.filters || {};
+  const filters = useMemo(() => data?.filters || {}, [data?.filters]);
   const filterValues = data?.filter_values || {};
   const todayOffset = data?.today_offset;
 
@@ -379,68 +509,27 @@ export function ProjectGanttDashboard({ data, onFiltersChange }) {
     });
   }
 
-  const applyFiltersFromDom = useCallback(() => {
-    const form = document.getElementById("filterForm");
-    if (!form) return;
-
-    const formData = new FormData(form);
-
-    applyFilters({
-      folder_lvl1: formData.get("folder_lvl1") || "",
-      folder_lvl2: formData.get("folder_lvl2") || "",
-      folder_lvl3: formData.get("folder_lvl3") || "",
-      project_name: formData.get("project_name") || "",
-      project_type: formData.get("project_type") || "",
-      department: formData.get("department") || "",
-      project_manager: formData.get("project_manager") || "",
-      project_status: formData.get("project_status") || "",
-      deviation_project: formData.get("deviation_project") || "",
-      project_start: formData.get("project_start") || "",
-      project_end: formData.get("project_end") || "",
-    });
-  }, [onFiltersChange]);
-
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setLocalFilters(filters);
     setExpandedIds(new Set());
   }, [filters, projects]);
-
-  useEffect(() => {
-    const ids = ["project_start_filter", "project_end_filter"];
-
-    ids.forEach((id) => {
-      const el = document.getElementById(id);
-
-      if (el) {
-        el.addEventListener("change", applyFiltersFromDom);
-      }
-    });
-
-    return () => {
-      ids.forEach((id) => {
-        const el = document.getElementById(id);
-
-        if (el) {
-          el.removeEventListener("change", applyFiltersFromDom);
-        }
-      });
-    };
-  }, [applyFiltersFromDom]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function resetFilters() {
     const year = new Date().getFullYear() - 1;
     const nextYear = year + 2;
 
     const next = {
-      project_name: "",
-      project_type: "",
-      department: "",
-      deviation_project: "",
-      project_manager: "",
-      project_status: "",
-      folder_lvl1: "",
-      folder_lvl2: "",
-      folder_lvl3: "",
+      project_name: [],
+      project_type: [],
+      department: [],
+      deviation_project: [],
+      project_manager: [],
+      project_status: [],
+      folder_lvl1: [],
+      folder_lvl2: [],
+      folder_lvl3: [],
       project_start: `${year}-01-01`,
       project_end: `${nextYear}-12-31`,
     };
@@ -480,72 +569,51 @@ export function ProjectGanttDashboard({ data, onFiltersChange }) {
   }
 
   const allExpanded = expandedIds.size > 0;
+  const resetYear = new Date().getFullYear() - 1;
+  const projectResetRange = {
+    start: `${resetYear}-01-01`,
+    end: `${resetYear + 2}-12-31`,
+  };
 
   return (
     <div className="project-gantt-dashboard">
       <h2>Проекты</h2>
 
-      <form id="filterForm">
-        {FILTERS.map(([name, label, valuesKey]) => (
-          <div className={label ? "filter" : "filter filter--no-label"} key={name}>
-            <label htmlFor={`${name}_filter`}>{label}</label>
-
-            <select
-              id={`${name}_filter`}
-              name={name}
-              value={localFilters[name] || ""}
-              onChange={(event) => handleFilterChange(name, event.target.value)}
-            >
-              <option value=""></option>
-              {(filterValues[valuesKey] || []).map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </div>
-        ))}
-
-        <div className="filter">
-          <label htmlFor="project_start_filter">Начало</label>
-          <input
-            type="date"
-            id="project_start_filter"
-            name="project_start"
-            value={localFilters.project_start || ""}
-            onChange={(event) =>
-              setLocalFilters((prev) => ({
-                ...prev,
-                project_start: event.target.value,
-              }))
-            }
-          />
+      <form id="filterForm" onSubmit={(event) => event.preventDefault()}>
+        <div className="project-filter-actions">
+          <button
+            type="button"
+            id="resetFilters"
+            className="filters-reset"
+            onClick={resetFilters}
+          >
+            Очистить
+          </button>
         </div>
 
-        <div className="filter">
-          <label htmlFor="project_end_filter">Окончание</label>
-          <input
-            type="date"
-            id="project_end_filter"
-            name="project_end"
-            value={localFilters.project_end || ""}
-            onChange={(event) =>
-              setLocalFilters((prev) => ({
-                ...prev,
-                project_end: event.target.value,
-              }))
-            }
+        <div className="project-filter-grid">
+          {FILTERS.map(([name, label, valuesKey]) => (
+            <ProjectMultiSelect
+              key={name}
+              label={label}
+              options={filterValues[valuesKey] || []}
+              selected={normalizeSelected(localFilters[name])}
+              onChange={(value) => handleFilterChange(name, value)}
+            />
+          ))}
+
+          <DateRangePicker
+            key={`${localFilters.project_start}:${localFilters.project_end}`}
+            start={localFilters.project_start || projectResetRange.start}
+            end={localFilters.project_end || projectResetRange.end}
+            resetRange={projectResetRange}
+            onChange={({ start, end }) => applyFilters({
+              ...localFilters,
+              project_start: start,
+              project_end: end,
+            })}
           />
         </div>
-
-        <button
-          type="button"
-          id="resetFilters"
-          className="filters-reset"
-          onClick={resetFilters}
-        >
-          Очистить
-        </button>
       </form>
 
       <div className="gantt-table-wrapper">

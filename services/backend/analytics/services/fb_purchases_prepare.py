@@ -29,10 +29,14 @@ def get_default_purchases_filters(filters=None):
 
     now = datetime.now().date()
 
+    def values(key):
+        value = filters.get(key, [])
+        return [item for item in (value if isinstance(value, (list, tuple)) else [value]) if item not in ("", None)]
+
     return {
-        "nomenclature_code": filters.get("nomenclature_code", ""),
-        "nomenclature": filters.get("nomenclature", ""),
-        "partner": filters.get("partner", ""),
+        "nomenclature_code": values("nomenclature_code"),
+        "nomenclature": values("nomenclature"),
+        "partner": values("partner"),
         "date_start": filters.get("date_start") or f"{now.year}-01-01",
         "date_end": filters.get("date_end") or now.isoformat(),
     }
@@ -414,10 +418,10 @@ def build_price_chart_data(rows, indicator_rows):
     }
 
 
-def prepare_fb_purchases_dashboard(rows, indicator_rows, filters=None):
+def prepare_fb_purchases_dashboard(rows, indicator_rows, filters=None, filter_options=None):
     filters = get_default_purchases_filters(filters)
 
-    filter_values = build_filter_values(rows)
+    filter_values = filter_options or build_filter_values(rows)
 
     purchases_list = group_purchases_by_month(rows)
     purchases_list = add_indicator_to_purchases(purchases_list, indicator_rows)

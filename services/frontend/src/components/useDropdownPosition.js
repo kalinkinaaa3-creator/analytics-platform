@@ -3,7 +3,7 @@ import { useCallback, useLayoutEffect, useState } from "react";
 const DASHBOARD_SELECTOR = ".crm-dashboard, .project-gantt-dashboard, .revenue-dashboard, .wordstat-dashboard, .purchases, .accreceiv, .turnover";
 const EDGE_PADDING = 12;
 
-export function useDropdownPosition({ open, rootRef, menuRef, contentKey = "" }) {
+export function useDropdownPosition({ open, rootRef, menuRef, contentKey = "", preferredWidth = null }) {
   const [position, setPosition] = useState({ left: 0, width: null, maxWidth: null, ready: false });
   const resetPosition = useCallback(() => {
     setPosition((current) => (
@@ -38,7 +38,10 @@ export function useDropdownPosition({ open, rootRef, menuRef, contentKey = "" })
         dashboardBounds?.right ?? window.innerWidth - EDGE_PADDING,
       );
       const availableWidth = Math.max(0, rightBoundary - leftBoundary);
-      const naturalWidth = Math.max(menuBounds.width, menuRef.current.scrollWidth);
+      const configuredWidth = typeof preferredWidth === "function"
+        ? preferredWidth()
+        : preferredWidth;
+      const naturalWidth = configuredWidth || Math.max(menuBounds.width, menuRef.current.scrollWidth);
       const effectiveWidth = Math.min(naturalWidth, availableWidth);
 
       let left = 0;
@@ -89,7 +92,7 @@ export function useDropdownPosition({ open, rootRef, menuRef, contentKey = "" })
       window.visualViewport?.removeEventListener("resize", measure);
       window.visualViewport?.removeEventListener("scroll", measure);
     };
-  }, [open, rootRef, menuRef, contentKey]);
+  }, [open, rootRef, menuRef, contentKey, preferredWidth]);
 
   return {
     menuStyle: {

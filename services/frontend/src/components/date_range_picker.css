@@ -150,7 +150,7 @@
 
   .date-range-picker { width: 100%; grid-column: 1 / -1; justify-self: stretch; }
 
-  .date-range-picker__popover,.date-range-picker__popover--right,.date-range-picker__popover--left { position: fixed; top: 70px; right: 12px; bottom: 12px; left: 12px; width: auto; max-width: none; max-height: none; grid-template-columns: 1fr; grid-template-rows: auto auto 50px; }
+  .date-range-picker__popover,.date-range-picker__popover--right,.date-range-picker__popover--left { position: fixed; top: 70px; right: 12px !important; bottom: 12px; left: 12px !important; width: auto !important; max-width: none !important; max-height: none; grid-template-columns: 1fr; grid-template-rows: auto auto 50px; }
 
   .date-range-picker__presets { display: grid; padding: 10px; border-right: 0; border-bottom: 1px solid #e1e4dd; grid-template-columns: repeat(2,minmax(0,1fr)); }
 

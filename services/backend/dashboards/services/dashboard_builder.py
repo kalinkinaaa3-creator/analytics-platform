@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from copy import deepcopy
 from django.core.cache import cache
 
 from analytics.clickhouse.repository import ClickHouseRepository
@@ -41,6 +42,13 @@ def get_dashboard_cache_timeout(dashboard: Dashboard) -> int:
     }
 
     return timeouts.get(dashboard.name, 300)
+
+
+def get_dashboard_cache_schema_version(dashboard: Dashboard) -> int:
+    return {
+        "Wordstat": 2,
+        "Turnover": 2,
+    }.get(dashboard.name, 1)
 
 
 
@@ -88,6 +96,7 @@ def normalize_filters_for_dashboard(dashboard: Dashboard, filters: dict | None =
             "quantity",
             "date_start",
             "date_end",
+            "tree_month",
         ]
 
     elif dashboard.name == "Accreceiv":
@@ -203,6 +212,18 @@ def clean_runtime_filters(filters: dict | None = None) -> dict:
     }
 
 
+def _can_edit_dashboard(user, dashboard) -> bool:
+    if user is None:
+        return False
+    if user.is_superuser or dashboard.owner_id == user.id:
+        return True
+    return DashboardAccess.objects.filter(
+        user=user,
+        dashboard=dashboard,
+        can_edit=True,
+    ).exists()
+
+
 
 
 
@@ -227,23 +248,40 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
     runtime_filters = clean_runtime_filters(cache_filters)
 
+    cache_schema_version = get_dashboard_cache_schema_version(dashboard)
+    cache_key_payload = cache_filters
+    if cache_schema_version > 1:
+        cache_key_payload = {
+            "schema_version": cache_schema_version,
+            "filters": cache_filters,
+        }
     filters_hash = hashlib.md5(
-        json.dumps(cache_filters, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        json.dumps(cache_key_payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
     ).hexdigest()
+
+    shared_key = dashboard_cache_key(
+        f"dashboard:{dashboard_id}:filters:{filters_hash}"
+    )
 
     if user is not None:
         key = dashboard_cache_key(
             f"user:{user.id}:dashboard:{dashboard_id}:filters:{filters_hash}"
         )
     else:
-        key = dashboard_cache_key(
-            f"dashboard:{dashboard_id}:filters:{filters_hash}"
-        )
+        key = shared_key
 
     cached = cache.get(key)
     
     if cached is not None:
         return cached
+
+    if user is not None:
+        shared_result = cache.get(shared_key)
+        if shared_result is not None:
+            result = deepcopy(shared_result)
+            result["dashboard"]["can_edit"] = _can_edit_dashboard(user, dashboard)
+            cache.set(key, result, timeout=get_dashboard_cache_timeout(dashboard))
+            return result
 
     repository = ClickHouseRepository()
 
@@ -299,14 +337,54 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
         elif widget.type == "yd_wordstat_table":
             page = int(runtime_filters.get("page", 1))
             page_size = int(runtime_filters.get("page_size", 100))
+            page = max(1, page)
+            page_size = min(max(1, page_size), 500)
+            offset = (page - 1) * page_size
 
             rows = repository.fetch_yd_wordstat_rows(
                 filters=runtime_filters,
+                limit=page_size,
+                offset=offset,
             )
+            wordstat_base_filters = {
+                key: value
+                for key, value in runtime_filters.items()
+                if key not in ("page", "page_size")
+            }
+            wordstat_base_hash = hashlib.md5(
+                json.dumps(wordstat_base_filters, sort_keys=True, ensure_ascii=False).encode("utf-8")
+            ).hexdigest()
+            wordstat_base_key = dashboard_cache_key(
+                f"dashboard:{dashboard_id}:filters:wordstat-base:{wordstat_base_hash}"
+            )
+            wordstat_base = cache.get(wordstat_base_key)
+            if wordstat_base is None:
+                wordstat_base = {
+                    "total_rows": repository.fetch_yd_wordstat_count(filters=runtime_filters),
+                    "summary_source_rows": repository.fetch_yd_wordstat_summary_rows(filters=runtime_filters),
+                    "filter_options": repository.fetch_yd_wordstat_filter_options(filters=runtime_filters),
+                }
+                cache.set(
+                    wordstat_base_key,
+                    wordstat_base,
+                    timeout=get_dashboard_cache_timeout(dashboard),
+                )
+
+            total_rows = wordstat_base["total_rows"]
+            page_phrases = sorted({row.get("phrase") for row in rows if row.get("phrase")})
+            context_filters = dict(runtime_filters)
+            context_filters["phrase"] = page_phrases
+            context_rows = repository.fetch_yd_wordstat_rows(filters=context_filters) if page_phrases else []
+            summary_source_rows = wordstat_base["summary_source_rows"]
+            filter_options = wordstat_base["filter_options"]
 
             widget_data["data"] = prepare_yd_wordstat_table(
                 rows=rows,
                 filters=runtime_filters,
+                filter_options=filter_options,
+                context_rows=context_rows,
+                summary_source_rows=summary_source_rows,
+                total_rows=total_rows,
                 page=page,
                 page_size=page_size,
             )
@@ -324,15 +402,18 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
             rows = repository.fetch_fb_purchases_use_rows(filters=purchases_filters)
             indicator_rows = repository.fetch_fb_purchases_indicator_rows(filters=purchases_filters)
+            filter_options = repository.fetch_fb_purchases_filter_options(filters=purchases_filters)
 
             widget_data["data"] = prepare_fb_purchases_dashboard(
                 rows=rows,
                 indicator_rows=indicator_rows,
                 filters=purchases_filters,
+                filter_options=filter_options,
             )
 
         elif widget.type == "fb_turnover_dashboard":
             turnover_filters = dict(runtime_filters)
+            tree_month = turnover_filters.get("tree_month")
 
             yesterday = date.today() - timedelta(days=1)
 
@@ -343,12 +424,25 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
                 turnover_filters["date_end"] = yesterday.isoformat()
 
             rows = repository.fetch_fb_turnover_use_rows(filters=turnover_filters)
+
+            if tree_month:
+                widget_data["data"] = prepare_fb_turnover_dashboard(
+                    rows=rows,
+                    indicator_rows=[],
+                    filters=turnover_filters,
+                    tree_only=True,
+                )
+                widgets_data.append(widget_data)
+                continue
+
             indicator_rows = repository.fetch_fb_turnover_indicator_rows(filters=turnover_filters)
+            filter_options = repository.fetch_fb_turnover_filter_options(filters=turnover_filters)
 
             widget_data["data"] = prepare_fb_turnover_dashboard(
                 rows=rows,
                 indicator_rows=indicator_rows,
                 filters=turnover_filters,
+                filter_options=filter_options,
             )
 
         elif widget.type == "fb_accreceiv_dashboard":
@@ -364,11 +458,13 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
             rows = repository.fetch_fb_accreceiv_use_rows(filters=accreceiv_filters)
             indicator_rows = repository.fetch_fb_accreceiv_indicator_rows(filters=accreceiv_filters)
+            filter_options = repository.fetch_fb_accreceiv_filter_options(filters=accreceiv_filters)
 
             widget_data["data"] = prepare_fb_accreceiv_dashboard(
                 rows=rows,
                 indicator_rows=indicator_rows,
                 filters=accreceiv_filters,
+                filter_options=filter_options,
             )
 
         elif widget.type == "planned_sales_dashboard":
@@ -442,14 +538,7 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
         widgets_data.append(widget_data)
 
-    can_edit = False
-
-    if user is not None:
-        can_edit = DashboardAccess.objects.filter(
-            user=user,
-            dashboard=dashboard,
-            can_edit=True,
-        ).exists()
+    can_edit = _can_edit_dashboard(user, dashboard)
 
     result = {
         "dashboard": {
@@ -463,5 +552,9 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
     cache_timeout = get_dashboard_cache_timeout(dashboard)
     cache.set(key, result, timeout=cache_timeout)
+    if user is not None:
+        shared_result = deepcopy(result)
+        shared_result["dashboard"]["can_edit"] = False
+        cache.set(shared_key, shared_result, timeout=cache_timeout)
 
     return result

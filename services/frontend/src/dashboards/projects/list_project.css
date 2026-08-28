@@ -4,8 +4,8 @@
 }
 
 .project-gantt-dashboard #head	{
-visibility: hidden; 
-opacity: 0;        
+visibility: hidden;
+opacity: 0;
 }
 
 .project-gantt-dashboard #head.visible  {
@@ -16,77 +16,223 @@ opacity: 1;
 
 /* ФИЛЬТРЫ */
 .project-gantt-dashboard #filterForm {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    border: 1px solid #ccc;
+    border: 1px solid #d5d8d1;
     border-radius: 8px;
-    padding: 15px;
-    background-color: #fafafa;
+    padding: 10px;
+    background-color: #fff;
     position: relative;
-	margin-bottom: 20px;
+	margin-bottom: 10px;
 }
 
-.project-gantt-dashboard .filter {
-  flex-basis: 120px;          /* ширину берём из модификатора */
+.project-gantt-dashboard .project-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.project-gantt-dashboard .project-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  align-items: end;
+  gap: 10px;
+}
+
+.project-gantt-dashboard .project-filter {
+  position: relative;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
 
-.project-gantt-dashboard .filter label {
-  display: block;
-  font-size: 14px;
-  margin-bottom: 4px;
-  font-weight: bold;
+.project-gantt-dashboard .project-filter--open {
+  z-index: 1300;
+}
+
+.project-gantt-dashboard .date-range-picker {
+  width: 260px;
+}
+
+.project-gantt-dashboard .date-range-picker > span {
+  font-size: 12px;
+}
+
+.project-gantt-dashboard .project-filter > label {
   min-height: 18px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  color: #444841;
+  font-size: 12px;
+  font-weight: 700;
   text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.project-gantt-dashboard .filter input,
-.project-gantt-dashboard .filter select {
+.project-gantt-dashboard .project-multiselect__control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
+  min-height: 34px;
   box-sizing: border-box;
-  height: 24px;
+  padding: 6px 9px;
+  background: #fff;
+  border: 1px solid #aeb3aa;
+  border-radius: 5px;
+  color: #222;
+  font: 13px Helvetica, sans-serif;
+  text-align: left;
+  cursor: pointer;
 }
 
-.project-gantt-dashboard .filter--no-label::before {
-  display: block;
-  min-height: 18px;
-  margin-bottom: 4px;
+.project-gantt-dashboard .project-multiselect__control:hover {
+  border-color: #71796b;
+}
+
+.project-gantt-dashboard .project-multiselect__control:focus {
+  border-color: #65705e;
+  outline: 0;
+  box-shadow: 0 0 0 2px rgba(101, 112, 94, .12);
+}
+
+.project-gantt-dashboard .project-multiselect__control i {
+  flex: none;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.project-gantt-dashboard .project-multiselect__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: 80;
+  width: max-content;
+  min-width: 100%;
+  max-width: min(440px, 90vw);
+  max-height: 390px;
+  box-sizing: border-box;
+  padding: 8px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 7px 20px rgba(0, 0, 0, .16);
+}
+
+.project-gantt-dashboard .project-multiselect__menu > input {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  width: 100%;
+  min-height: 30px;
+  box-sizing: border-box;
+  margin-bottom: 6px;
+  padding: 5px 7px;
+  border: 1px solid #aaa;
+  border-radius: 3px;
+}
+
+.project-gantt-dashboard .project-multiselect__actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 2px 0 7px;
+}
+
+.project-gantt-dashboard .project-multiselect__actions button {
+  padding: 4px 2px;
+  background: transparent;
+  border: 0;
+  color: #4e6349;
+  font: 700 11px Helvetica, sans-serif;
+  cursor: pointer;
+}
+
+.project-gantt-dashboard .project-multiselect__actions button:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.project-gantt-dashboard .project-multiselect__actions button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.project-gantt-dashboard .project-multiselect__options {
+  max-height: 270px;
+  overflow-y: auto;
+  border-top: 1px solid #eceee9;
+}
+
+.project-gantt-dashboard .project-multiselect__options > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 220px;
+  padding: 6px;
+  border-bottom: 1px solid #f0f1ed;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.project-gantt-dashboard .project-multiselect__options > label:hover {
+  background: #f4f5f1;
+}
+
+.project-gantt-dashboard .project-multiselect__options input {
+  flex: none;
+  margin-top: 2px;
+}
+
+.project-gantt-dashboard .project-multiselect__options > p {
+  margin: 12px 4px;
+  color: #747970;
+  font-size: 12px;
 }
 
 .project-gantt-dashboard .filters-reset {
-  margin-left: auto;    /* кнопка «Очистить» уезжает вправо в третьей строке */
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 8px 14px;
+  border: 1px solid #4d5747;
   border-radius: 4px;
-  height: 44px;
   cursor: pointer;
-  background: #4d5747;
-  color: white;
-  border: #4d5747;
-  transition: all 0.3s ease;
   background: linear-gradient(90deg, #6c6c5a, #4e4e43);
+  color: white;
+  font: 700 12px Helvetica, sans-serif;
+  transition: all .3s ease;
 }
-
-.project-gantt-dashboard .filters-reset:hover {
-  color: black;
-  border: #c8cec5;
-  filter: brightness(1);
+.project-gantt-dashboard .filters-reset:hover:not(:disabled) {
+  color: #111;
   background: linear-gradient(90deg, #a0a699, #c8cec5);
 }
 
+@media (min-width: 1180px) {
+  .project-gantt-dashboard .project-filter-grid {
+    grid-template-columns: repeat(9, minmax(0, 1fr)) 260px;
+  }
+
+  .project-gantt-dashboard .date-range-picker {
+    grid-column: auto;
+  }
+}
 @media (max-width: 768px) {
   .project-gantt-dashboard #filterForm {
-    gap: 10px 8px;  /* меньше отступов на мобильных */
     padding: 12px;
   }
-  
-  .project-gantt-dashboard .filter {
-    flex-basis: 100%;  /* на мобилках каждый фильтр в новую строку */
+
+  .project-gantt-dashboard .project-filter-grid {
+    grid-template-columns: 1fr;
+    gap: 10px 8px;
   }
-  
+
+  .project-gantt-dashboard .date-range-picker {
+    width: 100%;
+    justify-self: stretch;
+  }
+
   .project-gantt-dashboard .filters-reset {
-    margin-left: 0;    /* кнопка не уезжает вправо */
-    margin-top: 8px;
     width: 100%;
   }
 }
@@ -101,7 +247,7 @@ opacity: 1;
     width: 100%;
     max-width: 100%;
     position: relative;
-	overflow-x: auto;   
+	overflow-x: auto;
 	overflow-y: auto;
 	height: 70vh;
 }
@@ -196,7 +342,7 @@ opacity: 1;
 /* === Ширина колонок по месяцам === */
 .project-gantt-dashboard .month-col {
     width: 62px !important;
-	position: relative; 
+	position: relative;
 	box-sizing: border-box;
     font-size: 12px;
     font-weight: bold;
@@ -292,12 +438,12 @@ opacity: 1;
 }
 
 .project-gantt-dashboard .today-line {
-    pointer-events: none; 
-	position:absolute; 
-	top:0; 
-	width:2px; 
-	height:100%; 
-	background:red; 
+    pointer-events: none;
+	position:absolute;
+	top:0;
+	width:2px;
+	height:100%;
+	background:red;
 	z-index:8;
 }
 

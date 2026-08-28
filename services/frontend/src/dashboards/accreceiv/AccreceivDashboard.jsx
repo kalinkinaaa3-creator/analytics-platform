@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
+import { DashboardMultiSelect } from "../../components/DashboardMultiSelect";
+import { DateRangePicker } from "../../components/DateRangePicker";
 import "../spinner.css";
 import "./accreceiv.css";
 
@@ -110,181 +112,6 @@ function shouldShowXLabel(total, index) {
   if (total <= 28) return index % 3 === 0;
 
   return index % 4 === 0;
-}
-
-function MultiSelect({
-  name,
-  label,
-  options,
-  selected,
-  onChange,
-  onApply,
-}) {
-  const rootRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [pending, setPending] = useState(false);
-
-  const safeOptions = options || [];
-  const safeSelected = selected || [];
-
-  const selectedSet = useMemo(() => new Set(safeSelected), [safeSelected]);
-
-  const visibleOptions = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    if (!query) return safeOptions;
-
-    return safeOptions.filter((item) =>
-      String(item).toLowerCase().includes(query)
-    );
-  }, [safeOptions, search]);
-
-  const allVisibleSelected =
-    visibleOptions.length > 0 &&
-    visibleOptions.every((item) => selectedSet.has(item));
-
-  useEffect(() => {
-    function handleDocumentClick(event) {
-      if (!rootRef.current) return;
-
-      if (!rootRef.current.contains(event.target)) {
-        setOpen(false);
-        setSearch("");
-
-        if (pending) {
-          setPending(false);
-          onApply();
-        }
-      }
-    }
-
-    document.addEventListener("mousedown", handleDocumentClick);
-
-    return () => {
-      document.removeEventListener("mousedown", handleDocumentClick);
-    };
-  }, [pending, onApply]);
-
-  function updateSelected(next) {
-    onChange(next);
-    setPending(true);
-  }
-
-  function toggleItem(item) {
-    if (selectedSet.has(item)) {
-      updateSelected(safeSelected.filter((value) => value !== item));
-      return;
-    }
-
-    updateSelected([...safeSelected, item]);
-  }
-
-  function toggleAllVisible() {
-    if (allVisibleSelected) {
-      updateSelected(
-        safeSelected.filter((item) => !visibleOptions.includes(item))
-      );
-      return;
-    }
-
-    updateSelected(Array.from(new Set([...safeSelected, ...visibleOptions])));
-  }
-
-  function removeItem(item) {
-    updateSelected(safeSelected.filter((value) => value !== item));
-  }
-
-  function handleInputKeyDown(event) {
-    if (event.key !== "Enter") return;
-
-    event.preventDefault();
-
-    const value = search.trim();
-
-    if (!value) return;
-
-    if (!selectedSet.has(value)) {
-      updateSelected([...safeSelected, value]);
-    }
-
-    setSearch("");
-  }
-
-  function renderSelectedTags() {
-    if (safeSelected.length === 0) return null;
-
-    if (safeSelected.length > 1) {
-      return <div className="tag">...</div>;
-    }
-
-    return (
-      <div className="tag">
-        {safeSelected[0]}
-        <button type="button" onClick={() => removeItem(safeSelected[0])}>
-          ×
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="filter">
-      <label htmlFor={`filter_${name}_list`}>{label}</label>
-
-      <div
-        ref={rootRef}
-        className={`multi-select ${open ? "open" : ""}`}
-        id={`multiSelect_${name}`}
-      >
-        <div className="top-bar">
-          <div className="selected-items">
-            {renderSelectedTags()}
-          </div>
-
-          <input
-            type="text"
-            id={`filter_${name}_list`}
-            name={name}
-            value={search}
-            onFocus={() => setOpen(true)}
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder=""
-          />
-        </div>
-
-        <div className="dropdown">
-          <div className="dropdown-item select-all">
-            <label>
-              <input
-                type="checkbox"
-                checked={allVisibleSelected}
-                onChange={toggleAllVisible}
-              />
-              <span>Выбрать все</span>
-            </label>
-          </div>
-
-          <div>
-            {visibleOptions.map((item) => (
-              <div className="dropdown-item" key={item}>
-                <label>
-                  <input
-                    type="checkbox"
-                    value={item}
-                    checked={selectedSet.has(item)}
-                    onChange={() => toggleItem(item)}
-                  />
-                  <span>{item}</span>
-                </label>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function AccreceivIndicators({ indicators }) {
@@ -605,6 +432,8 @@ export function AccreceivDashboard({ data, publicToken = null }) {
     date_end: filters.date_end || "",
   });
 
+  /* Данные виджета приходят асинхронно и намеренно синхронизируют локальное состояние. */
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setDashboardData(data || {});
   }, [data]);
@@ -621,6 +450,7 @@ export function AccreceivDashboard({ data, publicToken = null }) {
     setExpandedMonths(new Set());
     setExpandedCodes(new Set());
   }, [filters, accreceivTree]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const currentFilters = useMemo(
     () => ({
@@ -685,45 +515,6 @@ export function AccreceivDashboard({ data, publicToken = null }) {
       [name]: value,
     }));
   }
-
-  const applyFiltersFromDom = useCallback(() => {
-    const form = document.getElementById("filterForm");
-
-    if (!form) return;
-
-    const formData = new FormData(form);
-
-    const next = {
-      ...currentFilters,
-      date_start: formData.get("date_start") || "",
-      date_end: formData.get("date_end") || "",
-    };
-
-    setLocalFilters(next);
-    applyFilters(next);
-  }, [currentFilters]);
-
-  useEffect(() => {
-    const ids = ["date_start_filter", "date_end_filter"];
-
-    ids.forEach((id) => {
-      const element = document.getElementById(id);
-
-      if (element) {
-        element.addEventListener("change", applyFiltersFromDom);
-      }
-    });
-
-    return () => {
-      ids.forEach((id) => {
-        const element = document.getElementById(id);
-
-        if (element) {
-          element.removeEventListener("change", applyFiltersFromDom);
-        }
-      });
-    };
-  }, [applyFiltersFromDom]);
 
   async function resetFilters() {
     setLocalFilters(defaultFilters);
@@ -835,71 +626,27 @@ export function AccreceivDashboard({ data, publicToken = null }) {
     <div className="accreceiv">
       <h2>ДЗ</h2>
 
-      <form id="filterForm">
+      <form id="filterForm" onSubmit={(event) => event.preventDefault()}>
+        <div className="dashboard-filter-actions">
+        <button type="button" className="filters-export" onClick={exportExcel} disabled={exporting || isApplyingFilters}>{exporting ? "Экспорт..." : "Экспорт"}</button>
+        <button type="button" id="resetFilters" className="filters-reset" onClick={resetFilters} disabled={isApplyingFilters}>Очистить</button>
+        </div>
+        <div className="dashboard-filter-grid">
         {FILTERS.map(([name, label]) => (
-          <MultiSelect
+          <DashboardMultiSelect
             key={name}
-            name={name}
             label={label}
             options={filterValues[name] || []}
             selected={localFilters[name] || []}
-            onChange={(value) => changeFilter(name, value)}
-            onApply={() => applyFilters()}
+            onApply={(value) => {
+              const next = { ...currentFilters, [name]: value };
+              changeFilter(name, value);
+              applyFilters(next);
+            }}
           />
         ))}
-
-        <div className="filter">
-          <label htmlFor="date_start_filter">Дата начала</label>
-          <input
-            type="date"
-            id="date_start_filter"
-            name="date_start"
-            value={localFilters.date_start || ""}
-            onChange={(event) =>
-              setLocalFilters((prev) => ({
-                ...prev,
-                date_start: event.target.value,
-              }))
-            }
-            disabled={isApplyingFilters}
-          />
+        <DateRangePicker start={localFilters.date_start} end={localFilters.date_end} resetRange={{ start: defaultFilters.date_start, end: defaultFilters.date_end }} onChange={({ start, end }) => { const next = { ...currentFilters, date_start: start, date_end: end }; setLocalFilters(next); applyFilters(next); }} />
         </div>
-
-        <div className="filter">
-          <label htmlFor="date_end_filter">Дата окончания</label>
-          <input
-            type="date"
-            id="date_end_filter"
-            name="date_end"
-            value={localFilters.date_end || ""}
-            onChange={(event) =>
-              setLocalFilters((prev) => ({
-                ...prev,
-                date_end: event.target.value,
-              }))
-            }
-            disabled={isApplyingFilters}
-          />
-        </div>
-
-        <button
-          type="button"
-          className="filters-export"
-          onClick={exportExcel}
-          disabled={exporting || isApplyingFilters}
-        >
-          {exporting ? "Экспорт..." : "Экспорт"}
-        </button>
-
-        <button
-          type="button"
-          id="resetFilters"
-          className="filters-reset"
-          onClick={resetFilters}
-          disabled={isApplyingFilters}
-        >
-          Очистить
-        </button>
       </form>
 
       <AccreceivIndicators indicators={indicators} />

@@ -25,7 +25,13 @@ class PublicDashboardBuilderView(APIView):
         if not public_access.is_valid():
             raise PermissionDenied("Public dashboard link is inactive or expired")
 
-        filters = request.query_params.dict()
+        filters = {}
+        for key in request.query_params.keys():
+            values = request.query_params.getlist(key)
+            if len(values) > 1:
+                filters[key] = values
+            elif values:
+                filters[key] = values[0]
 
         result = build_dashboard(
             dashboard_id=public_access.dashboard_id,

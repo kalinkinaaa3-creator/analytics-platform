@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
+import { DashboardMultiSelect } from "../../components/DashboardMultiSelect";
+import { DateRangePicker } from "../../components/DateRangePicker";
 import "../spinner.css";
 import "./turnover.css";
 
@@ -111,172 +113,6 @@ function shouldShowXLabel(total, index) {
   if (total <= 28) return index % 3 === 0;
 
   return index % 4 === 0;
-}
-
-function MultiSelect({ name, label, options, selected, onChange, onApply }) {
-  const rootRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [pending, setPending] = useState(false);
-
-  const safeOptions = options || [];
-  const safeSelected = selected || [];
-
-  const selectedSet = useMemo(() => new Set(safeSelected), [safeSelected]);
-
-  const visibleOptions = useMemo(() => {
-    const q = search.trim().toLowerCase();
-
-    if (!q) return safeOptions;
-
-    return safeOptions.filter((item) =>
-      String(item).toLowerCase().includes(q)
-    );
-  }, [safeOptions, search]);
-
-  const allVisibleSelected =
-    visibleOptions.length > 0 &&
-    visibleOptions.every((item) => selectedSet.has(item));
-
-  useEffect(() => {
-    function handleDocumentClick(event) {
-      if (!rootRef.current) return;
-
-      if (!rootRef.current.contains(event.target)) {
-        setOpen(false);
-        setSearch("");
-
-        if (pending) {
-          setPending(false);
-          onApply();
-        }
-      }
-    }
-
-    document.addEventListener("mousedown", handleDocumentClick);
-
-    return () => {
-      document.removeEventListener("mousedown", handleDocumentClick);
-    };
-  }, [pending, onApply]);
-
-  function updateSelected(next) {
-    onChange(next);
-    setPending(true);
-  }
-
-  function toggleItem(item) {
-    if (selectedSet.has(item)) {
-      updateSelected(safeSelected.filter((value) => value !== item));
-      return;
-    }
-
-    updateSelected([...safeSelected, item]);
-  }
-
-  function toggleAllVisible() {
-    if (allVisibleSelected) {
-      updateSelected(
-        safeSelected.filter((item) => !visibleOptions.includes(item))
-      );
-      return;
-    }
-
-    updateSelected(Array.from(new Set([...safeSelected, ...visibleOptions])));
-  }
-
-  function removeItem(item) {
-    updateSelected(safeSelected.filter((value) => value !== item));
-  }
-
-  function handleInputKeyDown(event) {
-    if (event.key !== "Enter") return;
-
-    event.preventDefault();
-
-    const value = search.trim();
-
-    if (!value) return;
-
-    if (!selectedSet.has(value)) {
-      updateSelected([...safeSelected, value]);
-    }
-
-    setSearch("");
-  }
-
-  function renderSelectedTags() {
-    if (safeSelected.length === 0) return null;
-
-    if (safeSelected.length > 1) {
-      return <div className="tag">...</div>;
-    }
-
-    return (
-      <div className="tag">
-        {safeSelected[0]}
-        <button type="button" onClick={() => removeItem(safeSelected[0])}>
-          ×
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="filter">
-      <label htmlFor={`filter_${name}_list`}>{label}</label>
-
-      <div
-        ref={rootRef}
-        className={`multi-select ${open ? "open" : ""}`}
-        id={`multiSelect_${name}`}
-      >
-        <div className="top-bar">
-          <div className="selected-items">{renderSelectedTags()}</div>
-
-          <input
-            type="text"
-            id={`filter_${name}_list`}
-            name={name}
-            value={search}
-            onFocus={() => setOpen(true)}
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder=""
-          />
-        </div>
-
-        <div className="dropdown">
-          <div className="dropdown-item select-all">
-            <label>
-              <input
-                type="checkbox"
-                checked={allVisibleSelected}
-                onChange={toggleAllVisible}
-              />
-              <span>Выбрать все</span>
-            </label>
-          </div>
-
-          <div>
-            {visibleOptions.map((item) => (
-              <div className="dropdown-item" key={item}>
-                <label>
-                  <input
-                    type="checkbox"
-                    value={item}
-                    checked={selectedSet.has(item)}
-                    onChange={() => toggleItem(item)}
-                  />
-                  <span>{item}</span>
-                </label>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function TurnoverIndicators({ indicators }) {
@@ -450,6 +286,7 @@ function TurnoverTreeTable({
   onToggleMonth,
   onToggleCode,
   onToggleAll,
+  loadingMonths,
 }) {
   const allExpanded = expandedMonths.size > 0;
 
@@ -487,6 +324,7 @@ function TurnoverTreeTable({
                 expandedCodes={expandedCodes}
                 onToggleMonth={onToggleMonth}
                 onToggleCode={onToggleCode}
+                loadingMonths={loadingMonths}
               />
             ))
           ) : (
@@ -508,6 +346,7 @@ function TreeMonth({
   expandedCodes,
   onToggleMonth,
   onToggleCode,
+  loadingMonths,
 }) {
   const month = monthNode.month_year;
   const monthExpanded = expandedMonths.has(month);
@@ -523,10 +362,10 @@ function TreeMonth({
             className="toggle-sign"
             onClick={(event) => {
               event.stopPropagation();
-              onToggleMonth(month);
+              onToggleMonth(monthNode);
             }}
           >
-            {monthExpanded ? "[-]" : "[+]"}
+            {loadingMonths.has(month) ? "[…]" : monthExpanded ? "[-]" : "[+]"}
           </span>{" "}
           {month}
         </td>
@@ -537,7 +376,7 @@ function TreeMonth({
         <td className="number">{formatNumber(monthNode.final_stock)}</td>
       </tr>
 
-      {(monthNode.children || []).map((nomenclatureNode, index) => (
+      {monthExpanded && (monthNode.children || []).map((nomenclatureNode, index) => (
         <TreeNomenclature
           key={`${month}__nomenclature__${index}__${
             nomenclatureNode.partner || ""
@@ -604,7 +443,7 @@ function TreeNomenclature({
         <td className="number">{formatNumber(nomenclatureNode.final_stock)}</td>
       </tr>
 
-      {(nomenclatureNode.children || []).map((warehouseGroupNode, index) => (
+      {monthExpanded && codeExpanded && (nomenclatureNode.children || []).map((warehouseGroupNode, index) => (
         <TreeWarehouseGroup
           key={`${codeKey}__warehouse_group__${index}`}
           month={month}
@@ -677,12 +516,19 @@ export function TurnoverDashboard({ data, publicToken = null }) {
   const [expandedCodes, setExpandedCodes] = useState(new Set());
   const [isApplyingFilters, setIsApplyingFilters] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [loadingMonths, setLoadingMonths] = useState(new Set());
 
-  const filters = dashboardData?.filters || {};
+  const filters = useMemo(
+    () => dashboardData?.filters || {},
+    [dashboardData?.filters]
+  );
   const filterValues = dashboardData?.filter_values || {};
   const indicators = dashboardData?.indicators || {};
   const chart = dashboardData?.chart || null;
-  const turnoverTree = dashboardData?.turnover_tree || [];
+  const turnoverTree = useMemo(
+    () => dashboardData?.turnover_tree || [],
+    [dashboardData?.turnover_tree]
+  );
 
   const defaultFilters = useMemo(() => {
     const yesterday = new Date();
@@ -708,6 +554,8 @@ export function TurnoverDashboard({ data, publicToken = null }) {
     date_end: filters.date_end || "",
   });
 
+  /* Данные виджета приходят асинхронно и намеренно синхронизируют локальное состояние. */
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setDashboardData(data || {});
   }, [data]);
@@ -724,7 +572,8 @@ export function TurnoverDashboard({ data, publicToken = null }) {
 
     setExpandedMonths(new Set());
     setExpandedCodes(new Set());
-  }, [filters, turnoverTree]);
+  }, [filters]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const currentFilters = useMemo(
     () => ({
@@ -791,45 +640,6 @@ export function TurnoverDashboard({ data, publicToken = null }) {
     }));
   }
 
-  const applyFiltersFromDom = useCallback(() => {
-    const form = document.getElementById("filterForm");
-
-    if (!form) return;
-
-    const formData = new FormData(form);
-
-    const next = {
-      ...currentFilters,
-      date_start: formData.get("date_start") || "",
-      date_end: formData.get("date_end") || "",
-    };
-
-    setLocalFilters(next);
-    applyFilters(next);
-  }, [currentFilters]);
-
-  useEffect(() => {
-    const ids = ["date_start_filter", "date_end_filter"];
-
-    ids.forEach((id) => {
-      const element = document.getElementById(id);
-
-      if (element) {
-        element.addEventListener("change", applyFiltersFromDom);
-      }
-    });
-
-    return () => {
-      ids.forEach((id) => {
-        const element = document.getElementById(id);
-
-        if (element) {
-          element.removeEventListener("change", applyFiltersFromDom);
-        }
-      });
-    };
-  }, [applyFiltersFromDom]);
-
   async function resetFilters() {
     setLocalFilters(defaultFilters);
     setIsApplyingFilters(true);
@@ -841,7 +651,48 @@ export function TurnoverDashboard({ data, publicToken = null }) {
     }
   }
 
-  function toggleMonth(month) {
+  async function loadMonthChildren(monthNode) {
+    const month = monthNode.month_year;
+    if (monthNode.children_loaded || loadingMonths.has(month)) return true;
+
+    setLoadingMonths((current) => new Set(current).add(month));
+
+    try {
+      const payload = buildPayload({
+        ...currentFilters,
+        tree_month: String(month).slice(0, 7),
+      });
+      const response = await api.post(getBuilderUrl(), payload);
+      const widget = response.data?.widgets?.find(
+        (item) => item.type === "fb_turnover_dashboard"
+      );
+      const loadedNode = widget?.data?.turnover_tree?.[0];
+      if (!loadedNode) return false;
+
+      setDashboardData((current) => ({
+        ...current,
+        turnover_tree: (current.turnover_tree || []).map((item) => (
+          item.month_year === month ? loadedNode : item
+        )),
+      }));
+      return true;
+    } catch (error) {
+      console.error("Failed to load turnover month details", error);
+      return false;
+    } finally {
+      setLoadingMonths((current) => {
+        const next = new Set(current);
+        next.delete(month);
+        return next;
+      });
+    }
+  }
+
+  async function toggleMonth(monthNode) {
+    const month = monthNode.month_year;
+    const opening = !expandedMonths.has(month);
+    if (opening && !(await loadMonthChildren(monthNode))) return;
+
     setExpandedMonths((prev) => {
       const next = new Set(prev);
 
@@ -893,18 +744,19 @@ export function TurnoverDashboard({ data, publicToken = null }) {
     });
   }
 
-  function toggleAll() {
+  async function toggleAll() {
     if (expandedMonths.size > 0) {
       setExpandedMonths(new Set());
       setExpandedCodes(new Set());
       return;
     }
 
-    const nextMonths = new Set();
-
-    turnoverTree.forEach((monthNode) => {
-      nextMonths.add(monthNode.month_year);
-    });
+    const results = await Promise.all(turnoverTree.map(loadMonthChildren));
+    const nextMonths = new Set(
+      turnoverTree
+        .filter((_, index) => results[index])
+        .map((monthNode) => monthNode.month_year)
+    );
 
     setExpandedMonths(nextMonths);
     setExpandedCodes(new Set());
@@ -940,71 +792,27 @@ export function TurnoverDashboard({ data, publicToken = null }) {
     <div className="turnover">
       <h2>Остатки</h2>
 
-      <form id="filterForm">
+      <form id="filterForm" onSubmit={(event) => event.preventDefault()}>
+        <div className="dashboard-filter-actions">
+        <button type="button" className="filters-export" onClick={exportExcel} disabled={exporting || isApplyingFilters}>{exporting ? "Экспорт..." : "Экспорт"}</button>
+        <button type="button" id="resetFilters" className="filters-reset" onClick={resetFilters} disabled={isApplyingFilters}>Очистить</button>
+        </div>
+        <div className="dashboard-filter-grid">
         {FILTERS.map(([name, label]) => (
-          <MultiSelect
+          <DashboardMultiSelect
             key={name}
-            name={name}
             label={label}
             options={filterValues[name] || []}
             selected={localFilters[name] || []}
-            onChange={(value) => changeFilter(name, value)}
-            onApply={() => applyFilters()}
+            onApply={(value) => {
+              const next = { ...currentFilters, [name]: value };
+              changeFilter(name, value);
+              applyFilters(next);
+            }}
           />
         ))}
-
-        <div className="filter">
-          <label htmlFor="date_start_filter">Дата начала</label>
-          <input
-            type="date"
-            id="date_start_filter"
-            name="date_start"
-            value={localFilters.date_start || ""}
-            onChange={(event) =>
-              setLocalFilters((prev) => ({
-                ...prev,
-                date_start: event.target.value,
-              }))
-            }
-            disabled={isApplyingFilters}
-          />
+        <DateRangePicker start={localFilters.date_start} end={localFilters.date_end} resetRange={{ start: defaultFilters.date_start, end: defaultFilters.date_end }} onChange={({ start, end }) => { const next = { ...currentFilters, date_start: start, date_end: end }; setLocalFilters(next); applyFilters(next); }} />
         </div>
-
-        <div className="filter">
-          <label htmlFor="date_end_filter">Дата окончания</label>
-          <input
-            type="date"
-            id="date_end_filter"
-            name="date_end"
-            value={localFilters.date_end || ""}
-            onChange={(event) =>
-              setLocalFilters((prev) => ({
-                ...prev,
-                date_end: event.target.value,
-              }))
-            }
-            disabled={isApplyingFilters}
-          />
-        </div>
-
-        <button
-          type="button"
-          className="filters-export"
-          onClick={exportExcel}
-          disabled={exporting || isApplyingFilters}
-        >
-          {exporting ? "Экспорт..." : "Экспорт"}
-        </button>
-
-        <button
-          type="button"
-          id="resetFilters"
-          className="filters-reset"
-          onClick={resetFilters}
-          disabled={isApplyingFilters}
-        >
-          Очистить
-        </button>
       </form>
 
       <TurnoverIndicators indicators={indicators} />
@@ -1018,6 +826,7 @@ export function TurnoverDashboard({ data, publicToken = null }) {
         onToggleMonth={toggleMonth}
         onToggleCode={toggleCode}
         onToggleAll={toggleAll}
+        loadingMonths={loadingMonths}
       />
 
       {isApplyingFilters && <GlobalSpinner />}

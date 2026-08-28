@@ -84,16 +84,21 @@ def get_default_project_filters(filters: dict | None = None) -> dict:
     year_now = date.today().year - 1
     next_year = year_now + 2
 
+    def selected_values(key: str) -> list[str]:
+        value = filters.get(key, [])
+        values = value if isinstance(value, (list, tuple)) else [value]
+        return [str(item) for item in values if item not in ("", None)]
+
     return {
-        "project_name": filters.get("project_name", ""),
-        "project_type": filters.get("project_type", ""),
-        "department": filters.get("department", ""),
-        "deviation_project": filters.get("deviation_project", ""),
-        "project_manager": filters.get("project_manager", ""),
-        "project_status": filters.get("project_status", ""),
-        "folder_lvl1": filters.get("folder_lvl1", ""),
-        "folder_lvl2": filters.get("folder_lvl2", ""),
-        "folder_lvl3": filters.get("folder_lvl3", ""),
+        "project_name": selected_values("project_name"),
+        "project_type": selected_values("project_type"),
+        "department": selected_values("department"),
+        "deviation_project": selected_values("deviation_project"),
+        "project_manager": selected_values("project_manager"),
+        "project_status": selected_values("project_status"),
+        "folder_lvl1": selected_values("folder_lvl1"),
+        "folder_lvl2": selected_values("folder_lvl2"),
+        "folder_lvl3": selected_values("folder_lvl3"),
         "project_start": filters.get("project_start", f"{year_now}-01-01"),
         "project_end": filters.get("project_end", f"{next_year}-12-31"),
     }
@@ -108,51 +113,35 @@ def get_default_project_filters(filters: dict | None = None) -> dict:
 
 
 def build_filter_values(projects_list: list[dict], filters: dict) -> dict:
-    return {
-        "deviation": sorted(
-            set(project["deviation_project"] for project in projects_list if project.get("deviation_project"))
-        ),
-        "department": sorted(
-            set(project["department"] for project in projects_list if project.get("department"))
-        ),
-        "type": sorted(
-            set(project["project_type"] for project in projects_list if project.get("project_type"))
-        ),
-        "name": sorted(
-            set(project["project_name"] for project in projects_list if project.get("project_name"))
-        ),
-        "managers": sorted(
-            set(project["project_manager"] for project in projects_list if project.get("project_manager"))
-        ),
-        "statuses": sorted(
-            set(project["project_status"] for project in projects_list if project.get("project_status"))
-        ),
-        "folder_lvl1": sorted(
-            set(project["folder_lvl1"] for project in projects_list if project.get("folder_lvl1"))
-        ),
-        "folder_lvl2": sorted(
-            set(
-                project["folder_lvl2"]
-                for project in projects_list
-                if project.get("folder_lvl2")
-                and (
-                    not filters["folder_lvl1"]
-                    or project.get("folder_lvl1") == filters["folder_lvl1"]
-                )
-            )
-        ),
-        "folder_lvl3": sorted(
-            set(
-                project["folder_lvl3"]
-                for project in projects_list
-                if project.get("folder_lvl3")
-                and (
-                    not filters["folder_lvl2"]
-                    or project.get("folder_lvl2") == filters["folder_lvl2"]
-                )
-            )
-        ),
+    option_fields = {
+        "deviation": "deviation_project",
+        "department": "department",
+        "type": "project_type",
+        "name": "project_name",
+        "managers": "project_manager",
+        "statuses": "project_status",
+        "folder_lvl1": "folder_lvl1",
+        "folder_lvl2": "folder_lvl2",
+        "folder_lvl3": "folder_lvl3",
     }
+    result = {}
+
+    # Каждый список зависит от остальных фильтров, но не ограничивает сам
+    # себя. Поэтому после выбора одного значения пользователь может добавить
+    # второе, не сбрасывая уже выбранное.
+    for output_key, field_name in option_fields.items():
+        option_filters = dict(filters)
+        option_filters[field_name] = []
+        matching_projects = apply_project_filters(projects_list, option_filters)
+        values = {
+            project.get(field_name)
+            for project in matching_projects
+            if project.get(field_name)
+        }
+        values.update(filters[field_name])
+        result[output_key] = sorted(values)
+
+    return result
 
 
 
@@ -676,31 +665,31 @@ def apply_project_filters(rows: list[dict], filters: dict) -> list[dict]:
     filtered = []
 
     for row in rows:
-        if filters["deviation_project"] and row.get("deviation_project") != filters["deviation_project"]:
+        if filters["deviation_project"] and row.get("deviation_project") not in filters["deviation_project"]:
             continue
 
-        if filters["department"] and row.get("department") != filters["department"]:
+        if filters["department"] and row.get("department") not in filters["department"]:
             continue
 
-        if filters["project_type"] and row.get("project_type") != filters["project_type"]:
+        if filters["project_type"] and row.get("project_type") not in filters["project_type"]:
             continue
 
-        if filters["project_name"] and row.get("project_name") != filters["project_name"]:
+        if filters["project_name"] and row.get("project_name") not in filters["project_name"]:
             continue
 
-        if filters["project_manager"] and row.get("project_manager") != filters["project_manager"]:
+        if filters["project_manager"] and row.get("project_manager") not in filters["project_manager"]:
             continue
 
-        if filters["project_status"] and row.get("project_status") != filters["project_status"]:
+        if filters["project_status"] and row.get("project_status") not in filters["project_status"]:
             continue
 
-        if filters["folder_lvl1"] and row.get("folder_lvl1") != filters["folder_lvl1"]:
+        if filters["folder_lvl1"] and row.get("folder_lvl1") not in filters["folder_lvl1"]:
             continue
 
-        if filters["folder_lvl2"] and row.get("folder_lvl2") != filters["folder_lvl2"]:
+        if filters["folder_lvl2"] and row.get("folder_lvl2") not in filters["folder_lvl2"]:
             continue
 
-        if filters["folder_lvl3"] and row.get("folder_lvl3") != filters["folder_lvl3"]:
+        if filters["folder_lvl3"] and row.get("folder_lvl3") not in filters["folder_lvl3"]:
             continue
 
         row_start = _to_date_or_none(row.get("start_date"))
@@ -747,6 +736,11 @@ def prepare_fb_project_gantt(
 
     project_tasks = assign_knot_fields(rows)
 
+    filter_values = build_filter_values(
+        project_tasks,
+        filters,
+    )
+
     project_tasks = apply_project_filters(
         rows=project_tasks,
         filters=filters,
@@ -755,11 +749,6 @@ def prepare_fb_project_gantt(
     projects_tree, global_min, global_max, today_offset = build_projects_tree(
         project_tasks,
         months_list,
-    )
-
-    filter_values = build_filter_values(
-        projects_tree,
-        filters,
     )
 
     return {

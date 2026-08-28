@@ -666,63 +666,90 @@ def paginate_rows(rows: list[dict], page: int, page_size: int) -> dict:
 def prepare_yd_wordstat_table(
     rows: list[dict],
     filters: dict | None = None,
+    filter_options: dict | None = None,
+    context_rows: list[dict] | None = None,
+    summary_source_rows: list[dict] | None = None,
+    total_rows: int | None = None,
     page: int = 1,
     page_size: int = 100,
 ) -> dict:
     filters = normalize_wordstat_filters(filters)
 
-    filter_values = build_filter_values(rows)
+    filter_values = filter_options or build_filter_values(rows)
 
-    for row in rows:
+    context_rows = context_rows if context_rows is not None else rows
+    summary_source_rows = summary_source_rows if summary_source_rows is not None else context_rows
+
+    for row in context_rows:
         if row.get("average") is not None:
             row["average"] = round(row["average"])
 
-    rows = add_show_phrase(rows)
+    context_rows = add_show_phrase(context_rows)
+    summary_rows = get_wordstat_summary(summary_source_rows)
 
-    summary_rows = get_wordstat_summary(rows)
-
-    rows = add_quarters(rows)
+    context_rows = add_quarters(context_rows)
     summary_rows = add_quarters(summary_rows)
 
     summary_extra_rows = build_summary_extra_rows(summary_rows)
 
-    rows = get_month_colors(rows)
+    context_rows = get_month_colors(context_rows)
     summary_rows = get_month_colors(summary_rows)
 
-    rows = add_percentage_fields(rows)
+    context_rows = add_percentage_fields(context_rows)
     summary_rows = add_percentage_fields(summary_rows)
 
-    rows = format_wordstat_values(rows)
+    context_rows = format_wordstat_values(context_rows)
     summary_rows = format_wordstat_values(summary_rows)
     summary_extra_rows = format_wordstat_values(summary_extra_rows)
 
-    pagination = paginate_rows(
-        rows,
-        page=page,
-        page_size=page_size,
-    )
+    row_keys = {
+        (
+            row.get("category"),
+            row.get("feature"),
+            row.get("phrase"),
+            row.get("year"),
+        )
+        for row in rows
+    }
+    page_rows = [
+        row
+        for row in context_rows
+        if (
+            row.get("category"),
+            row.get("feature"),
+            row.get("phrase"),
+            row.get("year"),
+        ) in row_keys
+    ]
+    page_rows.sort(key=lambda row: (
+        row.get("category") or "",
+        row.get("feature") or "",
+        row.get("phrase") or "",
+        row.get("year") or 0,
+    ))
+    total_rows = len(rows) if total_rows is None else int(total_rows)
+    has_next = page * page_size < total_rows
 
     if page == 1:
         combined_rows = (
             summary_rows
             + summary_extra_rows
-            + pagination["rows"]
+            + page_rows
         )
     else:
-        combined_rows = pagination["rows"]
+        combined_rows = page_rows
 
     return {
         "rows": combined_rows,
-        "detail_rows": rows,
         "summary_rows": summary_rows,
         "summary_extra_rows": summary_extra_rows,
         "filters": filters,
         "filter_values": filter_values,
         "pagination": {
-            "page": pagination["page"],
-            "page_size": pagination["page_size"],
-            "total_rows": pagination["total_rows"],
-            "has_next": pagination["has_next"],
-            "next_page": pagination["next_page"],
+            "page": page,
+            "page_size": page_size,
+            "total_rows": total_rows,
+            "has_next": has_next,
+            "next_page": page + 1 if has_next else None,
         },
     }

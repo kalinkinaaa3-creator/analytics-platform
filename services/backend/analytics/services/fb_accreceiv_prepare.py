@@ -548,10 +548,10 @@ def build_accreceiv_indicators(chart_data):
     }
 
 
-def prepare_fb_accreceiv_dashboard(rows, indicator_rows=None, filters=None):
+def prepare_fb_accreceiv_dashboard(rows, indicator_rows=None, filters=None, filter_options=None):
     filters = get_default_accreceiv_filters(filters)
 
-    filter_values = build_filter_values(rows)
+    filter_values = filter_options or build_filter_values(rows)
 
     chart = build_accreceiv_chart_data(
         rows=rows,

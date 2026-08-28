@@ -489,7 +489,13 @@ class ClickHouseRepository:
             payload,
         )
 
-    def fetch_yd_wordstat_rows(self, filters: dict | None = None):
+    def fetch_yd_wordstat_rows(
+        self,
+        filters: dict | None = None,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ):
         ensure_yd_wordstat_for_table()
 
         filters = filters or {}
@@ -536,12 +542,19 @@ class ClickHouseRepository:
 
         columns_sql = ", ".join(YD_WORDSTAT_COLUMNS)
 
+        pagination_sql = ""
+        if limit is not None:
+            pagination_sql = "LIMIT %(limit)s OFFSET %(offset)s"
+            params["limit"] = max(1, int(limit))
+            params["offset"] = max(0, int(offset))
+
         result = client.execute(
             f"""
             SELECT {columns_sql}
             FROM default.yd_wordstat_for
             {where_sql}
             ORDER BY category, feature, phrase, year
+            {pagination_sql}
             """,
             params,
         )
@@ -550,6 +563,116 @@ class ClickHouseRepository:
             dict(zip(YD_WORDSTAT_COLUMNS, item))
             for item in result
         ]
+
+    def fetch_yd_wordstat_count(self, filters: dict | None = None) -> int:
+        ensure_yd_wordstat_for_table()
+        filters = filters or {}
+        client = get_clickhouse_client()
+        where = []
+        params = {}
+
+        for field in ("feature", "category", "phrase"):
+            value = filters.get(field)
+            if value in ("", None, [], ()):
+                continue
+            values = value if isinstance(value, (list, tuple)) else [value]
+            values = [str(item) for item in values if item not in ("", None)]
+            if values:
+                where.append(f"{field} IN %({field})s")
+                params[field] = tuple(values)
+
+        where_sql = "WHERE " + " AND ".join(where) if where else ""
+        return int(client.execute(
+            f"SELECT count() FROM default.yd_wordstat_for {where_sql}",
+            params,
+        )[0][0])
+
+    def fetch_yd_wordstat_summary_rows(self, filters: dict | None = None):
+        ensure_yd_wordstat_for_table()
+        filters = filters or {}
+        client = get_clickhouse_client()
+        where = []
+        params = {}
+
+        for field in ("feature", "category", "phrase"):
+            value = filters.get(field)
+            if value in ("", None, [], ()):
+                continue
+            values = value if isinstance(value, (list, tuple)) else [value]
+            values = [str(item) for item in values if item not in ("", None)]
+            if values:
+                where.append(f"{field} IN %({field})s")
+                params[field] = tuple(values)
+
+        where_sql = "WHERE " + " AND ".join(where) if where else ""
+        sum_fields = [
+            "total",
+            *(f"month_{index}" for index in range(1, 13)),
+            "desktop", "phone", "tablet", "other_device",
+            "ekb_macroregion", "kras_macroregion", "mos_macroregion",
+            "nign_macroregion", "novos_macroregion", "spb_macroregion",
+            "sng_macroregion", "other_macroregion",
+        ]
+        avg_fields = [f"monthS_{index}" for index in range(1, 13)]
+        select_sql = ", ".join(
+            ["year"]
+            + [f"sum({field}) AS {field}" for field in sum_fields]
+            + [f"avg({field}) AS {field}" for field in avg_fields]
+        )
+        columns = ["year", *sum_fields, *avg_fields]
+        rows = client.execute(
+            f"""
+            SELECT {select_sql}
+            FROM default.yd_wordstat_for
+            {where_sql}
+            GROUP BY year
+            ORDER BY year
+            """,
+            params,
+        )
+        return [dict(zip(columns, row)) for row in rows]
+
+    def fetch_yd_wordstat_filter_options(self, filters: dict | None = None):
+        ensure_yd_wordstat_for_table()
+        filters = filters or {}
+        client = get_clickhouse_client()
+        option_fields = ("feature", "category", "phrase")
+        result = {}
+
+        for option_field in option_fields:
+            where = []
+            params = {}
+
+            for field in option_fields:
+                if field == option_field:
+                    continue
+                value = filters.get(field)
+                if value in ("", None, [], ()):
+                    continue
+                values = value if isinstance(value, (list, tuple)) else [value]
+                values = [str(item) for item in values if item not in ("", None)]
+                if values:
+                    where.append(f"{field} IN %({field})s")
+                    params[field] = tuple(values)
+
+            where.append(f"{option_field} != ''")
+            where_sql = "WHERE " + " AND ".join(where)
+            rows = client.execute(
+                f"""
+                SELECT DISTINCT {option_field}
+                FROM default.yd_wordstat_for
+                {where_sql}
+                ORDER BY {option_field}
+                """,
+                params,
+            )
+            selected = filters.get(option_field)
+            selected_values = selected if isinstance(selected, (list, tuple)) else [selected]
+            values = {row[0] for row in rows if row[0] not in ("", None)}
+            values.update(str(item) for item in selected_values if item not in ("", None))
+            result[option_field] = sorted(values)
+
+        return result
 
 
 
@@ -629,6 +752,60 @@ class ClickHouseRepository:
 
         return len(payload)
 
+    def _fetch_dependent_filter_options(
+        self,
+        *,
+        table,
+        option_fields,
+        filters=None,
+        date_conditions=(),
+    ):
+        filters = filters or {}
+        client = get_clickhouse_client()
+        result = {}
+
+        for option_field in option_fields:
+            where = []
+            params = {}
+
+            for field in option_fields:
+                if field == option_field:
+                    continue
+                value = filters.get(field)
+                if value in ("", None, [], ()):
+                    continue
+                values = value if isinstance(value, (list, tuple)) else [value]
+                values = [str(item) for item in values if item not in ("", None)]
+                if values:
+                    where.append(f"{field} IN %({field})s")
+                    params[field] = tuple(values)
+
+            for date_field, operator, filter_key in date_conditions:
+                value = filters.get(filter_key)
+                if value:
+                    parameter = f"date_filter_{len(params)}"
+                    where.append(f"{date_field} {operator} %({parameter})s")
+                    params[parameter] = value
+
+            where.append(f"{option_field} != ''")
+            rows = client.execute(
+                f"""
+                SELECT DISTINCT toString({option_field})
+                FROM {table}
+                WHERE {' AND '.join(where)}
+                ORDER BY toString({option_field})
+                """,
+                params,
+            )
+
+            selected = filters.get(option_field)
+            selected_values = selected if isinstance(selected, (list, tuple)) else [selected]
+            values = {str(row[0]) for row in rows if row[0] not in ("", None)}
+            values.update(str(item) for item in selected_values if item not in ("", None))
+            result[option_field] = sorted(values)
+
+        return result
+
     def fetch_fb_purchases_use_rows(self, filters=None):
         ensure_fb_purchases_use_table()
 
@@ -639,17 +816,15 @@ class ClickHouseRepository:
         where = []
         params = {}
 
-        if filters.get("nomenclature_code"):
-            where.append("nomenclature_code = %(nomenclature_code)s")
-            params["nomenclature_code"] = filters["nomenclature_code"]
-
-        if filters.get("nomenclature"):
-            where.append("nomenclature = %(nomenclature)s")
-            params["nomenclature"] = filters["nomenclature"]
-
-        if filters.get("partner"):
-            where.append("partner = %(partner)s")
-            params["partner"] = filters["partner"]
+        for field in ("nomenclature_code", "nomenclature", "partner"):
+            value = filters.get(field)
+            if value in ("", None, [], ()):
+                continue
+            values = value if isinstance(value, (list, tuple)) else [value]
+            values = [str(item) for item in values if item not in ("", None)]
+            if values:
+                where.append(f"{field} IN %({field})s")
+                params[field] = tuple(values)
 
         if filters.get("date_start"):
             where.append("date_draft >= %(date_start)s")
@@ -680,6 +855,15 @@ class ClickHouseRepository:
             dict(zip(FB_PURCHASES_USE_COLUMNS, row))
             for row in result
         ]
+
+    def fetch_fb_purchases_filter_options(self, filters=None):
+        ensure_fb_purchases_use_table()
+        return self._fetch_dependent_filter_options(
+            table="default.fb_purchases_use",
+            option_fields=("nomenclature_code", "nomenclature", "partner"),
+            filters=filters,
+            date_conditions=(("date_draft", ">=", "date_start"), ("date_draft", "<=", "date_end")),
+        )
 
     def fetch_fb_purchases_indicator_rows(self, filters=None):
         ensure_fb_purchases_indicator_table()
@@ -850,6 +1034,10 @@ class ClickHouseRepository:
             where.append("date_end <= %(date_end)s")
             params["date_end"] = filters["date_end"]
 
+        if filters.get("tree_month"):
+            where.append("toYYYYMM(date_end) = toYYYYMM(toDate(%(tree_month)s))")
+            params["tree_month"] = f"{str(filters['tree_month'])[:7]}-01"
+
         where_sql = ""
 
         if where:
@@ -871,6 +1059,15 @@ class ClickHouseRepository:
             dict(zip(FB_TURNOVER_USE_COLUMNS, row))
             for row in result
         ]
+
+    def fetch_fb_turnover_filter_options(self, filters=None):
+        ensure_fb_turnover_use_table()
+        return self._fetch_dependent_filter_options(
+            table="default.fb_turnover_use",
+            option_fields=("nomenclature", "warehouse_group", "warehouse", "quantity"),
+            filters=filters,
+            date_conditions=(("date_start", ">=", "date_start"), ("date_end", "<=", "date_end")),
+        )
 
     def fetch_fb_turnover_indicator_rows(self, filters=None):
         ensure_fb_turnover_indicator_table()
@@ -1058,6 +1255,15 @@ class ClickHouseRepository:
             dict(zip(FB_ACCRECEIV_USE_COLUMNS, row))
             for row in result
         ]
+
+    def fetch_fb_accreceiv_filter_options(self, filters=None):
+        ensure_fb_accreceiv_use_table()
+        return self._fetch_dependent_filter_options(
+            table="default.fb_accreceiv_use",
+            option_fields=("partner", "contract_partner", "manager_name"),
+            filters=filters,
+            date_conditions=(("date_start", ">=", "date_start"), ("date_start", "<=", "date_end")),
+        )
 
     def fetch_fb_accreceiv_indicator_rows(self, filters=None):
         ensure_fb_accreceiv_indicator_table()
