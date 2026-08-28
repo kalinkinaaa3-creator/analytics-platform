@@ -1,21 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
+import { DateRangePicker } from "../../components/DateRangePicker";
+import { useDropdownPosition } from "../../components/useDropdownPosition";
 import "../spinner.css";
 import "./revenue.css";
 import { RevenueCharts } from "./RevenueCharts";
 
 const FILTERS = [
-  ["direction", "Направление", "filter--sm"],
-  ["project", "Проект", "filter--md"],
-  ["manager", "Менеджер", "filter--md"],
-  ["partner", "Контрагент", "filter--xl"],
-  ["consignee", "Грузополучатель", "filter--xl"],
-  ["nom_view", "Вид продукции", "filter--sm"],
-  ["nom_category", "Категория", "filter--sm"],
-  ["nom_group", "Группа", "filter--sm"],
-  ["nom", "Номенклатура", "filter--xll"],
-  ["nom_code", "Код", "filter--smm"],
-  ["nom_hier", "Номенклатура (группировка)", "filter--xll"],
+  ["direction", "Направление"],
+  ["project", "Проект"],
+  ["manager", "Менеджер"],
+  ["partner", "Контрагент"],
+  ["consignee", "Грузополучатель"],
+  ["nom_view", "Вид продукции"],
+  ["nom_category", "Категория"],
+  ["nom_group", "Группа"],
+  ["nom", "Номенклатура"],
+  ["nom_code", "Код"],
+  ["nom_hier", "Номенклатура (группировка)"],
 ];
 
 function GlobalSpinner() {
@@ -41,6 +43,10 @@ function normalizeList(value) {
   return [value].filter(
     (item) => item !== "" && item !== null && item !== undefined
   );
+}
+
+function localIsoDate(value = new Date()) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
 
 function buildPayload(filters) {
@@ -84,43 +90,67 @@ function Toast({ message }) {
   return <div id="toast">{message}</div>;
 }
 
-function MultiSelect({ name, label, options, selected, onChange, onApply, className = "" }) {
+function MultiSelect({ label, options, selected, onApply }) {
   const rootRef = useRef(null);
+  const menuRef = useRef(null);
+  const selectedRef = useRef(selected);
+  const draftRef = useRef(selected);
+  const onApplyRef = useRef(onApply);
+  const openRef = useRef(false);
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(selected);
   const [search, setSearch] = useState("");
-  const [pending, setPending] = useState(false);
 
-  const safeOptions = options || [];
-  const safeSelected = selected || [];
+  const safeOptions = useMemo(() => options || [], [options]);
+  const safeSelected = useMemo(() => normalizeList(selected), [selected]);
 
-  const selectedSet = useMemo(() => new Set(safeSelected), [safeSelected]);
+  useEffect(() => {
+    selectedRef.current = safeSelected;
+    onApplyRef.current = onApply;
+    if (!open) draftRef.current = safeSelected;
+  }, [safeSelected, onApply, open]);
 
   const visibleOptions = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim().toLocaleLowerCase("ru-RU");
 
     if (!q) return safeOptions;
 
     return safeOptions.filter((item) =>
-      String(item).toLowerCase().includes(q)
+      String(item).toLocaleLowerCase("ru-RU").includes(q)
     );
   }, [safeOptions, search]);
 
-  const allVisibleSelected =
-    visibleOptions.length > 0 &&
-    visibleOptions.every((item) => selectedSet.has(item));
+  function updateDraft(next) {
+    draftRef.current = next;
+    setDraft(next);
+  }
+
+  function commit() {
+    const current = selectedRef.current;
+    const next = draftRef.current;
+    if (current.length !== next.length || current.some((value, index) => value !== next[index])) {
+      onApplyRef.current(next);
+    }
+  }
+
+  function closeMenu() {
+    commit();
+    openRef.current = false;
+    setOpen(false);
+    setSearch("");
+  }
 
   useEffect(() => {
     function handleDocumentClick(event) {
-      if (!rootRef.current) return;
-
-      if (!rootRef.current.contains(event.target)) {
+      if (openRef.current && !rootRef.current?.contains(event.target)) {
+        const current = selectedRef.current;
+        const next = draftRef.current;
+        if (current.length !== next.length || current.some((value, index) => value !== next[index])) {
+          onApplyRef.current(next);
+        }
+        openRef.current = false;
         setOpen(false);
         setSearch("");
-
-        if (pending) {
-          setPending(false);
-          onApply();
-        }
       }
     }
 
@@ -129,120 +159,66 @@ function MultiSelect({ name, label, options, selected, onChange, onApply, classN
     return () => {
       document.removeEventListener("mousedown", handleDocumentClick);
     };
-  }, [pending, onApply]);
+  }, []);
 
-  function updateSelected(next) {
-    onChange(next);
-    setPending(true);
+  const { menuStyle, resetPosition } = useDropdownPosition({
+    open,
+    rootRef,
+    menuRef,
+    contentKey: `${visibleOptions.length}:${search}`,
+  });
+
+  function toggleMenu() {
+    if (open) {
+      closeMenu();
+      return;
+    }
+    updateDraft(safeSelected);
+    resetPosition();
+    openRef.current = true;
+    setOpen(true);
   }
 
   function toggleItem(item) {
-    if (selectedSet.has(item)) {
-      updateSelected(safeSelected.filter((value) => value !== item));
-      return;
-    }
-
-    updateSelected([...safeSelected, item]);
+    updateDraft(draft.includes(item) ? draft.filter((value) => value !== item) : [...draft, item]);
   }
 
-  function toggleAllVisible() {
-    if (allVisibleSelected) {
-      updateSelected(
-        safeSelected.filter((item) => !visibleOptions.includes(item))
-      );
-      return;
-    }
-
-    updateSelected(Array.from(new Set([...safeSelected, ...visibleOptions])));
+  function selectVisible() {
+    updateDraft([...new Set([...draft, ...visibleOptions])]);
   }
 
-  function removeItem(item) {
-    updateSelected(safeSelected.filter((value) => value !== item));
-  }
-
-  function handleInputKeyDown(event) {
-    if (event.key !== "Enter") return;
-
-    event.preventDefault();
-
-    const value = search.trim();
-
-    if (!value) return;
-
-    if (!selectedSet.has(value)) {
-      updateSelected([...safeSelected, value]);
-    }
-
-    setSearch("");
-  }
-
-  function renderSelectedTags() {
-    if (safeSelected.length === 0) return null;
-
-    if (safeSelected.length > 1) {
-      return <div className="tag">...</div>;
-    }
-
-    return (
-      <div className="tag">
-        {safeSelected[0]}
-        <button type="button" onClick={() => removeItem(safeSelected[0])}>
-          ×
-        </button>
-      </div>
-    );
-  }
+  const shownSelection = open ? draft : safeSelected;
 
   return (
-    <div className={`filter ${className}`}>
-      <label htmlFor={`filter_${name}_list`}>{label}</label>
-
-      <div
-        ref={rootRef}
-        className={`multi-select ${open ? "open" : ""}`}
-        id={`multiSelect_${name}`}
+    <div className={`revenue-filter${open ? " revenue-filter--open" : ""}`} ref={rootRef}>
+      <label>{label}</label>
+      <button
+        type="button"
+        className="revenue-multiselect__control"
+        aria-expanded={open}
+        onClick={toggleMenu}
       >
-        <div className="top-bar">
-          <div className="selected-items">{renderSelectedTags()}</div>
-
-          <input
-            type="text"
-            id={`filter_${name}_list`}
-            name={name}
-            value={search}
-            onFocus={() => setOpen(true)}
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder=""
-          />
-        </div>
-
-        <div className="dropdown">
-          <div className="dropdown-item select-all">
-            <label>
-              <input
-                type="checkbox"
-                checked={allVisibleSelected}
-                onChange={toggleAllVisible}
-              />
-              <span>Выбрать все</span>
-            </label>
+        <span>{shownSelection.length ? `Выбрано: ${shownSelection.length}` : "Все"}</span>
+        <i aria-hidden="true">▾</i>
+      </button>
+      {open && (
+        <div ref={menuRef} className="revenue-multiselect__menu" style={menuStyle}>
+          <input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Поиск…" />
+          <div className="revenue-multiselect__actions">
+            <button type="button" disabled={!visibleOptions.length} onClick={selectVisible}>Выбрать найденные</button>
+            <button type="button" disabled={!draft.length && !search} onClick={() => { updateDraft([]); setSearch(""); }}>Очистить</button>
           </div>
-
-          {visibleOptions.map((item) => (
-            <div className="dropdown-item" key={item}>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={selectedSet.has(item)}
-                  onChange={() => toggleItem(item)}
-                />
+          <div className="revenue-multiselect__options">
+            {visibleOptions.map((item) => (
+              <label key={item}>
+                <input type="checkbox" checked={draft.includes(item)} onChange={() => toggleItem(item)} />
                 <span>{item}</span>
               </label>
-            </div>
-          ))}
+            ))}
+            {!visibleOptions.length && <p>Нет значений</p>}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -286,7 +262,7 @@ export function RevenueDashboard({ data }) {
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState("");
 
-  const filters = dashboardData?.filters || {};
+  const filters = useMemo(() => dashboardData?.filters || {}, [dashboardData?.filters]);
   const filterValues = dashboardData?.filter_values || {};
   const kpi = dashboardData?.kpi || {};
   const charts = dashboardData?.charts || {};
@@ -310,8 +286,8 @@ export function RevenueDashboard({ data }) {
     nom: [],
     nom_code: [],
     nom_hier: [],
-    date_start: "",
-    date_end: "",
+    date_start: `${new Date().getFullYear()}-01-01`,
+    date_end: localIsoDate(),
     }), []);
 
   const [localFilters, setLocalFilters] = useState({
@@ -330,6 +306,7 @@ export function RevenueDashboard({ data }) {
     date_end: filters.date_end || "",
   });
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setDashboardData(data || {});
   }, [data]);
@@ -351,6 +328,7 @@ export function RevenueDashboard({ data }) {
       date_end: filters.date_end || "",
     });
   }, [filters]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const currentFilters = useMemo(
     () => ({
@@ -379,13 +357,6 @@ export function RevenueDashboard({ data }) {
     }, 2500);
   }
 
-  function changeFilter(name, value) {
-    setLocalFilters((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  }
-
   async function fetchRevenue(nextFilters) {
     const payload = buildPayload(nextFilters);
 
@@ -411,45 +382,6 @@ export function RevenueDashboard({ data }) {
       setIsApplyingFilters(false);
     }
   }
-
-  const applyFiltersFromDom = useCallback(() => {
-    const form = document.getElementById("filterForm");
-
-    if (!form) return;
-
-    const formData = new FormData(form);
-
-    const next = {
-      ...currentFilters,
-      date_start: formData.get("date_start") || "",
-      date_end: formData.get("date_end") || "",
-    };
-
-    setLocalFilters(next);
-    applyFilters(next);
-  }, [currentFilters]);
-
-  useEffect(() => {
-    const ids = ["date_start_filter", "date_end_filter"];
-
-    ids.forEach((id) => {
-      const element = document.getElementById(id);
-
-      if (element) {
-        element.addEventListener("change", applyFiltersFromDom);
-      }
-    });
-
-    return () => {
-      ids.forEach((id) => {
-        const element = document.getElementById(id);
-
-        if (element) {
-          element.removeEventListener("change", applyFiltersFromDom);
-        }
-      });
-    };
-  }, [applyFiltersFromDom]);
 
   async function resetFilters() {
     setLocalFilters(defaultFilters);
@@ -524,54 +456,7 @@ export function RevenueDashboard({ data }) {
 
       <h2>Динамика выручки</h2>
 
-      <form id="filterForm">
-        {FILTERS.map(([name, label, className]) => (
-          <MultiSelect
-            key={name}
-            name={name}
-            label={label}
-            options={filterValues[name] || []}
-            selected={localFilters[name] || []}
-            onChange={(value) => changeFilter(name, value)}
-            onApply={() => applyFilters()}
-            className={className}
-          />
-        ))}
-
-        <div className="filter">
-          <label htmlFor="date_start_filter">Дата начала</label>
-          <input
-            type="date"
-            id="date_start_filter"
-            name="date_start"
-            value={localFilters.date_start || ""}
-            onChange={(event) =>
-              setLocalFilters((prev) => ({
-                ...prev,
-                date_start: event.target.value,
-              }))
-            }
-            disabled={isApplyingFilters}
-          />
-        </div>
-
-        <div className="filter">
-          <label htmlFor="date_end_filter">Дата окончания</label>
-          <input
-            type="date"
-            id="date_end_filter"
-            name="date_end"
-            value={localFilters.date_end || ""}
-            onChange={(event) =>
-              setLocalFilters((prev) => ({
-                ...prev,
-                date_end: event.target.value,
-              }))
-            }
-            disabled={isApplyingFilters}
-          />
-        </div>
-
+      <form id="filterForm" onSubmit={(event) => event.preventDefault()}>
         <div className="filters-actions">
           <button
             type="button"
@@ -601,6 +486,37 @@ export function RevenueDashboard({ data }) {
           >
             Очистить
           </button>
+        </div>
+
+        <div className="revenue-filter-grid">
+          {FILTERS.map(([name, label]) => (
+            <MultiSelect
+              key={name}
+              label={label}
+              options={filterValues[name] || []}
+              selected={localFilters[name] || []}
+              onApply={(value) => {
+                const next = { ...currentFilters, [name]: value };
+                setLocalFilters(next);
+                applyFilters(next);
+              }}
+            />
+          ))}
+
+          <DateRangePicker
+            key={`${localFilters.date_start}:${localFilters.date_end}`}
+            start={localFilters.date_start}
+            end={localFilters.date_end}
+            resetRange={{
+              start: `${new Date().getFullYear()}-01-01`,
+              end: localIsoDate(),
+            }}
+            onChange={({ start, end }) => {
+              const next = { ...currentFilters, date_start: start, date_end: end };
+              setLocalFilters(next);
+              applyFilters(next);
+            }}
+          />
         </div>
       </form>
 

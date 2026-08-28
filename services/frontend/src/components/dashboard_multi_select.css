@@ -1,0 +1,18 @@
+.dashboard-filter { position: relative; display: flex; min-width: 0; flex-direction: column; }
+.dashboard-filter--open { z-index: 1300; }
+.dashboard-filter > label { min-height: 18px; margin-bottom: 4px; overflow: hidden; color: #444841; font: 700 12px Helvetica,Arial,sans-serif; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-multiselect__control { display: flex; width: 100%; min-height: 34px; box-sizing: border-box; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 9px; background: #fff; border: 1px solid #aeb3aa; border-radius: 5px; color: #222; font: 13px Helvetica,Arial,sans-serif; text-align: left; cursor: pointer; }
+.dashboard-multiselect__control:hover { border-color: #71796b; }
+.dashboard-multiselect__control:focus { border-color: #65705e; outline: 0; box-shadow: 0 0 0 2px rgba(101,112,94,.12); }
+.dashboard-multiselect__control i { flex: none; font-size: 13px; font-style: normal; }
+.dashboard-multiselect__menu { position: absolute; top: calc(100% + 4px); z-index: 80; width: max-content; min-width: 100%; max-width: min(440px,90vw); max-height: 390px; box-sizing: border-box; padding: 8px; overflow: auto; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 7px 20px rgba(0,0,0,.16); }
+.dashboard-multiselect__menu > input { position: sticky; top: 0; z-index: 2; width: 100%; min-height: 30px; box-sizing: border-box; margin-bottom: 6px; padding: 5px 7px; border: 1px solid #aaa; border-radius: 3px; }
+.dashboard-multiselect__actions { display: flex; justify-content: space-between; gap: 8px; margin: 2px 0 7px; }
+.dashboard-multiselect__actions button { padding: 4px 2px; background: transparent; border: 0; color: #4e6349; font: 700 11px Helvetica,Arial,sans-serif; cursor: pointer; }
+.dashboard-multiselect__actions button:hover:not(:disabled) { text-decoration: underline; }
+.dashboard-multiselect__actions button:disabled { cursor: not-allowed; opacity: .45; }
+.dashboard-multiselect__options { max-height: 270px; overflow-y: auto; border-top: 1px solid #eceee9; }
+.dashboard-multiselect__options > label { display: flex; min-width: 220px; align-items: flex-start; gap: 7px; padding: 6px; border-bottom: 1px solid #f0f1ed; font-size: 13px; cursor: pointer; }
+.dashboard-multiselect__options > label:hover { background: #f4f5f1; }
+.dashboard-multiselect__options input { flex: none; margin-top: 2px; }
+.dashboard-multiselect__options > p { margin: 12px 4px; color: #747970; font-size: 12px; }

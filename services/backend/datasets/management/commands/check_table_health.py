@@ -1,8 +1,9 @@
 import logging
-from datetime import date, timedelta
+from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 from django.db import connection
+from django.utils import timezone
 
 from analytics.services.bitrix_notify import send_bitrix_message
 
@@ -245,13 +246,183 @@ def check_base_parser_health(cursor, today, problems, ok):
     )
 
 
+def check_bitrix24_health(cursor, today, problems, ok):
+    """Check Bitrix24 downloads, allowing an empty weekend activity window."""
+    refresh_name = "Bitrix24 CRM refresh (bitrix24_crm_refresh_12h)"
+    reconciliation_name = (
+        "Bitrix24 recent leads reconciliation "
+        "(bitrix24_recent_leads_reconciliation_weekly)"
+    )
+    local_problems = []
+    # The 08:04 check validates the preceding overnight activity window.
+    # Saturday/Sunday inactivity is therefore visible on Sunday/Monday.
+    requires_received_leads = today.weekday() not in (0, 6)
+    lead_last_seen_date = None
+
+    for table in ("bitrix24_lead", "bitrix24_lead_analytics"):
+        if not table_exists(cursor, table):
+            local_problems.append(f"{refresh_name}: таблица {table} не существует")
+            continue
+        row_count = scalar(cursor, f'SELECT COUNT(*) FROM "{table}"')
+        if not row_count:
+            local_problems.append(f"{refresh_name}: таблица {table} пуста")
+        elif table == "bitrix24_lead":
+            lead_last_seen_date = scalar(
+                cursor,
+                f'''
+                SELECT MAX(
+                    (last_seen_at AT TIME ZONE 'Europe/Moscow')::date
+                )
+                FROM "{table}"
+                ''',
+            )
+
+    if requires_received_leads and lead_last_seen_date != today:
+        local_problems.append(
+            f"{refresh_name}: не получены ожидаемые строки leads, "
+            f"max(last_seen_at)={lead_last_seen_date}, нужно={today}"
+        )
+
+    state_table = "bitrix24_sync_state"
+    if not table_exists(cursor, state_table):
+        local_problems.append(
+            f"{refresh_name}: таблица {state_table} не существует"
+        )
+    else:
+        required_entities = (
+            "departments",
+            "users",
+            "crm_dictionary",
+            "crm_fields_1",
+            "leads",
+            "stage_history_1",
+        )
+        cursor.execute(
+            f'''
+            SELECT entity, status,
+                   (last_success_at AT TIME ZONE 'Europe/Moscow')::date,
+                   rows_received,
+                   COALESCE(error_text, '')
+            FROM "{state_table}"
+            WHERE entity IN %s
+            ''',
+            [required_entities],
+        )
+        states = {
+            entity: (status, last_success_date, rows_received, error_text)
+            for (
+                entity,
+                status,
+                last_success_date,
+                rows_received,
+                error_text,
+            ) in cursor.fetchall()
+        }
+        # The regular DAG runs Monday-Saturday. At the Sunday 08:04 health
+        # check, Saturday's successful refresh is therefore the expected one.
+        min_success_date = (
+            today - timedelta(days=1)
+            if today.weekday() == 6
+            else today
+        )
+        for entity in required_entities:
+            state = states.get(entity)
+            if state is None:
+                local_problems.append(
+                    f"{refresh_name}: отсутствует состояние entity={entity}"
+                )
+                continue
+            status, last_success_date, rows_received, error_text = state
+            if status != "success":
+                suffix = f", error={error_text}" if error_text else ""
+                local_problems.append(
+                    f"{refresh_name}: entity={entity}, status={status}{suffix}"
+                )
+            if last_success_date is None or last_success_date < min_success_date:
+                local_problems.append(
+                    f"{refresh_name}: entity={entity}, последнее успешное "
+                    f"обновление={last_success_date}, нужно >= {min_success_date}"
+                )
+            if entity == "leads" and requires_received_leads and not rows_received:
+                local_problems.append(
+                    f"{refresh_name}: entity=leads получил "
+                    f"rows_received={rows_received}, ожидалось > 0"
+                )
+
+        logger.info(
+            "%s: expected_entities=%s min_success_date=%s states=%s",
+            refresh_name,
+            required_entities,
+            min_success_date,
+            states,
+        )
+        logger.info(
+            "%s: requires_received_leads=%s lead_last_seen_date=%s",
+            refresh_name,
+            requires_received_leads,
+            lead_last_seen_date,
+        )
+
+    run_table = "bitrix24_sync_run"
+    if not table_exists(cursor, run_table):
+        local_problems.append(
+            f"{reconciliation_name}: таблица {run_table} не существует"
+        )
+    else:
+        cursor.execute(
+            f'''
+            SELECT status,
+                   (finished_at AT TIME ZONE 'Europe/Moscow')::date,
+                   rows_received,
+                   rows_deactivated,
+                   COALESCE(error_text, '')
+            FROM "{run_table}"
+            WHERE entity = %s AND mode = %s
+            ORDER BY started_at DESC, id DESC
+            LIMIT 1
+            ''',
+            ["leads", "repair"],
+        )
+        latest_repair = cursor.fetchone()
+        min_repair_date = today - timedelta(days=7)
+        if latest_repair is None:
+            local_problems.append(
+                f"{reconciliation_name}: отсутствуют repair-запуски leads"
+            )
+        else:
+            status, finished_date, received, deactivated, error_text = latest_repair
+            if status != "success":
+                suffix = f", error={error_text}" if error_text else ""
+                local_problems.append(
+                    f"{reconciliation_name}: последний запуск status={status}{suffix}"
+                )
+            if finished_date is None or finished_date < min_repair_date:
+                local_problems.append(
+                    f"{reconciliation_name}: последнее завершение="
+                    f"{finished_date}, нужно >= {min_repair_date}"
+                )
+            logger.info(
+                "%s: status=%s finished_date=%s received=%s deactivated=%s",
+                reconciliation_name,
+                status,
+                finished_date,
+                received,
+                deactivated,
+            )
+
+    if local_problems:
+        problems.extend(local_problems)
+    else:
+        ok.extend((refresh_name, reconciliation_name))
+
+
 class Command(BaseCommand):
     help = "Check freshness and data availability for analytics tables"
 
     def handle(self, *args, **options):
         logger.info("Table health check started")
 
-        today = date.today()
+        today = timezone.localdate()
         yesterday = today - timedelta(days=1)
         period_start = today - timedelta(days=3)
 
@@ -347,6 +518,12 @@ class Command(BaseCommand):
                 ok.append(name)
 
             check_base_parser_health(
+                cursor,
+                today,
+                problems,
+                ok,
+            )
+            check_bitrix24_health(
                 cursor,
                 today,
                 problems,

@@ -1,0 +1,165 @@
+.date-range-picker { position: relative; display: flex; width: 260px; max-width: 100%; grid-column: span 2; z-index: 20; flex-direction: column; }
+
+.date-range-picker > span { min-height: 18px; margin-bottom: 4px; overflow: hidden; color: #444841; font: 700 12px Helvetica,Arial,sans-serif; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+
+.date-range-picker--open { z-index: 1500; }
+
+.date-range-picker__control { display: grid; min-height: 34px; box-sizing: border-box; grid-template-columns: minmax(92px,1fr) auto minmax(92px,1fr) 34px; align-items: center; background: #fff; border: 1px solid #aeb3aa; border-radius: 5px; color: #252925; cursor: text; transition: border-color .15s ease,box-shadow .15s ease; }
+
+.date-range-picker__control:focus-within { border-color: #65705e; box-shadow: 0 0 0 2px rgba(101,112,94,.12); }
+
+.date-range-picker__control input { width: 100%; min-width: 0; height: 32px; box-sizing: border-box; padding: 6px 10px; background: transparent; border: 0; outline: 0; color: #252925; font: 13px Helvetica,Arial,sans-serif; font-variant-numeric: tabular-nums; text-align: center; }
+
+.date-range-picker__control b { color: #737a70; font-size: 14px; font-weight: 500; }
+
+.date-range-picker__control > button { display: grid; width: 34px; height: 32px; padding: 0; place-items: center; background: transparent; border: 0; color: #53634f; cursor: pointer; }
+
+.date-range-picker__control svg,.date-range-picker__presets svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+.date-range-picker__popover { position: absolute; top: calc(100% + 10px); z-index: 1500; display: grid; width: 980px; max-width: calc(100vw - 56px); max-height: min(620px,calc(100vh - 150px)); overflow: auto; grid-template-columns: 210px minmax(0,1fr); grid-template-rows: auto 54px; background: rgba(255,255,255,.99); border: 1px solid #d3d8cf; border-radius: 10px; box-shadow: 0 18px 50px rgba(45,53,42,.22); color: #252925; }
+
+.date-range-picker__popover--right { right: auto; left: 0; }
+
+.date-range-picker__popover--left { right: 0; left: auto; }
+
+.date-range-picker__presets { display: flex; min-width: 0; padding: 18px 16px; border-right: 1px solid #e1e4dd; flex-direction: column; gap: 4px; }
+
+.date-range-picker__presets button { display: flex; min-height: 39px; align-items: center; gap: 12px; padding: 7px 8px; background: transparent; border: 0; border-radius: 6px; color: #3f473d; font: 500 13px Helvetica,Arial,sans-serif; text-align: left; cursor: pointer; }
+
+.date-range-picker__presets button:hover,.date-range-picker__presets button:focus-visible { background: #eef2eb; color: #30402e; outline: none; }
+
+.date-range-picker__presets button svg { width: 21px; height: 21px; flex: 0 0 21px; }
+
+.date-range-picker__presets hr { width: 100%; height: 1px; margin: 10px 0; background: #e1e4dd; border: 0; }
+
+.date-range-picker__calendars { position: relative; display: grid; min-width: 0; padding: 18px 42px 14px; grid-template-columns: repeat(2,minmax(260px,1fr)); gap: 30px; }
+
+.date-range-picker__month { position: relative; min-width: 0; }
+
+.date-range-picker__month-header { position: relative; z-index: 20; display: flex; min-height: 28px; margin: -4px 0 10px; align-items: center; justify-content: center; }
+
+.date-range-picker__period-selector { display: inline-flex; height: 30px; min-width: 126px; align-items: center; justify-content: center; gap: 7px; padding: 0 10px 0 12px; background: transparent; border: 1px solid transparent; border-radius: 7px; color: #242924; font: 700 12px Helvetica,Arial,sans-serif; cursor: pointer; transition: background .15s ease,border-color .15s ease,box-shadow .15s ease,color .15s ease; }
+
+.date-range-picker__period-selector:hover,.date-range-picker__period-selector:focus-visible { background: #f2f4ef; border-color: #dde2d9; color: #30402e; outline: none; }
+
+.date-range-picker__period-selector.is-open { background: #f1f4ee; border-color: #cbd3c6; box-shadow: 0 2px 7px rgba(45,53,42,.08); color: #30402e; }
+
+.date-range-picker__period-selector > span { white-space: nowrap; }
+
+.date-range-picker__period-selector > i { position: relative; top: -1px; color: #737d70; font-size: 11px; font-style: normal; line-height: 1; }
+
+.date-range-picker__period-menu { position: absolute; top: calc(100% + 5px); left: 50%; z-index: 50; width: 250px; box-sizing: border-box; padding: 10px; overflow: hidden; background: rgba(255,255,255,.995); border: 1px solid #d5dbd1; border-radius: 10px; box-shadow: 0 14px 36px rgba(44,54,41,.18),0 2px 7px rgba(44,54,41,.07); transform: translateX(-50%); }
+
+.date-range-picker__period-menu::before { position: absolute; top: -5px; left: 50%; width: 9px; height: 9px; background: #fff; border-top: 1px solid #d5dbd1; border-left: 1px solid #d5dbd1; content: ""; transform: translateX(-50%) rotate(45deg); }
+
+.date-range-picker__period-year { position: relative; z-index: 1; display: grid; height: 34px; margin-bottom: 8px; grid-template-columns: 34px 1fr 34px; align-items: center; }
+
+.date-range-picker__period-year > button { display: grid; height: 32px; padding: 0; place-items: center; background: transparent; border: 0; border-radius: 6px; color: #53604f; cursor: pointer; }
+
+.date-range-picker__period-year > button:first-child,.date-range-picker__period-year > button:last-child { font-size: 22px; font-weight: 400; line-height: 1; }
+
+.date-range-picker__period-year > button:first-child:hover,.date-range-picker__period-year > button:first-child:focus-visible,.date-range-picker__period-year > button:last-child:hover,.date-range-picker__period-year > button:last-child:focus-visible { background: #eef2eb; outline: none; }
+
+.date-range-picker__period-year .date-range-picker__period-year-value { display: flex; min-width: 0; align-items: center; justify-content: center; gap: 5px; color: #2d352b; font: 700 13px Helvetica,Arial,sans-serif; }
+
+.date-range-picker__period-year .date-range-picker__period-year-value:hover,.date-range-picker__period-year .date-range-picker__period-year-value:focus-visible { background: #f0f3ed; color: #30402e; outline: none; }
+
+.date-range-picker__period-year-value span { position: relative; top: -1px; color: #7b8577; font-size: 10px; }
+
+.date-range-picker__period-months { position: relative; z-index: 1; display: grid; padding-top: 7px; border-top: 1px solid #ecefe9; grid-template-columns: repeat(4,1fr); gap: 4px; }
+
+.date-range-picker__period-months button { height: 34px; min-width: 0; padding: 0 4px; background: transparent; border: 1px solid transparent; border-radius: 6px; color: #444c41; font: 500 12px Helvetica,Arial,sans-serif; cursor: pointer; transition: background .12s ease,border-color .12s ease,color .12s ease; }
+
+.date-range-picker__period-months button:hover,.date-range-picker__period-months button:focus-visible { background: #eef2eb; color: #30402e; outline: none; }
+
+.date-range-picker__period-months button.is-selected { background: #dfe7da; border-color: #cbd6c5; color: #30402e; font-weight: 700; }
+
+.date-range-picker__years-header { position: relative; z-index: 1; display: grid; height: 34px; margin-bottom: 8px; grid-template-columns: 34px 1fr 34px; align-items: center; }
+
+.date-range-picker__years-header button { display: grid; width: 32px; height: 32px; padding: 0; place-items: center; background: transparent; border: 0; border-radius: 6px; color: #53604f; font-size: 22px; cursor: pointer; }
+
+.date-range-picker__years-header button:hover,.date-range-picker__years-header button:focus-visible { background: #eef2eb; outline: none; }
+
+.date-range-picker__years-header strong { color: #30372e; font: 700 12px Helvetica,Arial,sans-serif; text-align: center; }
+
+.date-range-picker__period-years { position: relative; z-index: 1; display: grid; max-height: 210px; padding: 7px 2px 1px; overflow-y: auto; border-top: 1px solid #ecefe9; grid-template-columns: repeat(3,1fr); gap: 4px; scrollbar-width: thin; scrollbar-color: #c3c9bf transparent; }
+
+.date-range-picker__period-years button { height: 34px; padding: 0 5px; background: transparent; border: 1px solid transparent; border-radius: 6px; color: #41483e; font: 500 12px Helvetica,Arial,sans-serif; cursor: pointer; }
+
+.date-range-picker__period-years button:hover,.date-range-picker__period-years button:focus-visible { background: #eef2eb; color: #30402e; outline: none; }
+
+.date-range-picker__period-years button.is-selected { background: #dfe7da; border-color: #cbd6c5; color: #30402e; font-weight: 700; }
+
+.date-range-picker__weekdays,.date-range-picker__days { display: grid; grid-template-columns: repeat(7,minmax(30px,1fr)); }
+
+.date-range-picker__weekdays { margin-bottom: 7px; }
+
+.date-range-picker__weekdays span { padding: 4px 0; color: #626860; font: 600 12px Helvetica,Arial,sans-serif; text-align: center; }
+
+.date-range-picker__days button { position: relative; height: 36px; padding: 0; background: transparent; border: 0; color: #242824; font: 500 13px Helvetica,Arial,sans-serif; cursor: pointer; }
+
+.date-range-picker__days button::before { position: absolute; inset: 3px 0; z-index: 0; background: transparent; content: ""; }
+
+.date-range-picker__days button > span { position: relative; z-index: 2; display: grid; width: 30px; height: 30px; margin: auto; place-items: center; border-radius: 7px; }
+
+.date-range-picker__days button:hover > span,.date-range-picker__days button:focus-visible > span { background: #e9eee5; outline: none; }
+
+.date-range-picker__days button.is-outside { color: #adb2aa; }
+
+.date-range-picker__days button.is-outside::before { background: transparent; }
+
+.date-range-picker__days button.is-outside > span { background: transparent; box-shadow: none; color: #adb2aa; font-weight: 500; }
+
+.date-range-picker__days button.is-outside:hover > span,.date-range-picker__days button.is-outside:focus-visible > span { background: #f3f4f1; color: #959b93; }
+
+.date-range-picker__days button.is-in-range::before { background: #f0f2ec; }
+
+.date-range-picker__days button.is-start::before { left: 50%; border-radius: 8px 0 0 8px; }
+
+.date-range-picker__days button.is-end::before { right: 50%; border-radius: 0 8px 8px 0; }
+
+.date-range-picker__days button.is-start.is-end::before { right: 50%; left: 50%; }
+
+.date-range-picker__days button.is-start > span { background: #bcc8b3; color: #263124; font-weight: 700; }
+
+.date-range-picker__days button.is-end > span { background: linear-gradient(145deg,#758c68,#465d3e); box-shadow: 0 4px 9px rgba(63,83,56,.26); color: #fff; font-weight: 700; }
+
+.date-range-picker__nav { position: absolute; top: 14px; display: grid; width: 34px; height: 34px; padding: 0; place-items: center; background: transparent; border: 0; border-radius: 50%; color: #3f493c; font-size: 28px; line-height: 1; cursor: pointer; }
+
+.date-range-picker__nav:hover,.date-range-picker__nav:focus-visible { background: #eef2eb; outline: none; }
+
+.date-range-picker__nav--previous { left: 10px; }
+
+.date-range-picker__nav--next { right: 10px; }
+
+.date-range-picker__popover footer { grid-column: 1 / -1; padding: 16px 26px; background: #fafbf9; border-top: 1px solid #e1e4dd; color: #3f473d; font: 500 13px Helvetica,Arial,sans-serif; }
+
+.date-range-picker__popover footer strong { margin-left: 5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+@media (max-width:900px) {
+
+  .date-range-picker__popover { width: 720px; max-width: calc(100vw - 44px); grid-template-columns: 170px minmax(0,1fr); }
+
+  .date-range-picker__calendars { padding-inline: 38px; grid-template-columns: minmax(260px,1fr); }
+
+  .date-range-picker__month:nth-of-type(2) { display: none; }
+
+}
+
+@media (max-width:620px) {
+
+  .date-range-picker { width: 100%; grid-column: 1 / -1; justify-self: stretch; }
+
+  .date-range-picker__popover,.date-range-picker__popover--right,.date-range-picker__popover--left { position: fixed; top: 70px; right: 12px; bottom: 12px; left: 12px; width: auto; max-width: none; max-height: none; grid-template-columns: 1fr; grid-template-rows: auto auto 50px; }
+
+  .date-range-picker__presets { display: grid; padding: 10px; border-right: 0; border-bottom: 1px solid #e1e4dd; grid-template-columns: repeat(2,minmax(0,1fr)); }
+
+  .date-range-picker__presets hr { display: none; }
+
+  .date-range-picker__calendars { padding: 14px 36px 10px; }
+
+  .date-range-picker__period-menu { width: min(250px,calc(100vw - 92px)); }
+
+  .date-range-picker__popover footer { padding: 13px 16px; }
+
+}

@@ -394,3 +394,145 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Единый контур фильтров — как в дашборде «Аналитика CRM». */
+.revenue-dashboard #filterForm {
+  position: relative;
+  display: block;
+  margin-bottom: 10px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #d5d8d1;
+  border-radius: 8px;
+}
+
+.revenue-dashboard .filters-actions {
+  display: flex;
+  width: auto;
+  margin: 0 0 14px;
+  flex-wrap: wrap;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.revenue-dashboard .revenue-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  align-items: end;
+  gap: 10px;
+}
+
+.revenue-dashboard .revenue-filter {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.revenue-dashboard .revenue-filter--open {
+  z-index: 1300;
+}
+
+.revenue-dashboard .revenue-filter > label {
+  min-height: 18px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  color: #444841;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.revenue-dashboard .revenue-multiselect__control {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 9px;
+  background: #fff;
+  border: 1px solid #aeb3aa;
+  border-radius: 5px;
+  color: #222;
+  font: 13px Helvetica, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.revenue-dashboard .revenue-multiselect__control:hover { border-color: #71796b; }
+.revenue-dashboard .revenue-multiselect__control:focus { border-color: #65705e; outline: 0; box-shadow: 0 0 0 2px rgba(101,112,94,.12); }
+.revenue-dashboard .revenue-multiselect__control i { flex: none; font-size: 13px; font-style: normal; }
+
+.revenue-dashboard .revenue-multiselect__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: 80;
+  width: max-content;
+  min-width: 100%;
+  max-width: min(440px, 90vw);
+  max-height: 390px;
+  box-sizing: border-box;
+  padding: 8px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 7px 20px rgba(0,0,0,.16);
+}
+
+.revenue-dashboard .revenue-multiselect__menu > input {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  width: 100%;
+  min-height: 30px;
+  box-sizing: border-box;
+  margin-bottom: 6px;
+  padding: 5px 7px;
+  border: 1px solid #aaa;
+  border-radius: 3px;
+}
+
+.revenue-dashboard .revenue-multiselect__actions { display: flex; justify-content: space-between; gap: 8px; margin: 2px 0 7px; }
+.revenue-dashboard .revenue-multiselect__actions button { padding: 4px 2px; background: transparent; border: 0; color: #4e6349; font: 700 11px Helvetica,sans-serif; cursor: pointer; }
+.revenue-dashboard .revenue-multiselect__actions button:hover:not(:disabled) { text-decoration: underline; }
+.revenue-dashboard .revenue-multiselect__actions button:disabled { cursor: not-allowed; opacity: .45; }
+.revenue-dashboard .revenue-multiselect__options { max-height: 270px; overflow-y: auto; border-top: 1px solid #eceee9; }
+.revenue-dashboard .revenue-multiselect__options > label { display: flex; min-width: 220px; align-items: flex-start; gap: 7px; padding: 6px; border-bottom: 1px solid #f0f1ed; font-size: 13px; cursor: pointer; }
+.revenue-dashboard .revenue-multiselect__options > label:hover { background: #f4f5f1; }
+.revenue-dashboard .revenue-multiselect__options input { flex: none; margin-top: 2px; }
+.revenue-dashboard .revenue-multiselect__options > p { margin: 12px 4px; color: #747970; font-size: 12px; }
+
+.revenue-dashboard .filters-reset,
+.revenue-dashboard .filters-export {
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 8px 14px;
+  background: linear-gradient(90deg,#6c6c5a,#4e4e43);
+  border: 1px solid #4d5747;
+  border-radius: 4px;
+  color: #fff;
+  font: 700 12px Helvetica,sans-serif;
+  cursor: pointer;
+  transition: all .3s ease;
+}
+
+.revenue-dashboard .filters-reset:hover:not(:disabled),
+.revenue-dashboard .filters-export:hover:not(:disabled) { background: linear-gradient(90deg,#a0a699,#c8cec5); color: #111; }
+.revenue-dashboard .filters-export:disabled,
+.revenue-dashboard .filters-reset:disabled { cursor: not-allowed; opacity: .55; }
+.revenue-dashboard .date-range-picker { width: 260px; }
+
+@media (max-width: 768px) {
+  .revenue-dashboard .revenue-filter-grid { grid-template-columns: 1fr; }
+  .revenue-dashboard .filters-actions { width: 100%; flex-direction: column; gap: 8px; }
+  .revenue-dashboard .filters-reset,
+  .revenue-dashboard .filters-export,
+  .revenue-dashboard .date-range-picker { width: 100%; }
+}

@@ -32,7 +32,7 @@
 .crm-multiselect__options > p { margin: 12px 4px; color: #747970; font-size: 12px; }
 .crm-group-filter { grid-column: span 2; }
 .crm-group-filter > div { display: flex; }
-.crm-group-filter button { flex: 1; min-height: 30px; background: #fff; border: 1px solid #777; border-right: 0; color: #444; cursor: pointer; }
+.crm-group-filter button { flex: 1; min-height: 34px; background: #fff; border: 1px solid #777; border-right: 0; color: #444; cursor: pointer; }
 .crm-group-filter button:first-child { border-radius: 4px 0 0 4px; }
 .crm-group-filter button:last-child { border-right: 1px solid #777; border-radius: 0 4px 4px 0; }
 .crm-group-filter button.active { background: #515b4b; color: #fff; font-weight: 700; }
