@@ -37,6 +37,15 @@ def _notify(message):
         logger.exception("Wordstat notification failed")
 
 
+def notify_wordstat_updated():
+    """A socket outage must not stop publication of the remaining mart."""
+    try:
+        from dashboards.realtime import notify_dashboard_updated
+        notify_dashboard_updated("Wordstat")
+    except Exception:
+        logger.exception("Wordstat was published, but its WebSocket notification failed")
+
+
 def _run_pipeline(source=None):
     if not settings.YD_WORDSTAT_V2_LOAD_ENABLED:
         raise RuntimeError("Wordstat v2 loading is disabled. Run the plan and probe before enabling YD_WORDSTAT_V2_LOAD_ENABLED.")
@@ -68,14 +77,15 @@ def _run_pipeline(source=None):
             from analytics.services.yd_wordstat_rebuild_sql import rebuild_yd_wordstat_for_from_raw_sql
             from analytics.services.yd_wordstat_sync import sync_yd_wordstat_to_clickhouse
             from dashboards.cache.invalidation import invalidate_dashboard_by_name
-            from dashboards.realtime import notify_dashboard_updated
 
             rebuild = rebuild_yd_wordstat_for_from_raw_sql()
             synced = sync_yd_wordstat_to_clickhouse()
+            # The statistics publication must invalidate even if demand rebuilding fails.
+            invalidate_dashboard_by_name("Wordstat")
+            notify_wordstat_updated()
             from analytics.services.wordstat_demand_mart import sync_wordstat_demand
             demand_synced = sync_wordstat_demand()
-            invalidate_dashboard_by_name("Wordstat")
-            notify_dashboard_updated("Wordstat")
+            notify_wordstat_updated()
             _notify("[b]Wordstat v2[/b] Загрузка и публикация завершены. Региональный срез: 7 групп IPLAST.")
         return {
             "status": "ok", "source": source or "full", "region_mode": "iplast",

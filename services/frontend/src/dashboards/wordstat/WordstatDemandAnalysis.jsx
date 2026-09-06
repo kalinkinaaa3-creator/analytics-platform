@@ -118,7 +118,10 @@ function SliceCard({ title, data, type }) {
   const mobileChange = mobile.length === 2 && mobile.every((p) => p.change_pp != null) ? mobile.reduce((sum, p) => sum + p.change_pp, 0) : null;
   const mobileParent = mobile.length === 2 && mobile.every((p) => p.difference_vs_parent_pp != null) ? mobile.reduce((sum, p) => sum + p.difference_vs_parent_pp, 0) : null;
   return <article className="seo-panel wd-slice"><header><h3>{title} <Help>Структура спроса за выбранный период. Изменение доли показывается в процентных пунктах. Карточка описывает текущий контекст и не фильтрует графики.</Help></h3>{type === "regions" && items.length > 0 && <button className="wd-link" onClick={() => setExpanded(!expanded)}>{expanded ? "Свернуть" : "Все регионы"}</button>}</header>
-    {!data.complete || !data.consistent ? <Empty>{items.length ? "Недостаточно согласованных помесячных данных за выбранный период." : "Нет помесячных данных для этого разреза."}</Empty> : <>
+    {!data.complete || !data.consistent ? <>
+      <Empty>{{ missing_total: "Общий спрос за выбранный период загружен не полностью: доли пока не рассчитываются.", zero_total: "Общий спрос за выбранный период равен нулю: доли не определены.", missing_slices: "Помесячные данные разреза загружены не полностью.", inconsistent: "Сумма разрезов превышает общий спрос. Требуется сверка исходных данных." }[data.reason] || "Нет помесячных данных для этого разреза."}</Empty>
+      {items.filter((p) => p.missing_months?.length).map((p) => <p className="wd-muted" key={p.id}>{p.name}: нет полного набора запросов за {p.missing_months.slice(0, 3).map(monthLabel).join(", ")}{p.missing_months.length > 3 ? ` и ещё ${p.missing_months.length - 3} мес.` : ""}.</p>)}
+    </> : <>
       <p>{type === "devices" ? "Основное устройство" : "Лидер по спросу"}: <b>{data.leader?.name}</b> · {percent(data.leader?.share)}</p>
       {type === "devices" && <div className="wd-stacked">{items.map((p, i) => <i key={p.id} title={`${p.name}: ${percent(p.share)}`} style={{ width: `${p.share}%`, background: COLORS[i] }} />)}{data.other_share > 0 && <i title="Прочее" style={{ width: `${data.other_share}%`, background: "#aaa" }} />}</div>}
       {(type === "regions" && !expanded ? data.top : items).map((p) => <div className="wd-slice-row" key={p.id}><span>{p.name}</span><b>{percent(p.share)}</b><small>{signed(p.change_pp)} п.п.</small></div>)}
@@ -129,27 +132,13 @@ function SliceCard({ title, data, type }) {
   </article>;
 }
 
-function exportReport(report) {
-  const escape = (value) => {
-    const text = typeof value === "string" ? value.replace(/^[=+@-]/, "'$&") : String(value ?? "");
-    return `"${text.replaceAll('"', '""')}"`;
-  };
-  const context = report.context;
-  const p = report.period;
-  const rows = [["Категория", context.feature, "Подкатегория", context.category, "Запрос", context.phrase, "Уровень", context.level],
-    ["Текущий период", p.current_start, p.current_end, "Сравниваемый период", p.previous_start, p.previous_end],
-    ["Название", "Объём", "Объём прошлого периода", "Изменение, абс.", "Изменение, %", "Статус"],
-    ...report.items.filter((item) => !context.phrase || item.phrase === context.phrase).map((item) => [item.name, item.current_volume, item.previous_volume, item.absolute_change, item.growth_percent, STATUS[item.status]])];
-  const url = URL.createObjectURL(new Blob(["\ufeff", rows.map((row) => row.map(escape).join(";")).join("\r\n")], { type: "text/csv;charset=utf-8" }));
-  const link = document.createElement("a"); link.href = url; link.download = `wordstat_demand_${p.end_month}_${p.period_months}m.csv`; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 export function WordstatDemandAnalysis({ publicToken = null, revision, active = true }) {
   const [filters, setFilters] = useState(DEFAULTS);
   const [state, setState] = useState({ report: null, loading: true, error: "" });
   const [attempt, setAttempt] = useState(0);
   const [chosen, setChosen] = useState([]);
   useEffect(() => {
+    if (!active) return;
     const controller = new AbortController();
     // Retain controls and panel dimensions while a new context is loading.
     setState((old) => ({ ...old, loading: true, error: "" })); // eslint-disable-line react-hooks/set-state-in-effect
@@ -158,7 +147,7 @@ export function WordstatDemandAnalysis({ publicToken = null, revision, active = 
       .then(({ data }) => { if (!controller.signal.aborted) setState({ report: data, loading: false, error: "" }); })
       .catch((error) => { if (!controller.signal.aborted) setState((old) => ({ ...old, loading: false, error: typeof error.response?.data?.detail === "string" ? error.response.data.detail : "Не удалось загрузить анализ спроса. Повторите попытку." })); });
     return () => controller.abort();
-  }, [filters, attempt, publicToken, revision]);
+  }, [filters, attempt, publicToken, revision, active]);
   const report = state.report;
   const update = (next) => setFilters((old) => ({ ...old, ...next }));
   const select = (item) => {
@@ -170,16 +159,16 @@ export function WordstatDemandAnalysis({ publicToken = null, revision, active = 
   const period = report?.period;
   if (!active) return null;
   return <div className="wd-demand">
-    <section className="seo-filters"><div className="seo-toolbar"><button type="button" disabled={state.loading || !!state.error || !period} onClick={() => exportReport(report)}>Скачать данные</button><button type="button" onClick={() => { setChosen([]); setFilters(DEFAULTS); }}>Очистить</button></div>
+    <section className="seo-filters"><div className="seo-toolbar"><button type="button" onClick={() => { setChosen([]); setFilters(DEFAULTS); }}>Очистить</button></div>
       <nav className="wd-breadcrumbs" aria-label="Иерархия спроса"><button onClick={() => update({ feature: "", category: "", phrase: "", level: "feature" })}>Все категории</button>{filters.feature && <><span>›</span><button onClick={() => update({ category: "", phrase: "", level: "category" })}>{filters.feature}</button></>}{filters.category && <><span>›</span><button onClick={() => update({ phrase: "", level: "phrase" })}>{filters.category}</button></>}{filters.phrase && <><span>›</span><button onClick={() => update({ phrase: "" })}>{filters.phrase} ×</button></>}</nav>
       <div className="wd-filters"><Segments label="Период тренда" options={[1, 3, 6, 12].map((m) => [m, `${m} мес.`])} value={filters.period_months} onChange={(v) => update({ period_months: v })} />
-        <label className="wd-control">По месяц включительно<select className="dashboard-multiselect__control" aria-label="Конечный месяц" value={filters.end_month || report?.latest_month || ""} onChange={(e) => update({ end_month: e.target.value })}><option value="" disabled>Нет завершённых месяцев</option>{report?.available_months?.slice().reverse().map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}</select></label>
+        <label className="wd-control">По месяц включительно<select className="dashboard-multiselect__control" aria-label="Конечный месяц" value={filters.end_month || report?.period?.end_month || ""} onChange={(e) => update({ end_month: e.target.value })}><option value="" disabled>Нет завершённых месяцев</option>{report?.available_months?.slice().reverse().map((m) => <option key={m} value={m}>{monthLabel(m)}{report.month_coverage?.[m] === "partial" ? " · неполные данные" : report.month_coverage?.[m] === "missing" ? " · нет данных" : ""}</option>)}</select></label>
         <Segments label="Уровень детализации" options={LEVELS} value={filters.level} onChange={(v) => { setChosen([]); update({ level: v, phrase: "", ...(v === "feature" ? { feature: "", category: "" } : v === "category" ? { category: "" } : {}) }); }} />
         <DashboardMultiSelect label="Категория" options={report?.options?.features || []} selected={filters.feature ? [filters.feature] : []} onApply={(values) => { setChosen([]); update({ feature: values.at(-1) || "", category: "", phrase: "", level: values.length ? "category" : "feature" }); }} />
       </div>
       {!!report?.items?.length && <label className="wd-control wd-drill-select">Перейти к элементу<select className="dashboard-multiselect__control" aria-label="Перейти к элементу" value="" disabled={state.loading} onChange={(e) => select(report.items.find((item) => item.id === e.target.value))}><option value="">Выберите категорию, подкатегорию или запрос</option>{report.items.map((item) => <option key={item.id} value={item.id}>{item.name}{filters.level === "category" && !filters.feature ? ` · ${item.feature}` : ""}</option>)}</select></label>}
       {period && <p className="wd-period">{dateLabel(period.current_start)} — {dateLabel(period.current_end)} <span>vs</span> {dateLabel(period.previous_start)} — {dateLabel(period.previous_end)}</p>}
-      <p className="wd-muted">{report?.latest_month ? `Данные по ${monthLabel(report.latest_month)} включительно. ` : ""}Текущий незавершённый месяц исключён из расчётов.</p>
+      <p className="wd-muted">{report?.latest_month ? `Последний полностью загруженный месяц в выборке: ${monthLabel(report.latest_month)}. ` : "Нет полностью загруженных месяцев в выборке. "}Текущий незавершённый месяц исключён из расчётов.</p>
     </section>
     {state.error && <div className="wd-error" role="alert">{state.error} <button className="wd-link" onClick={() => setAttempt((v) => v + 1)}>Повторить</button></div>}
     <div aria-busy={state.loading}>{state.loading ? <div className="wd-skeleton" role="status" aria-label="Загрузка анализа спроса"><div /><div /><div /><div /></div> : !state.error && (period ? <>

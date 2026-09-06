@@ -3,8 +3,11 @@ from calendar import monthrange
 from collections import defaultdict
 from datetime import date
 from statistics import median
+import hashlib
+import json
 
 from django.conf import settings
+from django.core.cache import cache
 from django.utils import timezone
 
 
@@ -85,12 +88,40 @@ def aggregate_months(phrases, facts):
     return {day: complete_sum(facts.get(phrase, {}).get(day) for phrase in phrases) for day in days}
 
 
+def demand_snapshot():
+    from analytics.clickhouse.client import get_clickhouse_client
+    client = get_clickhouse_client()
+    try:
+        if not client.execute("EXISTS TABLE default.yd_wordstat_demand")[0][0]:
+            return ""
+        rows = client.execute("SELECT snapshot FROM default.yd_wordstat_demand LIMIT 1")
+        return rows[0][0] if rows else ""
+    finally:
+        client.disconnect()
+
+
+def cached_demand(params):
+    """Permissions are checked by the caller. Publication IDs make old caches unreachable."""
+    today = timezone.localdate()
+    digest = hashlib.sha256(json.dumps(params, sort_keys=True, default=str).encode()).hexdigest()
+    for _ in range(2):
+        snapshot = demand_snapshot()
+        key = f"wordstat:demand:v2:{snapshot}:{today}:{digest}"
+        result = cache.get(key) if snapshot else None
+        if result is not None:
+            return result
+        result = build_demand(params, today)
+        if result["snapshot"] == snapshot == demand_snapshot():
+            if snapshot:
+                cache.set(key, result, timeout=300)
+            return result
+    raise RuntimeError("Wordstat publication changed during reading; retry the request")
+
+
 def build_demand(params, today=None, source=None):
     today = today or timezone.localdate()
     refs, facts, snapshot = source if source is not None else read_facts(today)
     global_months = aggregate_months(list(refs), facts)
-    available = sorted(day for day, value in global_months.items() if value is not None)
-    end = params.get("end_month") or (available[-1] if available else None)
     feature, category, phrase = (params.get(k, "") for k in ("feature", "category", "phrase"))
     level = params.get("level", "feature")
     periods = params.get("period_months", 12)
@@ -98,11 +129,21 @@ def build_demand(params, today=None, source=None):
     minimum = int(getattr(settings, "WORDSTAT_DEMAND_MIN_BASE", 100))
     selected = [p for p, r in refs.items() if (not feature or r["feature"] == feature)
                 and (not category or r["category"] == category)]
+    monthly = aggregate_months(selected, facts)
+    last = shift(today.replace(day=1), -1)
+    first = min(global_months, default=last)
+    available = [shift(first, n) for n in range((last.year - first.year) * 12 + last.month - first.month + 1)]
+    complete = sorted(d for d, value in monthly.items() if value is not None)
+    observed = sorted({d for p in selected for d, value in facts.get(p, {}).items() if value is not None})
+    end = params.get("end_month") or (observed[-1] if observed else last)
     options = dict(features=sorted({r["feature"] or "Без категории" for r in refs.values()}),
                    categories=sorted({refs[p]["category"] or "Без подкатегории" for p in selected}))
     response = dict(context=dict(feature=feature, category=category, phrase=phrase, level=level),
                     available_months=[d.strftime("%Y-%m") for d in available], options=options,
-                    latest_month=available[-1].strftime("%Y-%m") if available else None,
+                    snapshot=snapshot,
+                    latest_month=complete[-1].strftime("%Y-%m") if complete else None,
+                    month_coverage={d.strftime("%Y-%m"): "complete" if monthly.get(d) is not None else
+                                    "partial" if d in observed else "missing" for d in available},
                     neutral_percent=threshold, minimum_base=minimum, items=[], seasonality=[],
                     regions={}, devices={}, summary={}, period=None)
     if end is None:
@@ -190,12 +231,18 @@ def describe_slices(values, kind, names, total, parent_total, current, previous,
         parent_volume = complete_sum(values.get(("parent", kind, dimension, d)) for d in current)
         parent_share = parent_volume * 100 / parent_total["current_volume"] if parent_total["current_volume"] and parent_volume is not None else None
         item["difference_vs_parent_pp"] = item["share"] - parent_share if item["share"] is not None and parent_share is not None else None
+        item["missing_months"] = [d.strftime("%Y-%m") for d in current
+                                  if values.get(("focus", kind, dimension, d)) is None]
         items.append(item)
     complete = all(item["share"] is not None for item in items)
     share_sum = sum(item["share"] for item in items) if complete else None
     consistent = share_sum is not None and share_sum <= 100.000001
     ranked = sorted(items, key=lambda p: -(p["share"] or 0)) if complete and consistent else []
-    return dict(items=items, complete=complete, consistent=consistent, leader=ranked[0] if ranked else None,
+    reason = ("missing_total" if total["current_volume"] is None else
+              "zero_total" if total["current_volume"] == 0 else
+              "missing_slices" if not complete else "inconsistent" if not consistent else None)
+    return dict(items=items, complete=complete, consistent=consistent, reason=reason,
+        leader=ranked[0] if ranked else None,
         top=ranked[:3], top3_share=sum(p["share"] for p in ranked[:3]) if ranked else None,
         other_share=max(0, 100 - share_sum) if consistent else None,
         fastest_growing=max((p for p in items if p["status"] == "growth" and p["previous_volume"] >= minimum),

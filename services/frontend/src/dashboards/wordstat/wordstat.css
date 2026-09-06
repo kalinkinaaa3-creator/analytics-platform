@@ -605,7 +605,7 @@
 .wd-dashboard .wordstat-dashboard .wordstat-filter-grid { flex: 0 1 600px; grid-template-columns: repeat(3,minmax(120px,1fr)); gap: 10px; }
 .wd-dashboard .wordstat-dashboard .wordstat-filter-actions { flex: none; margin: 0 0 0 auto; flex-direction: row; flex-wrap: nowrap; gap: 8px; }
 .wd-dashboard .wordstat-dashboard .filters-reset,
-.wd-dashboard .wordstat-dashboard .filters-export { width: auto; min-height: 34px; padding: 6px 14px; }
+.wd-dashboard .wordstat-dashboard .filters-export { width: auto; min-height: 44px; padding: 7px 13px; }
 @media (max-width: 650px) {
   .wd-dashboard .wordstat-dashboard #filterForm { flex-wrap: wrap; gap: 10px; }
   .wd-dashboard .wordstat-dashboard .wordstat-filter-grid { flex-basis: 100%; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }

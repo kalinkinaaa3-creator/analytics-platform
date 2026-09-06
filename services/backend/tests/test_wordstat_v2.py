@@ -135,6 +135,67 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(len(result), 7)
         self.assertEqual(YdWordstatApiCheckpoint.objects.count(), 7)
 
+    def test_health_checks_downloads_and_publication_without_api_calls(self):
+        import sys
+        from types import SimpleNamespace
+        from analytics.services.wordstat_health import inspect_wordstat
+        from analytics.services.wordstat_demand import shift
+        config = loader.get_configuration()
+        months = [shift(TODAY.replace(day=1), n) for n in range(-24, 0)]
+        published = []
+        for job in loader.make_jobs(config):
+            value = 100 if job.source == "all" else 20 if job.source == "device" else 10
+            job.model.objects.bulk_create([job.model(**job.data_filters, date=day, count=value) for day in months])
+            YdWordstatApiCheckpoint.objects.create(**job.checkpoint_key, fingerprint=job.fingerprint,
+                                                  date_start=months[0], date_finish=date(2026, 8, 31))
+            published.extend((job.source, job.dimension, day, 1, 1, 1, value) for day in months)
+        ch = Mock()
+        def execute(sql, params=None):
+            if sql.startswith("EXISTS"):
+                return [(1,)]
+            if sql.startswith("SELECT source"):
+                return published
+            if sql.startswith("SELECT uniqExact"):
+                return [(1,)]
+            if sql.startswith("SELECT phrase"):
+                return [("test", year, *([100] * 12)) for year in (2024, 2025, 2026)]
+            raise AssertionError(sql)
+        ch.execute.side_effect = execute
+        with patch.dict(sys.modules, {"analytics.clickhouse.client": SimpleNamespace(get_clickhouse_client=lambda: ch)}), patch.object(loader, "fetch_dynamics") as fetch:
+            report = inspect_wordstat(TODAY)
+            self.assertTrue(report["ok"], report)
+            # A nonempty table must not pass when a device month is missing.
+            YdWordstatDeviceRaw.objects.filter(device="phone", date=months[-1]).delete()
+            report = inspect_wordstat(TODAY)
+            self.assertFalse(report["ok"])
+            self.assertEqual(report["coverage"]["postgres"]["incomplete_months"]["device:phone"], ["2026-08"])
+            self.assertEqual(report["coverage"]["clickhouse_demand"]["different_from_postgres"]["device:phone"], ["2026-08"])
+            YdWordstatIplastRaw.objects.all().update(group_fingerprint="obsolete")
+            report = inspect_wordstat(TODAY)
+            self.assertEqual(report["excluded_region_rows"], 7 * 24)
+            fetch.assert_not_called()
+
+    @override_settings(YD_WORDSTAT_V2_LOAD_ENABLED=True)
+    def test_publication_invalidates_statistics_even_if_demand_fails(self):
+        import sys
+        from types import SimpleNamespace
+        invalidate = Mock()
+        publish = Mock(side_effect=RuntimeError("demand staging failed"))
+        modules = {
+            "analytics.services.yd_wordstat_rebuild_sql": SimpleNamespace(rebuild_yd_wordstat_for_from_raw_sql=Mock()),
+            "analytics.services.yd_wordstat_sync": SimpleNamespace(sync_yd_wordstat_to_clickhouse=Mock()),
+            "analytics.services.wordstat_demand_mart": SimpleNamespace(sync_wordstat_demand=publish),
+            "dashboards.cache.invalidation": SimpleNamespace(invalidate_dashboard_by_name=invalidate),
+            "dashboards.realtime": SimpleNamespace(notify_dashboard_updated=Mock(side_effect=RuntimeError("socket offline"))),
+        }
+        with patch.dict(sys.modules, modules), patch.object(pipeline, "wordstat_pipeline_lock", return_value=nullcontext()), patch.object(
+                pipeline, "check_regions", return_value={}), patch.object(pipeline, "load_job", return_value={"saved": 0, "skipped": 1}), patch.object(
+                pipeline, "validate_download", return_value={"ok": True}), self.assertLogs("external_api.yd_wordstat", level="ERROR"):
+            with self.assertRaisesRegex(RuntimeError, "demand staging failed"):
+                pipeline._run_pipeline()
+        invalidate.assert_called_once_with("Wordstat")
+        publish.assert_called_once()
+
     def test_resume_skips_saved_groups(self):
         config = loader.get_configuration()
         job = next(loader.make_jobs(config, "region"))

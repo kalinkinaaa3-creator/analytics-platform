@@ -84,13 +84,6 @@ TABLE_CHECKS = [
         "fresh_days": 0,
     },
     {
-        "name": "Wordstat",
-        "table": "yd_wordstat_for",
-        "date_add_column": None,
-        "data_date_column": None,
-        "fresh_days": None,
-    },
-    {
         "name": "Nomenclature",
         "table": "nomenclature",
         "date_add_column": "date_add",
@@ -1003,6 +996,18 @@ class Command(BaseCommand):
                             )
 
                 ok.append(name)
+
+            try:
+                from analytics.services.wordstat_health import inspect_wordstat
+                wordstat = inspect_wordstat(today=today)
+                if wordstat["ok"]:
+                    ok.append("Wordstat")
+                else:
+                    problems.extend(f"Wordstat: {problem}" for problem in wordstat["problems"])
+                logger.info("Wordstat health: %s", wordstat)
+            except Exception as exc:
+                logger.exception("Wordstat health check failed")
+                problems.append(f"Wordstat: проверка не выполнена: {exc}")
 
             check_base_parser_health(
                 cursor,

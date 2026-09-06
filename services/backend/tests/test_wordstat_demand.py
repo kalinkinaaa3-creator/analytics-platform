@@ -2,14 +2,14 @@
 import os
 import unittest
 from datetime import date
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 os.environ["DJANGO_SETTINGS_MODULE"] = "tests.wordstat_settings"
 import django
 django.setup()
 
 from analytics.services.wordstat_demand import (
-    build_demand, complete_sum, describe_slices, metrics, season_profile, shift, unpack_facts,
+    build_demand, cached_demand, complete_sum, describe_slices, metrics, season_profile, shift, unpack_facts,
 )
 from analytics.services.wordstat_demand_mart import publish_rows
 
@@ -71,6 +71,22 @@ class DemandMathTests(unittest.TestCase):
         r = build_demand(dict(end_month=date(2026, 8, 1), period_months=1), TODAY, (refs, facts, snap))
         self.assertIsNone(r["summary"]["current_volume"])
         self.assertEqual(r["latest_month"], "2026-07")
+        self.assertIn("2026-08", r["available_months"])
+        self.assertEqual(r["month_coverage"]["2026-08"], "partial")
+
+    def test_other_category_gap_does_not_hide_complete_selected_month(self):
+        refs, facts, snap = source([("a", "A", "AA", 100), ("b", "B", "BB", 200)])
+        facts["b"][date(2026, 8, 1)] = None
+        r = build_demand(dict(feature="A", period_months=1), TODAY, (refs, facts, snap))
+        self.assertEqual(r["latest_month"], "2026-08")
+        self.assertEqual(r["summary"]["current_volume"], 100)
+
+    def test_missing_current_year_still_has_completed_calendar_months(self):
+        refs, facts, snap = source()
+        facts = {p: {d: v for d, v in days.items() if d.year < 2026} for p, days in facts.items()}
+        r = build_demand({}, TODAY, (refs, facts, snap))
+        self.assertEqual(r["month_coverage"]["2026-08"], "missing")
+        self.assertEqual(r["latest_month"], "2025-12")
 
     def test_hierarchy_and_same_named_subcategories(self):
         data = source([("a", "A", "same", 100), ("b", "B", "same", 200)])
@@ -113,6 +129,37 @@ class DemandMathTests(unittest.TestCase):
         result = describe_slices({("focus", "device", "phone", day): 101}, "device", [("phone", "Phone")], metrics(100, 100), metrics(None, None), [day], [date(2025, 8, 1)], 10)
         self.assertFalse(result["consistent"])
         self.assertIsNone(result["leader"])
+        self.assertEqual(result["reason"], "inconsistent")
+
+    def test_slice_diagnostics_distinguish_gaps_from_zero_totals(self):
+        day = date(2026, 8, 1)
+        for total, reason in [(None, "missing_total"), (0, "zero_total"), (100, "missing_slices")]:
+            r = describe_slices({}, "device", [("phone", "Phone")], metrics(total, 100), metrics(None, None), [day], [shift(day, -12)], 10)
+            self.assertEqual(r["reason"], reason)
+            self.assertEqual(r["items"][0]["missing_months"], ["2026-08"])
+
+
+class CacheTests(unittest.TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+
+    def test_cache_reuse_and_publication_change(self):
+        with patch("analytics.services.wordstat_demand.demand_snapshot", return_value="one") as version, patch(
+                "analytics.services.wordstat_demand.build_demand", return_value={"snapshot": "one"}) as build:
+            cached_demand({})
+            cached_demand({})
+            self.assertEqual(build.call_count, 1)
+            version.return_value = "two"
+            build.return_value = {"snapshot": "two"}
+            self.assertEqual(cached_demand({})["snapshot"], "two")
+            self.assertEqual(build.call_count, 2)
+
+    def test_publication_race_retries_instead_of_caching_mixed_report(self):
+        with patch("analytics.services.wordstat_demand.demand_snapshot", side_effect=["one", "two", "two", "two"]), patch(
+                "analytics.services.wordstat_demand.build_demand", side_effect=[{"snapshot": "one"}, {"snapshot": "two"}]) as build:
+            self.assertEqual(cached_demand({})["snapshot"], "two")
+            self.assertEqual(build.call_count, 2)
 
 
 class PublicationTests(unittest.TestCase):

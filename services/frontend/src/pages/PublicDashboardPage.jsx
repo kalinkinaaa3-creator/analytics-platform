@@ -12,11 +12,6 @@ const DASHBOARD_WS_NAMES = {
   turnover: "Turnover",
 };
 
-const DASHBOARDS_WITH_DEFAULT_DATES = [
-  "purchases",
-  "projects",
-];
-
 function buildDashboardWsUrl() {
   const baseURL = api.defaults.baseURL || window.location.origin;
   const url = new URL(baseURL, window.location.origin);
@@ -41,6 +36,20 @@ export function PublicDashboardPage() {
   const loadDashboardRef = useRef(null);
   const dashboardSlugRef = useRef(null);
 
+  useEffect(() => {
+    const refresh = () => {
+      if (dashboardSlugRef.current === "wordstat" && document.visibilityState === "visible") {
+        loadDashboardRef.current?.({ showSpinner: false });
+      }
+    };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("online", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("online", refresh);
+    };
+  }, []);
+
   const defaultDatesReady = true;
 
 
@@ -58,7 +67,7 @@ export function PublicDashboardPage() {
 
       try {
         const response = await api.get(
-          `/v1/dashboards/public-group/${token}/dashboard/${dashboardSlug}/?${filtersKey}`
+          `/v1/dashboards/public-group/${token}/dashboard/${dashboardSlug}/?${filtersKey}${dashboardSlug === "wordstat" ? "&metadata_only=1" : ""}`
         );
 
         setData(response.data);
@@ -86,7 +95,8 @@ export function PublicDashboardPage() {
 
 
   useEffect(() => {
-    loadDashboard({ showSpinner: true });
+    const timer = setTimeout(() => loadDashboard({ showSpinner: true }), 0);
+    return () => clearTimeout(timer);
   }, [loadDashboard]);
 
   useEffect(() => {
@@ -100,12 +110,13 @@ export function PublicDashboardPage() {
       socket = new WebSocket(wsUrl);
 
       socket.onopen = () => {
+        if (reconnectAttempt > 0 && dashboardSlugRef.current === "wordstat") loadDashboardRef.current?.({ showSpinner: false });
         reconnectAttempt = 0;
         console.log("Public dashboard WebSocket connected");
       };
 
       socket.onmessage = (event) => {
-        let message = null;
+        let message;
 
         try {
           message = JSON.parse(event.data);

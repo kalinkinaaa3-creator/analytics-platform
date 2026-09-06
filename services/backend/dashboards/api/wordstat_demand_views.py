@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from analytics.services.wordstat_demand import build_demand
+from analytics.services.wordstat_demand import cached_demand
 from dashboards.models import Dashboard
 from dashboards.services.access import user_can_view_dashboard
 
@@ -39,7 +39,7 @@ class WordstatDemandView(APIView):
             raise PermissionDenied("Нет доступа к дашборду Wordstat.")
         params = DemandParams(data=request.query_params)
         params.is_valid(raise_exception=True)
-        return Response(build_demand(params.validated_data))
+        return Response(cached_demand(params.validated_data))
 
 
 class PublicWordstatDemandView(APIView):
@@ -52,4 +52,4 @@ class PublicWordstatDemandView(APIView):
         get_public_group_dashboard_or_403(group, "wordstat")
         params = DemandParams(data=request.query_params)
         params.is_valid(raise_exception=True)
-        return Response(build_demand(params.validated_data))
+        return Response(cached_demand(params.validated_data))

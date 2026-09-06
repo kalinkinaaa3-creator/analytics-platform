@@ -50,7 +50,7 @@ export function DashboardPage() {
 
       try {
         const response = await api.get(
-          `/v1/dashboards/builder/${dashboardSlug}/?${filtersKey}`
+          `/v1/dashboards/builder/${dashboardSlug}/?${filtersKey}${dashboardSlug === "wordstat" ? "&metadata_only=1" : ""}`
         );
 
         setData(response.data);
@@ -72,6 +72,20 @@ export function DashboardPage() {
   useEffect(() => {
     dashboardSlugRef.current = dashboardSlug;
   }, [dashboardSlug]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (dashboardSlugRef.current === "wordstat" && document.visibilityState === "visible") {
+        loadDashboardRef.current?.({ showSpinner: false });
+      }
+    };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("online", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("online", refresh);
+    };
+  }, []);
 
   const defaultDatesReady = true;
 
@@ -110,6 +124,7 @@ export function DashboardPage() {
       socket = new WebSocket(`${wsUrl}?token=${encodeURIComponent(access)}`);
 
       socket.onopen = () => {
+        if (reconnectAttempt > 0 && dashboardSlugRef.current === "wordstat") loadDashboardRef.current?.({ showSpinner: false });
         reconnectAttempt = 0;
         console.log("Dashboard WebSocket connected");
       };

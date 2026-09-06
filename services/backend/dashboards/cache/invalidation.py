@@ -1,3 +1,5 @@
+from uuid import uuid4
+from django.core.cache import cache
 from dashboards.models import DashboardWidget, Dashboard
 from dashboards.cache.dashboard_cache import (
     delete_dashboard_cache,
@@ -37,6 +39,8 @@ def invalidate_dashboards_for_dataset(dataset_id: int):
 
 
 def invalidate_dashboard_by_name(name: str):
+    if name == "Wordstat":
+        cache.set("wordstat:statistics:generation", uuid4().hex, timeout=None)
     dashboards = Dashboard.objects.filter(name=name)
 
     for dashboard in dashboards:

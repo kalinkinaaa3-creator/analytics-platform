@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { useDropdownPosition } from "../../components/useDropdownPosition";
 import { WordstatDemandAnalysis } from "./WordstatDemandAnalysis";
@@ -439,7 +439,7 @@ function WordstatHeader() {
   );
 }
 
-function WordstatStatistics({ data }) {
+function WordstatStatistics({ data, active, publicToken }) {
   const wrapperRef = useRef(null);
 
   const [rows, setRows] = useState(data?.rows || []);
@@ -456,19 +456,10 @@ function WordstatStatistics({ data }) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    setRows(data?.rows || []);
-    setPagination(data?.pagination || {});
-    setFilterValues(data?.filter_values || {});
-
-    setLocalFilters({
-      feature: normalizeList(data?.filters?.feature),
-      category: normalizeList(data?.filters?.category),
-      phrase: normalizeList(data?.filters?.phrase),
-    });
-  }, [data]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  const requestRef = useRef(null);
+  const filtersRef = useRef(localFilters);
+  const [error, setError] = useState("");
+  useEffect(() => { filtersRef.current = localFilters; }, [localFilters]);
 
   const currentFilters = useMemo(
     () => ({
@@ -479,77 +470,53 @@ function WordstatStatistics({ data }) {
     [localFilters]
   );
 
-  async function fetchWordstat(nextFilters, page = 1, append = false) {
-    const payload = buildPayload(nextFilters, page);
-
-    const response = await api.post(
-      "/v1/dashboards/builder/wordstat/",
-      payload
-    );
-
-    const widget = response.data?.widgets?.find(
-      (item) => item.type === "yd_wordstat_table"
-    );
-
-    const nextData = widget?.data;
-
-    if (!nextData) return;
-
-    if (append) {
-      setRows((prev) => [...prev, ...(nextData.rows || [])]);
-    } else {
-      setRows(nextData.rows || []);
-
-      if (wrapperRef.current) {
-        wrapperRef.current.scrollTop = 0;
+  const fetchWordstat = useCallback(async (nextFilters, page = 1, append = false) => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setError("");
+    setIsApplyingFilters(!append);
+    setIsLoadingMore(append);
+    try {
+      const url = publicToken ? `/v1/dashboards/public-group/${publicToken}/dashboard/wordstat/` : "/v1/dashboards/builder/wordstat/";
+      const response = await api.post(url, buildPayload(nextFilters, page), { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      const nextData = response.data?.widgets?.find((item) => item.type === "yd_wordstat_table")?.data;
+      if (!nextData) throw new Error("Missing Wordstat widget");
+      setRows((prev) => append ? [...prev, ...(nextData.rows || [])] : nextData.rows || []);
+      if (!append && wrapperRef.current) wrapperRef.current.scrollTop = 0;
+      setPagination(nextData.pagination || {});
+      setFilterValues(nextData.filter_values || {});
+    } catch (failure) {
+      if (!controller.signal.aborted) setError(typeof failure.response?.data?.detail === "string" ? failure.response.data.detail : "Не удалось загрузить статистику запросов.");
+    } finally {
+      if (requestRef.current === controller) {
+        setIsApplyingFilters(false);
+        setIsLoadingMore(false);
       }
     }
+  }, [publicToken]);
 
-    setPagination(nextData.pagination || {});
-    setFilterValues(nextData.filter_values || {});
-  }
+  useEffect(() => {
+    if (!active) return;
+    // Refresh the current selection, never replace it with the parent widget's defaults.
+    const timer = setTimeout(() => fetchWordstat(filtersRef.current), 0);
+    return () => { clearTimeout(timer); requestRef.current?.abort(); };
+  }, [data, active, fetchWordstat]);
 
   async function applyFilters(next = currentFilters) {
-    setIsApplyingFilters(true);
-
-    try {
-      await fetchWordstat(next, 1, false);
-    } finally {
-      setIsApplyingFilters(false);
-    }
+    await fetchWordstat(next);
   }
 
   async function resetFilters() {
-    const next = {
-      feature: [],
-      category: [],
-      phrase: [],
-    };
-
+    const next = { feature: [], category: [], phrase: [] };
     setLocalFilters(next);
-    setIsApplyingFilters(true);
-
-    try {
-      await fetchWordstat(next, 1, false);
-    } finally {
-      setIsApplyingFilters(false);
-    }
+    await fetchWordstat(next);
   }
 
   async function loadNextPage() {
-    if (isLoadingMore || isApplyingFilters || !pagination?.has_next) return;
-
-    const nextPage = pagination.next_page;
-
-    if (!nextPage) return;
-
-    setIsLoadingMore(true);
-
-    try {
-      await fetchWordstat(currentFilters, nextPage, true);
-    } finally {
-      setIsLoadingMore(false);
-    }
+    if (isLoadingMore || isApplyingFilters || !pagination?.has_next || !pagination.next_page) return;
+    await fetchWordstat(currentFilters, pagination.next_page, true);
   }
 
   function handleScroll(event) {
@@ -635,6 +602,7 @@ function WordstatStatistics({ data }) {
         </div>
 
       </form>
+      {error && <div className="wd-error" role="alert">{error} <button type="button" className="wd-link" onClick={() => applyFilters()}>Повторить</button></div>}
 
       <div
         ref={wrapperRef}
@@ -672,6 +640,6 @@ export function WordstatDashboard({ data, publicToken = null }) {
       <button type="button" className={tab === "statistics" ? "is-active" : ""} aria-pressed={tab === "statistics"} onClick={() => setTab("statistics")}>Статистика запросов</button>
     </nav>
     <div hidden={tab !== "demand"}><WordstatDemandAnalysis publicToken={publicToken} revision={data} active={tab === "demand"} /></div>
-    <div hidden={tab !== "statistics"}><WordstatStatistics data={data} /></div>
+    <div hidden={tab !== "statistics"}><WordstatStatistics data={data} active={tab === "statistics"} publicToken={publicToken} /></div>
   </section>;
 }

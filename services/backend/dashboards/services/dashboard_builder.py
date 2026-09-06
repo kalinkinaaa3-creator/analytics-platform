@@ -46,7 +46,7 @@ def get_dashboard_cache_timeout(dashboard: Dashboard) -> int:
 
 def get_dashboard_cache_schema_version(dashboard: Dashboard) -> int:
     return {
-        "Wordstat": 2,
+        "Wordstat": 3,
         "Turnover": 2,
     }.get(dashboard.name, 1)
 
@@ -77,6 +77,7 @@ def normalize_filters_for_dashboard(dashboard: Dashboard, filters: dict | None =
             "phrase",
             "page",
             "page_size",
+            "metadata_only",
         ]
 
     elif dashboard.name == "Purchases":
@@ -255,6 +256,8 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
             "schema_version": cache_schema_version,
             "filters": cache_filters,
         }
+    if dashboard.name == "Wordstat":
+        cache_key_payload["generation"] = cache.get("wordstat:statistics:generation", "initial")
     filters_hash = hashlib.md5(
         json.dumps(cache_key_payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
     ).hexdigest()
@@ -300,8 +303,9 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
         }
 
         dataset_id = config.get("dataset_id")
+        wordstat_metadata = widget.type == "yd_wordstat_table" and str(runtime_filters.get("metadata_only", "")).lower() in ("1", "true")
 
-        if dataset_id:
+        if dataset_id and not wordstat_metadata:
             rows = repository.fetch_dataset_rows(dataset_id)
         else:
             rows = []
@@ -334,6 +338,9 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
                 filters=project_filters,
             )
 
+        elif wordstat_metadata:
+            widget_data["data"] = {"filters": {key: runtime_filters.get(key, []) for key in ("feature", "category", "phrase")}}
+
         elif widget.type == "yd_wordstat_table":
             page = int(runtime_filters.get("page", 1))
             page_size = int(runtime_filters.get("page_size", 100))
@@ -351,6 +358,7 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
                 for key, value in runtime_filters.items()
                 if key not in ("page", "page_size")
             }
+            wordstat_base_filters["generation"] = cache_key_payload.get("generation", "initial")
             wordstat_base_hash = hashlib.md5(
                 json.dumps(wordstat_base_filters, sort_keys=True, ensure_ascii=False).encode("utf-8")
             ).hexdigest()
