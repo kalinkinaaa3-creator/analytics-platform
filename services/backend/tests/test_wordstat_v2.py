@@ -247,6 +247,18 @@ class DatabaseTests(unittest.TestCase):
         YdWordstatAllRaw.objects.filter(date=date(2019, 1, 1)).delete()
         self.assertEqual(loader.job_period(job, TODAY)["date_start"], date(2019, 1, 1))
 
+    def test_cleared_raw_history_reloads_from_2018_despite_saved_checkpoint(self):
+        for kind in ("all", "device", "region"):
+            job = next(loader.make_jobs(loader.get_configuration(), kind))
+            with patch.object(loader, "fetch_dynamics", side_effect=response_for) as fetch:
+                loader.load_job(job, TODAY)
+                job.model.objects.filter(**job.filters).delete()
+                self.assertFalse(loader.checkpoint_is_complete(job, TODAY))
+                loader.load_job(job, TODAY)
+                self.assertEqual(fetch.call_args.args[1], date(2018, 1, 1))
+                self.assertEqual(fetch.call_args.args[2], date(2026, 8, 31))
+                self.assertTrue(loader.checkpoint_is_complete(job, TODAY))
+
     def test_plan_makes_no_http_calls_or_writes(self):
         with patch.object(client.requests, "post", side_effect=AssertionError("HTTP forbidden")):
             result = loader.estimate_load(today=TODAY)

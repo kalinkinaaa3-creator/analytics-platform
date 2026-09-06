@@ -106,7 +106,7 @@ def cached_demand(params):
     digest = hashlib.sha256(json.dumps(params, sort_keys=True, default=str).encode()).hexdigest()
     for _ in range(2):
         snapshot = demand_snapshot()
-        key = f"wordstat:demand:v2:{snapshot}:{today}:{digest}"
+        key = f"wordstat:demand:v3:{snapshot}:{today}:{digest}"
         result = cache.get(key) if snapshot else None
         if result is not None:
             return result
@@ -125,6 +125,7 @@ def build_demand(params, today=None, source=None):
     feature, category, phrase = (params.get(k, "") for k in ("feature", "category", "phrase"))
     level = params.get("level", "feature")
     periods = params.get("period_months", 12)
+    comparison = params.get("comparison", "year_over_year")
     threshold = float(getattr(settings, "WORDSTAT_DEMAND_NEUTRAL_PERCENT", 2))
     minimum = int(getattr(settings, "WORDSTAT_DEMAND_MIN_BASE", 100))
     selected = [p for p, r in refs.items() if (not feature or r["feature"] == feature)
@@ -149,8 +150,8 @@ def build_demand(params, today=None, source=None):
     if end is None:
         return response
     current = [shift(end, offset) for offset in range(1 - periods, 1)]
-    previous = [shift(day, -12) for day in current]
-    response["period"] = dict(period_months=periods, end_month=end.strftime("%Y-%m"),
+    previous = [shift(day, -periods if comparison == "previous_period" else -12) for day in current]
+    response["period"] = dict(period_months=periods, comparison=comparison, end_month=end.strftime("%Y-%m"),
         current_start=current[0].isoformat(), current_end=end.replace(day=monthrange(end.year, end.month)[1]).isoformat(),
         previous_start=previous[0].isoformat(),
         previous_end=previous[-1].replace(day=monthrange(previous[-1].year, previous[-1].month)[1]).isoformat())

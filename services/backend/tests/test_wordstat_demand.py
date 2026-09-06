@@ -56,6 +56,32 @@ class DemandMathTests(unittest.TestCase):
         self.assertEqual(r["items"][0]["growth_percent"], 10)
         self.assertEqual(r["items"][0]["children"]["growth"]["share"], 50)
 
+    def test_previous_period_uses_adjacent_months_across_year_boundary(self):
+        for length in (1, 3, 6, 12):
+            end = date(2026, 2, 1)
+            report = build_demand(dict(end_month=end, period_months=length, comparison="previous_period"), TODAY, source())
+            self.assertEqual(report["period"]["previous_start"], shift(end, 1 - 2 * length).isoformat())
+            self.assertEqual(report["period"]["comparison"], "previous_period")
+            self.assertEqual(report["summary"]["previous_volume"], length * 1000)
+        self.assertEqual(report["period"]["previous_end"], "2025-02-28")
+
+    def test_comparison_modes_change_values_but_not_seasonality(self):
+        refs, facts, snap = source()
+        facts["a"][date(2026, 7, 1)] = 300
+        data = refs, facts, snap
+        yoy = build_demand(dict(period_months=1), TODAY, data)
+        adjacent = build_demand(dict(period_months=1, comparison="previous_period"), TODAY, data)
+        self.assertEqual(yoy["summary"]["previous_volume"], 1000)
+        self.assertEqual(adjacent["summary"]["previous_volume"], 1200)
+        self.assertEqual(yoy["seasonality"], adjacent["seasonality"])
+        self.assertEqual(adjacent["period"]["previous_end"], "2026-07-31")
+
+    def test_twelve_month_comparison_modes_are_identical(self):
+        a = build_demand(dict(period_months=12), TODAY, source())
+        b = build_demand(dict(period_months=12, comparison="previous_period"), TODAY, source())
+        self.assertEqual(a["summary"], b["summary"])
+        self.assertEqual(a["period"]["previous_start"], b["period"]["previous_start"])
+
     def test_duplicate_is_not_added_to_volume(self):
         row = ("A", "AA", "a", date(2025, 1, 1), 100, "s")
         _, facts, _ = unpack_facts([row, row], TODAY)

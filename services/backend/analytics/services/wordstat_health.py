@@ -20,6 +20,7 @@ def inspect_wordstat(today=None, deep=False):
     expected = len(phrases)
     report = {"target_month": months[-1].strftime("%Y-%m"), "phrases": expected,
               "window_start": months[0].isoformat(), "problems": [], "coverage": {}, "checkpoints": {}}
+    report["iplast_groups"] = config["groups"]
     problems = report["problems"]
     raw = {}
     dimensions = [("all", "", YdWordstatAllRaw, {})]

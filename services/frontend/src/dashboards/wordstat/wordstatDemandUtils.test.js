@@ -1,0 +1,25 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { defaultSeasonIds, isParentSummary, objectNoun, sortedChanges } from "./wordstatDemandUtils.js";
+
+test("all positive and negative changes are retained, including neutral and zero-base rows", () => {
+  const items = Array.from({ length: 30 }, (_, i) => ({ id: String(i), absolute_change: 1, growth_percent: 0.1, current_volume: i, status: "stable" }));
+  items.push({ id: "new", absolute_change: 5, growth_percent: null, status: "new" }, { id: "down", absolute_change: -1, growth_percent: -0.1, status: "stable" }, { id: "missing", absolute_change: null });
+  const sorted = sortedChanges(items, "growth", { key: "growth_percent", direction: "desc" });
+  assert.equal(sorted.length, 31);
+  assert.equal(sorted.at(-1).id, "new");
+  assert.equal(sortedChanges(items, "decline", { key: "absolute_change", direction: "asc" })[0].id, "down");
+  assert.equal(sortedChanges(items, "growth", { key: "current_volume", direction: "desc" })[0].current_volume, 29);
+});
+test("season defaults use growth rather than volume and retain the selected phrase", () => {
+  const items = [1, 4, 2, 3].map((growth_percent) => ({ id: String(growth_percent), phrase: String(growth_percent), growth_percent, absolute_change: growth_percent, current_volume: 100 - growth_percent }));
+  assert.deepEqual(defaultSeasonIds(items), ["4", "3", "2"]);
+  assert.deepEqual(defaultSeasonIds(items, "1"), ["1", "4", "3"]);
+});
+test("Russian endings and parent-only seasonal summaries", () => {
+  assert.deepEqual([1, 2, 5, 11, 21, 22, 114].map((n) => objectNoun(n, "feature")), ["категория", "категории", "категорий", "категорий", "категория", "категории", "категорий"]);
+  assert.equal(objectNoun(3, "category"), "подкатегории");
+  assert.equal(objectNoun(11, "phrase"), "запросов");
+  assert.equal(isParentSummary({ name: "Наливная тара (Общие)", feature: "6. Наливная тара" }, { level: "category" }), true);
+  assert.equal(isParentSummary({ name: "Бочки", feature: "6. Наливная тара" }, { level: "category" }), false);
+});

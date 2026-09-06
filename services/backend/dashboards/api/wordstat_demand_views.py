@@ -17,6 +17,7 @@ class DemandParams(serializers.Serializer):
     phrase = serializers.CharField(required=False, allow_blank=True, max_length=255)
     level = serializers.ChoiceField(choices=["feature", "category", "phrase"], default="feature")
     period_months = serializers.ChoiceField(choices=[1, 3, 6, 12], default=12)
+    comparison = serializers.ChoiceField(choices=["year_over_year", "previous_period"], default="year_over_year")
     end_month = serializers.RegexField(r"^\d{4}-\d{2}$", required=False)
 
     def validate_end_month(self, value):
