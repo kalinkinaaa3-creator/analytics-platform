@@ -1,565 +1,222 @@
+"""Load v2 monthly series; the 'region' source now means IPLAST aggregates."""
 import logging
-from datetime import date, datetime
+from dataclasses import dataclass
+from datetime import date
 
 from django.db import transaction
+from django.utils import timezone
 
 from datasets.models import (
-    YdWordstatPhraseRef,
-    YdWordstatDeviceRef,
-    YdWordstatRegionRef,
-    YdWordstatIplastRegionRef,
-    YdWordstatAllRaw,
-    YdWordstatDeviceRaw,
-    YdWordstatRegionRaw,
+    YdWordstatPhraseRef, YdWordstatDeviceRef, YdWordstatIplastRegionRef,
+    YdWordstatAllRaw, YdWordstatDeviceRaw, YdWordstatIplastRaw,
+    YdWordstatApiCheckpoint,
 )
-from datasets.services.external_api.yd_wordstat_api_client import (
-    fetch_yd_wordstat_dynamics,
-    YdWordstatQuotaExceeded,
+from .yd_wordstat_contract import (
+    build_iplast_groups, dynamics_body, fingerprint, month_dates,
+    parse_monthly_results, validate_group_tree,
 )
-from datasets.services.external_api.yd_wordstat_load_period import (
-    get_reload_period_without_delete,
-    has_current_month_loaded,
-)
-
-
-
+from .yd_wordstat_load_period import get_reload_period_without_delete, get_previous_month_last_day
+from .yd_wordstat_search_api_client import fetch_dynamics, fetch_regions_tree
 
 logger = logging.getLogger("external_api.yd_wordstat")
 
 
-MAX_RETRIES = 3
-BATCH_SIZE = 5000
+@dataclass(frozen=True)
+class LoadJob:
+    source: str
+    phrase: str
+    feature: str | None
+    category: str | None
+    dimension: str
+    fingerprint: str
+    regions: tuple = ()
+
+    @property
+    def model(self):
+        return {"all": YdWordstatAllRaw, "device": YdWordstatDeviceRaw, "region": YdWordstatIplastRaw}[self.source]
+
+    @property
+    def filters(self):
+        result = {"phrase": self.phrase}
+        if self.source == "device":
+            result["device"] = self.dimension
+        elif self.source == "region":
+            result["macroregion_label"] = self.dimension
+        return result
+
+    @property
+    def checkpoint_key(self):
+        return {"source": self.source, "phrase": self.phrase, "dimension": self.dimension}
+
+    @property
+    def devices(self):
+        return [self.dimension] if self.source == "device" else ["all"]
+
+    @property
+    def data_filters(self):
+        result = self.filters
+        if self.source == "region":
+            result["group_fingerprint"] = self.fingerprint
+        return result
 
 
-class YdWordstatApiLoadError(Exception):
-    pass
+def get_configuration():
+    phrases = list(YdWordstatPhraseRef.objects.exclude(phrase="").order_by("phrase").values("phrase", "feature", "category"))
+    devices = list(YdWordstatDeviceRef.objects.order_by("device").values_list("device", flat=True))
+    groups = build_iplast_groups(list(YdWordstatIplastRegionRef.objects.values("region_value", "macroregion_label")))
+    if not phrases:
+        raise ValueError("Wordstat phrase reference is empty")
+    if set(devices) != {"desktop", "phone", "tablet"}:
+        raise ValueError("Wordstat device reference must contain desktop, phone and tablet")
+    # Validate every phrase before starting any paid requests.
+    for item in phrases:
+        dynamics_body(item["phrase"], date(2025, 1, 1), date(2025, 1, 31))
+    return {"phrases": phrases, "devices": devices, "groups": groups}
 
 
-def clean_str(value):
-    if value is None:
-        return None
-
-    value = str(value).strip()
-
-    if value == "":
-        return None
-
-    return value
-
-
-def clean_int(value, default=0):
-    if value is None:
-        return default
-
-    try:
-        return int(value)
-    except Exception:
-        return default
+def make_jobs(config, source=None):
+    sources = [source] if source else ["all", "device", "region"]
+    if any(item not in ("all", "device", "region") for item in sources):
+        raise ValueError("source must be all, device or region (IPLAST groups)")
+    for item in sources:
+        for phrase in config["phrases"]:
+            if item == "all":
+                dimensions = [("", (), fingerprint("v2:all"))]
+            elif item == "device":
+                dimensions = [(device, (), fingerprint("v2:" + device)) for device in config["devices"]]
+            else:
+                dimensions = [(group["name"], tuple(group["regions"]), group["fingerprint"]) for group in config["groups"]]
+            for dimension, regions, signature in dimensions:
+                yield LoadJob(item, phrase["phrase"], phrase["feature"], phrase["category"], dimension, signature, regions)
 
 
-def clean_date(value):
-    if value is None:
-        return None
-
-    if isinstance(value, date):
-        return value
-
-    value = str(value).strip()
-
-    if value == "":
-        return None
-
-    formats = [
-        "%Y-%m-%d",
-        "%Y-%m-%dT%H:%M:%S",
-        "%Y-%m-%d %H:%M:%S",
-        "%d.%m.%Y",
-    ]
-
-    for fmt in formats:
-        try:
-            return datetime.strptime(value[:19], fmt).date()
-        except Exception:
-            pass
-
-    return None
+def checkpoint_is_complete(job, today):
+    finish = get_previous_month_last_day(today)
+    checkpoint = YdWordstatApiCheckpoint.objects.filter(
+        **job.checkpoint_key, fingerprint=job.fingerprint, date_finish=finish,
+    ).first()
+    if checkpoint is None:
+        return False
+    # CSV imports or manual changes must not leave a stale checkpoint usable.
+    rows = list(job.model.objects.filter(
+        **job.data_filters, date__gte=checkpoint.date_start, date__lte=finish,
+    ).values_list("date", "count"))
+    expected = set(month_dates(checkpoint.date_start, finish))
+    return (len(rows) == len(expected) and {day for day, _ in rows} == expected
+            and all(count is not None and count >= 0 for _, count in rows))
 
 
-def get_phrase_refs():
-    return list(
-        YdWordstatPhraseRef.objects
-        .exclude(phrase__isnull=True)
-        .exclude(phrase="")
-        .order_by("phrase")
-        .values("phrase", "feature", "category")
+def job_period(job, today):
+    period = get_reload_period_without_delete(job.model, job.data_filters, today=today)
+    checkpoint = YdWordstatApiCheckpoint.objects.filter(
+        **job.checkpoint_key, fingerprint=job.fingerprint,
+    ).first()
+    if checkpoint:
+        from collections import Counter
+
+        records = list(job.model.objects.filter(
+            **job.data_filters, date__gte=checkpoint.date_start, date__lte=checkpoint.date_finish,
+        ).values_list("date", "count"))
+        counts = Counter(day for day, _ in records)
+        invalid = {day for day, count in records if count is None or count < 0}
+        broken = [day for day in month_dates(checkpoint.date_start, checkpoint.date_finish)
+                  if counts[day] != 1 or day in invalid]
+        if broken:
+            period["date_start"] = min(period["date_start"], min(broken))
+    return period
+
+
+def load_job(job, today):
+    if checkpoint_is_complete(job, today):
+        return {"skipped": 1, "saved": 0}
+    period = job_period(job, today)
+    if period["skipped"]:
+        raise ValueError("Unexpected empty Wordstat load period")
+    data = fetch_dynamics(
+        job.phrase, period["date_start"], period["date_finish"],
+        devices=job.devices, regions=list(job.regions) if job.regions else None,
     )
-
-
-def get_device_refs():
-    return list(
-        YdWordstatDeviceRef.objects
-        .exclude(device__isnull=True)
-        .exclude(device="")
-        .order_by("device")
-        .values_list("device", flat=True)
-    )
-
-
-def get_region_refs_for_loading():
-    return list(
-        YdWordstatRegionRef.objects
-        .filter(country_label="Россия")
-        .values(
-            "region_value",
-            "region_label",
-            "country_label",
-            "macroregion_label",
-        )
-    ) + list(
-        YdWordstatRegionRef.objects
-        .filter(region_value=166)
-        .exclude(country_label="Россия")
-        .values(
-            "region_value",
-            "region_label",
-            "country_label",
-            "macroregion_label",
-        )
-    )
-
-
-def get_iplast_region_map():
-    return {
-        item["region_value"]: item["macroregion_label"]
-        for item in YdWordstatIplastRegionRef.objects.values(
-            "region_value",
-            "macroregion_label",
-        )
-    }
-
-
-def parse_dynamics_response(data):
-    request_phrase = clean_str(data.get("requestPhrase"))
-    dynamics = data.get("dynamics") or []
-
-    if not isinstance(dynamics, list):
-        dynamics = []
-
-    return request_phrase, dynamics
-
-
-def fetch_with_retry(
-    phrase: str,
-    date_start,
-    date_finish,
-    devices: list[str] | None = None,
-    regions: list[int] | None = None,
-):
-    last_error = None
-
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            return fetch_yd_wordstat_dynamics(
-                phrase=phrase,
-                date_start=date_start,
-                date_finish=date_finish,
-                devices=devices,
-                regions=regions,
-            )
-
-        except YdWordstatQuotaExceeded:
-            logger.info(
-                "YD Wordstat quota exhausted during request: phrase=%s, devices=%s, regions=%s",
-                phrase,
-                devices,
-                regions,
-            )
-            raise
-
-        except Exception as exc:
-            last_error = exc
-
-            logger.exception(
-                "YD Wordstat API attempt failed: attempt=%s/%s, phrase=%s, devices=%s, regions=%s",
-                attempt,
-                MAX_RETRIES,
-                phrase,
-                devices,
-                regions,
-            )
-
-    raise YdWordstatApiLoadError(
-        f"YD Wordstat API failed after {MAX_RETRIES} attempts: "
-        f"phrase={phrase}, devices={devices}, regions={regions}, error={last_error}"
-    )
-
-
-def save_objects_after_success(model, filters: dict, reload_from_date, objects: list):
-    """
-    Безопасное переудаление:
-    API уже успешно отработал, объекты уже собраны.
-    Только теперь удаляем старый диапазон и вставляем новые строки.
-    """
-
-    if not objects:
-        logger.warning(
-            "YD Wordstat save skipped because objects list is empty: model=%s, filters=%s, reload_from_date=%s",
-            model.__name__,
-            filters,
-            reload_from_date,
-        )
-
-        return 0, 0
-
+    rows = parse_monthly_results(data, period["date_start"], period["date_finish"])
+    objects = []
+    for row in rows:
+        values = {
+            **job.filters, **row, "feature": job.feature, "category": job.category,
+        }
+        if job.source == "region":
+            values["group_fingerprint"] = job.fingerprint
+        objects.append(job.model(**values))
     with transaction.atomic():
-        deleted_count, _ = model.objects.filter(
-            **filters,
-            date__gte=reload_from_date,
+        # Delete precisely the validated interval, including initial history reloads.
+        job.model.objects.filter(
+            **job.filters, date__gte=period["date_start"], date__lte=period["date_finish"],
         ).delete()
-
-        model.objects.bulk_create(
-            objects,
-            batch_size=BATCH_SIZE,
+        job.model.objects.bulk_create(objects, batch_size=5000)
+        YdWordstatApiCheckpoint.objects.update_or_create(
+            **job.checkpoint_key,
+            defaults={
+                "fingerprint": job.fingerprint,
+                "date_start": period["date_start"],
+                "date_finish": period["date_finish"],
+            },
         )
+    logger.info("Wordstat loaded: source=%s phrase=%s dimension=%s months=%s",
+                job.source, job.phrase, job.dimension, len(objects))
+    return {"skipped": 0, "saved": len(objects)}
 
-    return deleted_count, len(objects)
 
+def estimate_load(source=None, today=None):
+    """Read local references only; no HTTP, quota reservations or writes."""
+    from django.conf import settings
 
-def load_yd_wordstat_all_raw_from_api(today: date | None = None):
-    logger.info("YD Wordstat all raw API load started")
-
-    phrase_refs = get_phrase_refs()
-
-    total_received = 0
-    total_saved = 0
-    total_deleted = 0
-    total_skipped = 0
-
-    for phrase_ref in phrase_refs:
-        phrase = phrase_ref["phrase"]
-        filters = {"phrase": phrase}
-
-        if has_current_month_loaded(
-            model=YdWordstatAllRaw,
-            filters=filters,
-            today=today,
-        ):
-            total_skipped += 1
-            logger.info("YD Wordstat all skipped, already loaded: phrase=%s", phrase)
-            continue
-
-        period = get_reload_period_without_delete(
-            model=YdWordstatAllRaw,
-            filters=filters,
-            today=today,
-        )
-
-        if period["skipped"]:
-            total_skipped += 1
-            logger.info(
-                "YD Wordstat all skipped by period: phrase=%s, period=%s",
-                phrase,
-                period,
-            )
-            continue
-
-        data = fetch_with_retry(
-            phrase=phrase,
-            date_start=period["date_start"],
-            date_finish=period["date_finish"],
-            devices=["all"],
-        )
-
-        request_phrase, dynamics = parse_dynamics_response(data)
-        total_received += len(dynamics)
-
-        objects = []
-
-        for item in dynamics:
-            row_date = clean_date(item.get("date"))
-            row_count = item.get("count")
-
-            if not row_date:
-                continue
-
-            objects.append(
-                YdWordstatAllRaw(
-                    phrase=request_phrase or phrase,
-                    date=row_date,
-                    count=clean_int(row_count),
-                    feature=phrase_ref["feature"],
-                    category=phrase_ref["category"],
-                )
-            )
-
-        deleted_count, saved_count = save_objects_after_success(
-            model=YdWordstatAllRaw,
-            filters=filters,
-            reload_from_date=period["reload_from_date"],
-            objects=objects,
-        )
-
-        total_deleted += deleted_count
-        total_saved += saved_count
-
-        logger.info(
-            "YD Wordstat all phrase loaded: phrase=%s, received=%s, saved=%s, deleted=%s",
-            phrase,
-            len(dynamics),
-            saved_count,
-            deleted_count,
-        )
-
-    result = {
-        "received": total_received,
-        "saved": total_saved,
-        "deleted": total_deleted,
-        "skipped": total_skipped,
-        "phrases": len(phrase_refs),
+    today = today or timezone.localdate()
+    config = get_configuration()
+    jobs = list(make_jobs(config, source))
+    pending = sum(not checkpoint_is_complete(job, today) for job in jobs)
+    quota = settings.YD_WORDSTAT_REQUESTS_PER_HOUR
+    if quota < 1:
+        raise ValueError("Wordstat hourly quota must be positive")
+    return {
+        "phrases": len(config["phrases"]), "devices": len(config["devices"]),
+        "iplast_groups": [{"name": group["name"], "regions": len(group["regions"])} for group in config["groups"]],
+        "requests_full_pass": len(jobs), "requests_pending": pending,
+        "quota_per_hour": quota, "estimated_quota_hours": round(pending / quota, 2),
+        "target_month": get_previous_month_last_day(today).isoformat(),
     }
 
-    logger.info("YD Wordstat all raw API load finished: %s", result)
 
+def validate_download(config, today):
+    missing = [
+        job.checkpoint_key for job in make_jobs(config)
+        if not checkpoint_is_complete(job, today)
+    ]
+    return {"ok": not missing, "missing_count": len(missing), "missing_examples": missing[:20]}
+
+
+def run_source(source, today=None, config=None):
+    today = today or timezone.localdate()
+    config = config or get_configuration()
+    result = {"saved": 0, "skipped": 0, "pairs": 0}
+    for job in make_jobs(config, source):
+        item = load_job(job, today)
+        result["saved"] += item["saved"]
+        result["skipped"] += item["skipped"]
+        result["pairs"] += 1
     return result
 
 
-def load_yd_wordstat_device_raw_from_api(today: date | None = None):
-    logger.info("YD Wordstat device raw API load started")
-
-    phrase_refs = get_phrase_refs()
-    devices = get_device_refs()
-
-    total_received = 0
-    total_saved = 0
-    total_deleted = 0
-    total_skipped = 0
-    total_pairs = 0
-
-    for device in devices:
-        for phrase_ref in phrase_refs:
-            phrase = phrase_ref["phrase"]
-            total_pairs += 1
-
-            filters = {
-                "phrase": phrase,
-                "device": device,
-            }
-
-            if has_current_month_loaded(
-                model=YdWordstatDeviceRaw,
-                filters=filters,
-                today=today,
-            ):
-                total_skipped += 1
-                logger.info(
-                    "YD Wordstat device skipped, already loaded: phrase=%s, device=%s",
-                    phrase,
-                    device,
-                )
-                continue
-
-            period = get_reload_period_without_delete(
-                model=YdWordstatDeviceRaw,
-                filters=filters,
-                today=today,
-            )
-
-            if period["skipped"]:
-                total_skipped += 1
-                logger.info(
-                    "YD Wordstat device skipped by period: phrase=%s, device=%s, period=%s",
-                    phrase,
-                    device,
-                    period,
-                )
-                continue
-
-            data = fetch_with_retry(
-                phrase=phrase,
-                date_start=period["date_start"],
-                date_finish=period["date_finish"],
-                devices=[device],
-            )
-
-            request_phrase, dynamics = parse_dynamics_response(data)
-            total_received += len(dynamics)
-
-            objects = []
-
-            for item in dynamics:
-                row_date = clean_date(item.get("date"))
-                row_count = item.get("count")
-
-                if not row_date:
-                    continue
-
-                objects.append(
-                    YdWordstatDeviceRaw(
-                        phrase=request_phrase or phrase,
-                        device=device,
-                        date=row_date,
-                        count=clean_int(row_count),
-                        feature=phrase_ref["feature"],
-                        category=phrase_ref["category"],
-                    )
-                )
-
-            deleted_count, saved_count = save_objects_after_success(
-                model=YdWordstatDeviceRaw,
-                filters=filters,
-                reload_from_date=period["reload_from_date"],
-                objects=objects,
-            )
-
-            total_deleted += deleted_count
-            total_saved += saved_count
-
-            logger.info(
-                "YD Wordstat device pair loaded: phrase=%s, device=%s, received=%s, saved=%s, deleted=%s",
-                phrase,
-                device,
-                len(dynamics),
-                saved_count,
-                deleted_count,
-            )
-
-    result = {
-        "received": total_received,
-        "saved": total_saved,
-        "deleted": total_deleted,
-        "skipped": total_skipped,
-        "phrases": len(phrase_refs),
-        "devices": len(devices),
-        "pairs": total_pairs,
-    }
-
-    logger.info("YD Wordstat device raw API load finished: %s", result)
-
-    return result
+def check_regions(config):
+    return validate_group_tree(config["groups"], fetch_regions_tree())
 
 
-def load_yd_wordstat_region_raw_from_api(today: date | None = None):
-    logger.info("YD Wordstat region raw API load started")
+def load_yd_wordstat_all_raw_from_api(today=None):
+    return run_source("all", today)
 
-    phrase_refs = get_phrase_refs()
-    regions = get_region_refs_for_loading()
-    iplast_region_map = get_iplast_region_map()
 
-    total_received = 0
-    total_saved = 0
-    total_deleted = 0
-    total_skipped = 0
-    total_pairs = 0
+def load_yd_wordstat_device_raw_from_api(today=None):
+    return run_source("device", today)
 
-    for phrase_ref in phrase_refs:
-        phrase = phrase_ref["phrase"]
 
-        for region in regions:
-            region_value = region["region_value"]
-            total_pairs += 1
-
-            if region_value is None:
-                total_skipped += 1
-                continue
-
-            filters = {
-                "phrase": phrase,
-                "region_value": region_value,
-            }
-
-            if has_current_month_loaded(
-                model=YdWordstatRegionRaw,
-                filters=filters,
-                today=today,
-            ):
-                total_skipped += 1
-                logger.info(
-                    "YD Wordstat region skipped, already loaded: phrase=%s, region_value=%s",
-                    phrase,
-                    region_value,
-                )
-                continue
-
-            period = get_reload_period_without_delete(
-                model=YdWordstatRegionRaw,
-                filters=filters,
-                today=today,
-            )
-
-            if period["skipped"]:
-                total_skipped += 1
-                logger.info(
-                    "YD Wordstat region skipped by period: phrase=%s, region_value=%s, period=%s",
-                    phrase,
-                    region_value,
-                    period,
-                )
-                continue
-
-            data = fetch_with_retry(
-                phrase=phrase,
-                date_start=period["date_start"],
-                date_finish=period["date_finish"],
-                devices=["all"],
-                regions=[region_value],
-            )
-
-            request_phrase, dynamics = parse_dynamics_response(data)
-            total_received += len(dynamics)
-
-            objects = []
-
-            for item in dynamics:
-                row_date = clean_date(item.get("date"))
-                row_count = item.get("count")
-
-                if not row_date:
-                    continue
-
-                objects.append(
-                    YdWordstatRegionRaw(
-                        phrase=request_phrase or phrase,
-                        region_label=region["region_label"],
-                        region_value=region_value,
-                        date=row_date,
-                        count=clean_int(row_count),
-                        feature=phrase_ref["feature"],
-                        category=phrase_ref["category"],
-                        country_label=region["country_label"],
-                        macroregion_label=region["macroregion_label"],
-                        macroregion_iplast=iplast_region_map.get(region_value),
-                    )
-                )
-
-            deleted_count, saved_count = save_objects_after_success(
-                model=YdWordstatRegionRaw,
-                filters=filters,
-                reload_from_date=period["reload_from_date"],
-                objects=objects,
-            )
-
-            total_deleted += deleted_count
-            total_saved += saved_count
-
-            logger.info(
-                "YD Wordstat region pair loaded: phrase=%s, region_value=%s, received=%s, saved=%s, deleted=%s",
-                phrase,
-                region_value,
-                len(dynamics),
-                saved_count,
-                deleted_count,
-            )
-
-    result = {
-        "received": total_received,
-        "saved": total_saved,
-        "deleted": total_deleted,
-        "skipped": total_skipped,
-        "phrases": len(phrase_refs),
-        "regions": len(regions),
-        "pairs": total_pairs,
-    }
-
-    logger.info("YD Wordstat region raw API load finished: %s", result)
-
-    return result
+def load_yd_wordstat_region_raw_from_api(today=None):
+    config = get_configuration()
+    check_regions(config)
+    return run_source("region", today, config)

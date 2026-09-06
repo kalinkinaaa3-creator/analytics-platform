@@ -109,22 +109,22 @@ class YdWordstatFor(models.Model):
 
     year = models.IntegerField(blank=True, null=True, db_index=True)
 
-    month_1 = models.IntegerField(blank=True, null=True)
-    month_2 = models.IntegerField(blank=True, null=True)
-    month_3 = models.IntegerField(blank=True, null=True)
-    month_4 = models.IntegerField(blank=True, null=True)
-    month_5 = models.IntegerField(blank=True, null=True)
-    month_6 = models.IntegerField(blank=True, null=True)
-    month_7 = models.IntegerField(blank=True, null=True)
-    month_8 = models.IntegerField(blank=True, null=True)
-    month_9 = models.IntegerField(blank=True, null=True)
-    month_10 = models.IntegerField(blank=True, null=True)
-    month_11 = models.IntegerField(blank=True, null=True)
-    month_12 = models.IntegerField(blank=True, null=True)
+    month_1 = models.BigIntegerField(blank=True, null=True)
+    month_2 = models.BigIntegerField(blank=True, null=True)
+    month_3 = models.BigIntegerField(blank=True, null=True)
+    month_4 = models.BigIntegerField(blank=True, null=True)
+    month_5 = models.BigIntegerField(blank=True, null=True)
+    month_6 = models.BigIntegerField(blank=True, null=True)
+    month_7 = models.BigIntegerField(blank=True, null=True)
+    month_8 = models.BigIntegerField(blank=True, null=True)
+    month_9 = models.BigIntegerField(blank=True, null=True)
+    month_10 = models.BigIntegerField(blank=True, null=True)
+    month_11 = models.BigIntegerField(blank=True, null=True)
+    month_12 = models.BigIntegerField(blank=True, null=True)
 
-    total = models.IntegerField(blank=True, null=True)
+    total = models.BigIntegerField(blank=True, null=True)
 
-    average = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
+    average = models.DecimalField(max_digits=22, decimal_places=2, blank=True, null=True)
     growth = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
 
     monthS_1 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
@@ -140,19 +140,19 @@ class YdWordstatFor(models.Model):
     monthS_11 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
     monthS_12 = models.DecimalField(max_digits=9, decimal_places=2, blank=True, null=True)
 
-    desktop = models.IntegerField(blank=True, null=True)
-    phone = models.IntegerField(blank=True, null=True)
-    tablet = models.IntegerField(blank=True, null=True)
-    other_device = models.IntegerField(blank=True, null=True)
+    desktop = models.BigIntegerField(blank=True, null=True)
+    phone = models.BigIntegerField(blank=True, null=True)
+    tablet = models.BigIntegerField(blank=True, null=True)
+    other_device = models.BigIntegerField(blank=True, null=True)
 
-    ekb_macroregion = models.IntegerField(blank=True, null=True)
-    kras_macroregion = models.IntegerField(blank=True, null=True)
-    mos_macroregion = models.IntegerField(blank=True, null=True)
-    nign_macroregion = models.IntegerField(blank=True, null=True)
-    novos_macroregion = models.IntegerField(blank=True, null=True)
-    spb_macroregion = models.IntegerField(blank=True, null=True)
-    sng_macroregion = models.IntegerField(blank=True, null=True)
-    other_macroregion = models.IntegerField(blank=True, null=True)
+    ekb_macroregion = models.BigIntegerField(blank=True, null=True)
+    kras_macroregion = models.BigIntegerField(blank=True, null=True)
+    mos_macroregion = models.BigIntegerField(blank=True, null=True)
+    nign_macroregion = models.BigIntegerField(blank=True, null=True)
+    novos_macroregion = models.BigIntegerField(blank=True, null=True)
+    spb_macroregion = models.BigIntegerField(blank=True, null=True)
+    sng_macroregion = models.BigIntegerField(blank=True, null=True)
+    other_macroregion = models.BigIntegerField(blank=True, null=True)
 
     date_add = models.DateTimeField(auto_now_add=True)
 
@@ -1639,7 +1639,7 @@ class YdWordstatIplastRegionRef(models.Model):
 class YdWordstatAllRaw(models.Model):
     phrase = models.CharField(max_length=255, blank=True, null=True, db_index=True)
     date = models.DateField(blank=True, null=True, db_index=True)
-    count = models.IntegerField(blank=True, null=True)
+    count = models.BigIntegerField(blank=True, null=True)
 
     feature = models.CharField(max_length=255, blank=True, null=True, db_index=True)
     category = models.CharField(max_length=255, blank=True, null=True, db_index=True)
@@ -1664,7 +1664,7 @@ class YdWordstatDeviceRaw(models.Model):
     phrase = models.CharField(max_length=255, blank=True, null=True, db_index=True)
     device = models.CharField(max_length=255, blank=True, null=True, db_index=True)
     date = models.DateField(blank=True, null=True, db_index=True)
-    count = models.IntegerField(blank=True, null=True)
+    count = models.BigIntegerField(blank=True, null=True)
 
     feature = models.CharField(max_length=255, blank=True, null=True, db_index=True)
     category = models.CharField(max_length=255, blank=True, null=True, db_index=True)
@@ -1719,10 +1719,56 @@ class YdWordstatRegionRaw(models.Model):
         return f"{self.phrase} {self.region_value} {self.date}: {self.count}"
 
 
+class YdWordstatIplastRaw(models.Model):
+    """A monthly v2 result aggregated by the API over one IPLAST region set."""
+
+    phrase = models.CharField(max_length=255)
+    macroregion_label = models.CharField(max_length=255)
+    group_fingerprint = models.CharField(max_length=64)
+    date = models.DateField()
+    count = models.BigIntegerField()
+    feature = models.CharField(max_length=255, blank=True, null=True)
+    category = models.CharField(max_length=255, blank=True, null=True)
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "yd_wordstat_iplast_api"
+        constraints = [models.UniqueConstraint(
+            fields=["phrase", "macroregion_label", "date"], name="wordstat_iplast_month_unique",
+        )]
+
+
+class YdWordstatApiCheckpoint(models.Model):
+    source = models.CharField(max_length=16)
+    phrase = models.CharField(max_length=255)
+    dimension = models.CharField(max_length=255, default="")
+    fingerprint = models.CharField(max_length=64)
+    date_start = models.DateField()
+    date_finish = models.DateField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "yd_wordstat_api_checkpoint"
+        constraints = [models.UniqueConstraint(
+            fields=["source", "phrase", "dimension"], name="wordstat_checkpoint_unique",
+        )]
+
+
+class YdWordstatApiQuota(models.Model):
+    """Shared rolling request budget; retained across workers and restarts."""
+
+    scope = models.CharField(max_length=64, primary_key=True)
+    requests = models.JSONField(default=list)
+    blocked_until = models.FloatField(default=0)
+
+    class Meta:
+        db_table = "yd_wordstat_api_quota"
+
+
 class YdWordstatMacroregionRaw(models.Model):
     phrase = models.CharField(max_length=255, blank=True, null=True, db_index=True)
     date = models.DateField(blank=True, null=True, db_index=True)
-    count = models.IntegerField(blank=True, null=True)
+    count = models.BigIntegerField(blank=True, null=True)
 
     feature = models.CharField(max_length=255, blank=True, null=True, db_index=True)
     category = models.CharField(max_length=255, blank=True, null=True, db_index=True)

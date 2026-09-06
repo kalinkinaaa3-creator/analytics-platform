@@ -17,6 +17,7 @@ with DAG(
     schedule="0 13 3 * *",
     catchup=False,
     is_paused_upon_creation=True,
+    max_active_runs=1,
     tags=["analytics", "wordstat", "external_api"],
 ) as dag:
 
@@ -24,16 +25,10 @@ with DAG(
         task_id="disabled_external_api_loads",
     )
 
-    load_yd_wordstat = BashOperator(
-        task_id="load_yd_wordstat_from_api",
-        bash_command="""
-        docker exec analytics-django python manage.py load_yd_wordstat_api
-        """,
-        execution_timeout=timedelta(days=10),
-        retries=0,
-    )
-
     if ENABLE_EXTERNAL_API_LOADS:
-        load_yd_wordstat
-    else:
-        disabled
+        load_yd_wordstat = BashOperator(
+            task_id="load_yd_wordstat_from_api",
+            bash_command="docker exec analytics-django python manage.py load_yd_wordstat_api",
+            execution_timeout=timedelta(days=10),
+            retries=0,
+        )

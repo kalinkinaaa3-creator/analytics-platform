@@ -1,4 +1,5 @@
 import logging
+from django.conf import settings
 
 from datasets.services.external_api.yd_wordstat_all_csv_loader import (
     load_yd_wordstat_all_raw_from_csv,
@@ -28,6 +29,8 @@ def run_yd_wordstat_csv_pipeline(
     csv_path: str,
     truncate_source: bool = True,
 ):
+    if settings.YD_WORDSTAT_V2_LOAD_ENABLED:
+        raise ValueError("Legacy Wordstat CSV publication is disabled while v2 IPLAST loading is enabled")
     logger.info(
         "YD Wordstat CSV pipeline started: source=%s, csv_path=%s",
         source,

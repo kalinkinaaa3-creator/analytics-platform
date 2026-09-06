@@ -179,8 +179,28 @@ def refresh_yd_wordstat_regions_from_api():
     logger.info("YD Wordstat region ref API refresh started")
 
     data = fetch_yd_wordstat_regions_tree()
-    rows = flatten_regions_tree(data)
-    result = save_region_ref_rows(rows)
+    from django.utils import timezone
+    from .yd_wordstat_regions_v2_diagnostic import flatten_regions_tree as flatten_v2
+
+    rows, malformed = flatten_v2(data)
+    by_id = {row["id"]: row for row in rows}
+    if malformed or not rows or len(by_id) != len(rows):
+        raise ValueError("Invalid Wordstat v2 region tree; reference was not changed")
+    # Keep the configured set and business hierarchy; a v2 tree can have six levels.
+    with transaction.atomic():
+        objects = list(YdWordstatRegionRef.objects.select_for_update().all())
+        if not objects:
+            raise ValueError("Import the configured region reference before refreshing labels")
+        missing = [obj.region_value for obj in objects if str(obj.region_value) not in by_id]
+        if missing:
+            raise ValueError(f"Configured regions missing in Wordstat v2: {missing}")
+        now = timezone.now()
+        for obj in objects:
+            if obj.region_value != 166:
+                obj.region_label = by_id[str(obj.region_value)]["label"]
+            obj.date_add = now
+        YdWordstatRegionRef.objects.bulk_update(objects, ["region_label", "date_add"])
+    result = {"received": len(rows), "saved": len(objects), "deleted": 0}
 
     logger.info("YD Wordstat region ref API refresh finished: %s", result)
 

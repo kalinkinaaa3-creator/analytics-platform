@@ -6,7 +6,9 @@ from django.db import connection, transaction
 logger = logging.getLogger("external_api.yd_wordstat")
 
 
-def rebuild_yd_wordstat_for_from_raw_sql():
+def rebuild_yd_wordstat_for_from_raw_sql(region_source="legacy"):
+    if region_source not in ("legacy", "iplast"):
+        raise ValueError("region_source must be legacy or iplast")
     logger.info("YD Wordstat rebuild started")
 
     with transaction.atomic():
@@ -31,43 +33,58 @@ def rebuild_yd_wordstat_for_from_raw_sql():
                   AND (raw.feature IS NULL OR raw.category IS NULL)
             """)
 
-            cursor.execute("""
-                UPDATE yd_wordstat_region AS raw
-                SET
-                    feature = ref.feature,
-                    category = ref.category
-                FROM yd_wordstat_ref AS ref
-                WHERE raw.phrase = ref.phrase
-                  AND (raw.feature IS NULL OR raw.category IS NULL)
-            """)
+            if region_source == "legacy":
+                cursor.execute("""
+                    UPDATE yd_wordstat_region AS raw
+                    SET
+                        feature = ref.feature,
+                        category = ref.category
+                    FROM yd_wordstat_ref AS ref
+                    WHERE raw.phrase = ref.phrase
+                      AND (raw.feature IS NULL OR raw.category IS NULL)
+                """)
 
-            cursor.execute("""
-                UPDATE yd_wordstat_region AS raw
-                SET
-                    country_label = reg.country_label,
-                    macroregion_label = reg.macroregion_label,
-                    region_label = reg.region_label
-                FROM yd_wordstat_ref_region AS reg
-                WHERE raw.region_value = reg.region_value
-                  AND (
-                        raw.country_label IS NULL
-                        OR raw.macroregion_label IS NULL
-                        OR raw.region_label IS NULL
-                  )
-            """)
+                cursor.execute("""
+                    UPDATE yd_wordstat_region AS raw
+                    SET
+                        country_label = reg.country_label,
+                        macroregion_label = reg.macroregion_label,
+                        region_label = reg.region_label
+                    FROM yd_wordstat_ref_region AS reg
+                    WHERE raw.region_value = reg.region_value
+                      AND (
+                            raw.country_label IS NULL
+                            OR raw.macroregion_label IS NULL
+                            OR raw.region_label IS NULL
+                      )
+                """)
 
-            cursor.execute("""
-                UPDATE yd_wordstat_region AS raw
-                SET
-                    macroregion_iplast = iplast.macroregion_label
-                FROM yd_wordstat_ref_iplast AS iplast
-                WHERE raw.region_value = iplast.region_value
-                  AND raw.macroregion_iplast IS NULL
-            """)
+                cursor.execute("""
+                    UPDATE yd_wordstat_region AS raw
+                    SET
+                        macroregion_iplast = iplast.macroregion_label
+                    FROM yd_wordstat_ref_iplast AS iplast
+                    WHERE raw.region_value = iplast.region_value
+                      AND raw.macroregion_iplast IS NULL
+                """)
 
             cursor.execute("TRUNCATE TABLE yd_wordstat_macroregion_label RESTART IDENTITY")
 
-            cursor.execute("""
+            if region_source == "iplast":
+                cursor.execute("""
+                    INSERT INTO yd_wordstat_macroregion_label (
+                        phrase, date, count, feature, category,
+                        country_label, macroregion_label, date_add
+                    )
+                    SELECT raw.phrase, raw.date, raw.count, ref.feature, ref.category,
+                           CASE WHEN raw.macroregion_label = 'СНГ'
+                                THEN 'СНГ (исключая Россию)' ELSE 'Россия' END,
+                           raw.macroregion_label, NOW()
+                    FROM yd_wordstat_iplast_api raw
+                    JOIN yd_wordstat_ref ref ON ref.phrase = raw.phrase
+                """)
+            else:
+                cursor.execute("""
                 INSERT INTO yd_wordstat_macroregion_label (
                     phrase,
                     date,
