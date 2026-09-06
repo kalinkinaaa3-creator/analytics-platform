@@ -1,14 +1,13 @@
 /* Layout only; panels, charts, toolbar, grouping buttons and filters reuse SEO/shared styles. */
 .seo-dashboard.wd-dashboard:not(.seo-dashboard--home) { display: block; height: auto; min-height: calc(100dvh - 24px); overflow: visible; }
 .wd-demand .seo-report-grid { overflow: visible; grid-auto-rows: auto; align-items: start; }
-.wd-dashboard .wd-tabs { margin: 0 0 14px; padding: 0; }
-.wd-dashboard .wd-tabs nav { display: flex; flex-wrap: wrap; }
-.wd-dashboard .wd-tabs nav button { flex: none; }
-.wd-dashboard .wd-tabs,.wd-demand .wd-segments { width: auto; height: auto; position: static; transform: none; }
-.wd-dashboard .wd-tabs nav,.wd-demand .wd-segments nav { position: static; width: auto; max-width: none; opacity: 1; pointer-events: auto; transform: none; box-shadow: none; padding: 3px!important; overflow: visible!important; }
+.wd-dashboard .wd-tabs { display: flex; margin-top: 8px; border-bottom: 1px solid #aeb6aa; gap: 3px; }
+.wd-dashboard .wd-tabs button { min-width: 130px; padding: 10px 18px; background: #eef1eb; border: 1px solid #c4cbc0; border-bottom: 0; border-radius: 7px 7px 0 0; color: #4c5749; font: 700 14px Helvetica,Arial,sans-serif; cursor: pointer; }
+.wd-dashboard .wd-tabs button.is-active { position: relative; bottom: -1px; background: #fff; border-color: #9da997; color: #263424; box-shadow: 0 -4px 12px rgba(44,57,40,.08); }
+.wd-demand .wd-segments { width: auto; height: auto; position: static; transform: none; }
+.wd-demand .wd-segments nav { position: static; width: auto; max-width: none; opacity: 1; pointer-events: auto; transform: none; box-shadow: none; padding: 3px!important; overflow: visible!important; }
 .wd-demand .seo-filters { display: block; }
-.wd-dashboard .wd-title { margin: 0 0 5px; font-size: 25px; }
-.wd-dashboard .wd-subtitle { margin: 0 0 16px; color: #747a71; font-size: 13px; }
+.wd-dashboard .wd-title { min-height: 38px; margin: 0; font-size: 25px; }
 .wd-demand .wd-breadcrumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin: 8px 0 18px; }
 .wd-breadcrumbs button,.wd-link { background: none; border: 0; padding: 3px 0; color: #536f50; font: inherit; text-align: left; cursor: pointer; }
 .wd-link:hover,.wd-breadcrumbs button:hover { text-decoration: underline; }

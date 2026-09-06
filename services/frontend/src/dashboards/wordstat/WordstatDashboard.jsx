@@ -597,6 +597,22 @@ function WordstatStatistics({ data }) {
     <div className="wordstat-dashboard">
 
       <form id="filterForm" onSubmit={(event) => event.preventDefault()}>
+        <div className="wordstat-filter-grid">
+          {FILTERS.map(([name, label]) => (
+            <MultiSelect
+              key={name}
+              label={label}
+              options={filterValues[name] || []}
+              selected={localFilters[name] || []}
+              onApply={(value) => {
+                const next = { ...currentFilters, [name]: value };
+                setLocalFilters(next);
+                applyFilters(next);
+              }}
+            />
+          ))}
+        </div>
+
         <div className="wordstat-filter-actions">
           <button
             type="button"
@@ -618,21 +634,6 @@ function WordstatStatistics({ data }) {
           </button>
         </div>
 
-        <div className="wordstat-filter-grid">
-          {FILTERS.map(([name, label]) => (
-            <MultiSelect
-              key={name}
-              label={label}
-              options={filterValues[name] || []}
-              selected={localFilters[name] || []}
-              onApply={(value) => {
-                const next = { ...currentFilters, [name]: value };
-                setLocalFilters(next);
-                applyFilters(next);
-              }}
-            />
-          ))}
-        </div>
       </form>
 
       <div
@@ -666,11 +667,10 @@ export function WordstatDashboard({ data, publicToken = null }) {
   const [tab, setTab] = useState("demand");
   return <section className="seo-dashboard wd-dashboard" data-dashboard-type="wordstat">
     <h2 className="wd-title">Тренды и сезонность</h2>
-    <p className="wd-subtitle">Анализ поискового спроса по категориям, подкатегориям и запросам</p>
-    <div className="seo-menu wd-tabs"><nav aria-label="Разделы Wordstat">
+    <nav className="wd-tabs" aria-label="Разделы Wordstat">
       <button type="button" className={tab === "demand" ? "is-active" : ""} aria-pressed={tab === "demand"} onClick={() => setTab("demand")}>Анализ спроса</button>
       <button type="button" className={tab === "statistics" ? "is-active" : ""} aria-pressed={tab === "statistics"} onClick={() => setTab("statistics")}>Статистика запросов</button>
-    </nav></div>
+    </nav>
     <div hidden={tab !== "demand"}><WordstatDemandAnalysis publicToken={publicToken} revision={data} active={tab === "demand"} /></div>
     <div hidden={tab !== "statistics"}><WordstatStatistics data={data} /></div>
   </section>;
