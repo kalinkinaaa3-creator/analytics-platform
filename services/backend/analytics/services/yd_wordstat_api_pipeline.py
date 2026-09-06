@@ -69,7 +69,7 @@ def _run_pipeline(source=None):
             from dashboards.cache.invalidation import invalidate_dashboard_by_name
             from dashboards.realtime import notify_dashboard_updated
 
-            rebuild = rebuild_yd_wordstat_for_from_raw_sql(region_source="iplast")
+            rebuild = rebuild_yd_wordstat_for_from_raw_sql()
             synced = sync_yd_wordstat_to_clickhouse()
             invalidate_dashboard_by_name("Wordstat")
             notify_dashboard_updated("Wordstat")

@@ -1599,26 +1599,6 @@ class YdWordstatDeviceRef(models.Model):
         return self.device
 
 
-class YdWordstatRegionRef(models.Model):
-    country_label = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-    macroregion_label = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-    region_label = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-    region_value = models.IntegerField(unique=True, db_index=True)
-    date_add = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "yd_wordstat_ref_region"
-        verbose_name = "YD Wordstat region ref"
-        verbose_name_plural = "YD Wordstat region refs"
-        indexes = [
-            models.Index(fields=["country_label", "macroregion_label"]),
-            models.Index(fields=["region_label", "region_value"]),
-        ]
-
-    def __str__(self):
-        return f"{self.region_label} ({self.region_value})"
-
-
 class YdWordstatIplastRegionRef(models.Model):
     region_value = models.IntegerField(unique=True, db_index=True)
     macroregion_label = models.CharField(max_length=255, blank=True, null=True, db_index=True)
@@ -1685,40 +1665,6 @@ class YdWordstatDeviceRaw(models.Model):
         return f"{self.phrase} {self.device} {self.date}: {self.count}"
 
 
-class YdWordstatRegionRaw(models.Model):
-    phrase = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-
-    region_label = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-    region_value = models.IntegerField(blank=True, null=True, db_index=True)
-
-    date = models.DateField(blank=True, null=True, db_index=True)
-    count = models.IntegerField(blank=True, null=True)
-
-    feature = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-    category = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-
-    country_label = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-    macroregion_label = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-    macroregion_iplast = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-
-    date_add = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "yd_wordstat_region"
-        verbose_name = "YD Wordstat region raw"
-        verbose_name_plural = "YD Wordstat region raw"
-        indexes = [
-            models.Index(fields=["phrase", "region_value", "date"]),
-            models.Index(fields=["region_value", "date"]),
-            models.Index(fields=["macroregion_iplast", "date"]),
-            models.Index(fields=["feature", "category", "phrase"]),
-            models.Index(fields=["country_label", "macroregion_label"]),
-        ]
-
-    def __str__(self):
-        return f"{self.phrase} {self.region_value} {self.date}: {self.count}"
-
-
 class YdWordstatIplastRaw(models.Model):
     """A monthly v2 result aggregated by the API over one IPLAST region set."""
 
@@ -1765,31 +1711,6 @@ class YdWordstatApiQuota(models.Model):
         db_table = "yd_wordstat_api_quota"
 
 
-class YdWordstatMacroregionRaw(models.Model):
-    phrase = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-    date = models.DateField(blank=True, null=True, db_index=True)
-    count = models.BigIntegerField(blank=True, null=True)
-
-    feature = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-    category = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-
-    country_label = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-    macroregion_label = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-
-    date_add = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "yd_wordstat_macroregion_label"
-        verbose_name = "YD Wordstat macroregion raw"
-        verbose_name_plural = "YD Wordstat macroregion raw"
-        indexes = [
-            models.Index(fields=["phrase", "date"]),
-            models.Index(fields=["macroregion_label", "date"]),
-            models.Index(fields=["feature", "category", "phrase"]),
-        ]
-
-    def __str__(self):
-        return f"{self.phrase} {self.macroregion_label} {self.date}: {self.count}"
 
 
 

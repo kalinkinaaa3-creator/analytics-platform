@@ -34,8 +34,6 @@ class FbProjectUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
 
 
-class YdWordstatUploadSerializer(serializers.Serializer):
-    file = serializers.FileField()
 
 
 class FBPurchasesUploadSerializer(serializers.Serializer):

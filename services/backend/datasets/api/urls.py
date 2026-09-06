@@ -8,7 +8,6 @@ from .views import (
     DatasetRowViewSet,
 
     FbProjectUploadView,
-    YdWordstatUploadView,
     FBPurchasesUploadView,
     FBTurnoverUploadView,
     FBAccreceivUploadView,
@@ -48,11 +47,6 @@ from .views import (
     YdWordstatPhraseRefUploadView,
     YdWordstatDeviceRefUploadView,
     YdWordstatIplastRegionRefUploadView,
-    YdWordstatRegionsRefreshFromApiView,
-    YdWordstatRegionsRefreshFromCsvView,
-    YdWordstatAllLoadFromCsvView,
-    YdWordstatDeviceLoadFromCsvView,
-    YdWordstatRegionLoadFromCsvView,
 
     YdWordstatAllLoadFromApiView,
     YdWordstatDeviceLoadFromApiView,
@@ -122,10 +116,6 @@ urlpatterns = [
         FbProjectUploadView.as_view(),
     ),
 
-    path(
-        "yd-wordstat/upload/",
-        YdWordstatUploadView.as_view(),
-    ),
 
     path(
         "fb-purchases/upload/",
@@ -228,14 +218,6 @@ urlpatterns = [
         YdWordstatIplastRegionRefUploadView.as_view(),
     ),
 
-    path(
-        "yd-wordstat/regions-refresh-from-api/",
-        YdWordstatRegionsRefreshFromApiView.as_view(),
-    ),
-    path(
-        "yd-wordstat/regions-refresh-from-csv/",
-        YdWordstatRegionsRefreshFromCsvView.as_view(),
-    ),
 
 
     path(
@@ -249,18 +231,6 @@ urlpatterns = [
     path(
         "yd-wordstat/region/load-from-api/",
         YdWordstatRegionLoadFromApiView.as_view(),
-    ),
-    path(
-        "yd-wordstat/all/load-from-csv/",
-        YdWordstatAllLoadFromCsvView.as_view(),
-    ),
-    path(
-        "yd-wordstat/device/load-from-csv/",
-        YdWordstatDeviceLoadFromCsvView.as_view(),
-    ),
-    path(
-        "yd-wordstat/region/load-from-csv/",
-        YdWordstatRegionLoadFromCsvView.as_view(),
     ),
     path(
         "yd-wordstat/load-from-api/",

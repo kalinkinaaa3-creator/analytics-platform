@@ -14,13 +14,12 @@ from django.test import override_settings
 
 from datasets.models import (
     YdWordstatPhraseRef, YdWordstatDeviceRef, YdWordstatIplastRegionRef,
-    YdWordstatRegionRef, YdWordstatRegionRaw, YdWordstatAllRaw, YdWordstatMacroregionRaw,
+    YdWordstatAllRaw,
     YdWordstatDeviceRaw, YdWordstatIplastRaw, YdWordstatApiCheckpoint, YdWordstatApiQuota,
 )
 from datasets.services.external_api import yd_wordstat_api_loader as loader
 from datasets.services.external_api import yd_wordstat_search_api_client as client
 from datasets.services.external_api import yd_wordstat_contract as contract
-from datasets.services.external_api.yd_wordstat_region_ref_loader import refresh_yd_wordstat_regions_from_api
 from analytics.services import yd_wordstat_api_pipeline as pipeline
 
 if connection.vendor != "sqlite" or connection.settings_dict["NAME"] != ":memory:":
@@ -28,8 +27,8 @@ if connection.vendor != "sqlite" or connection.settings_dict["NAME"] != ":memory
 
 TODAY = date(2026, 9, 6)
 MODELS = [YdWordstatPhraseRef, YdWordstatDeviceRef, YdWordstatIplastRegionRef,
-          YdWordstatRegionRef, YdWordstatRegionRaw, YdWordstatAllRaw, YdWordstatDeviceRaw,
-          YdWordstatIplastRaw, YdWordstatApiCheckpoint, YdWordstatApiQuota, YdWordstatMacroregionRaw]
+          YdWordstatAllRaw, YdWordstatDeviceRaw,
+          YdWordstatIplastRaw, YdWordstatApiCheckpoint, YdWordstatApiQuota]
 
 
 def mappings():
@@ -125,17 +124,15 @@ class DatabaseTests(unittest.TestCase):
             YdWordstatDeviceRef.objects.create(device=device)
         YdWordstatIplastRegionRef.objects.bulk_create([YdWordstatIplastRegionRef(**item) for item in mappings()])
 
-    def test_one_request_per_iplast_group_and_old_region_data_untouched(self):
-        YdWordstatRegionRaw.objects.create(phrase="test", region_value=1, date=date(2020, 1, 1), count=99)
+    def test_one_request_per_iplast_group(self):
         config = loader.get_configuration()
         self.assertEqual(len(list(loader.make_jobs(config))), 11)
         with patch.object(loader, "fetch_dynamics", side_effect=response_for) as fetch:
-            result = loader.run_source("region", TODAY, config)
+            result = [loader.load_job(job, TODAY) for job in loader.make_jobs(config, "region")]
         self.assertEqual(fetch.call_count, 7)
         for call, group in zip(fetch.call_args_list, config["groups"]):
             self.assertEqual(call.kwargs["regions"], group["regions"])
-        self.assertEqual(result["pairs"], 7)
-        self.assertEqual(YdWordstatRegionRaw.objects.get().count, 99)
+        self.assertEqual(len(result), 7)
         self.assertEqual(YdWordstatApiCheckpoint.objects.count(), 7)
 
     def test_resume_skips_saved_groups(self):
@@ -144,7 +141,8 @@ class DatabaseTests(unittest.TestCase):
         with patch.object(loader, "fetch_dynamics", side_effect=response_for):
             loader.load_job(job, TODAY)
         with patch.object(loader, "fetch_dynamics", side_effect=response_for) as fetch:
-            loader.run_source("region", TODAY, config)
+            for remaining in loader.make_jobs(config, "region"):
+                loader.load_job(remaining, TODAY)
         self.assertEqual(fetch.call_count, 6)
 
     def test_incomplete_response_preserves_previous_data_and_checkpoint(self):
@@ -216,16 +214,6 @@ class DatabaseTests(unittest.TestCase):
             client.block_quota(10)
         self.assertEqual(YdWordstatApiQuota.objects.get().blocked_until, 10120)
 
-    def test_reference_refresh_preserves_selection_and_hierarchy(self):
-        YdWordstatRegionRef.objects.create(region_value=1, country_label="Россия", macroregion_label="business", region_label="old")
-        with patch("datasets.services.external_api.yd_wordstat_region_ref_loader.fetch_yd_wordstat_regions_tree", return_value=tree()):
-            refresh_yd_wordstat_regions_from_api()
-        obj = YdWordstatRegionRef.objects.get()
-        self.assertEqual(obj.region_label, tree()["regions"][0]["label"])
-        self.assertEqual(obj.macroregion_label, "business")
-        with patch("datasets.services.external_api.yd_wordstat_region_ref_loader.fetch_yd_wordstat_regions_tree", return_value={"regions": []}), self.assertRaises(ValueError):
-            refresh_yd_wordstat_regions_from_api()
-        self.assertEqual(YdWordstatRegionRef.objects.count(), 1)
 
     def test_incomplete_combinations_block_publication(self):
         config = loader.get_configuration()
@@ -238,44 +226,76 @@ class DatabaseTests(unittest.TestCase):
             pipeline.run_yd_wordstat_api_pipeline()
         self.assertFalse(loader.validate_download(config, TODAY)["ok"])
 
-    def test_probe_comparison_detects_missing_regions_and_duplicates(self):
-        from datasets.management.commands.probe_yd_wordstat_v2 import compare_stored_regions
+    def test_diagnostic_only_needs_iplast_reference(self):
+        from datasets.services.external_api.yd_wordstat_regions_v2_diagnostic import build_regions_v2_diagnostic
 
-        rows = [{"date": date(2026, 8, 1), "count": 42}]
-        for region in (1, 2):
-            YdWordstatRegionRaw.objects.create(phrase="test", region_value=region, date=rows[0]["date"], count=21)
-        result = compare_stored_regions("test", [1, 2], rows)[0]
-        self.assertTrue(result["stored_complete"])
-        self.assertEqual(result["difference"], 0)
-        self.assertFalse(compare_stored_regions("test", [1, 2, 3], rows)[0]["stored_complete"])
-        YdWordstatRegionRaw.objects.create(phrase="test", region_value=1, date=rows[0]["date"], count=21)
-        self.assertFalse(compare_stored_regions("test", [1, 2], rows)[0]["stored_complete"])
+        result = build_regions_v2_diagnostic(tree())
+        self.assertEqual(result["iplast_mapping"]["configured"], 7)
+        self.assertTrue(result["hierarchy_overlap_check"]["ok"])
+        self.assertNotIn("current_region_reference", result)
 
-    def test_sql_uses_api_aggregate_without_adding_legacy_regions(self):
+    def test_sql_reads_iplast_aggregates_directly(self):
         from analytics.services import yd_wordstat_rebuild_sql as rebuild
 
-        job = next(loader.make_jobs(loader.get_configuration(), "region"))
-        YdWordstatIplastRaw.objects.create(**job.data_filters, date=date(2026, 8, 1), count=42)
-        YdWordstatRegionRaw.objects.create(phrase="test", date=date(2026, 8, 1), count=1000, macroregion_iplast=job.dimension)
+        YdWordstatIplastRaw.objects.create(phrase="test", macroregion_label="МОСКВА",
+                                         group_fingerprint="test", date=date(2026, 8, 1), count=42)
         cursor = Mock()
         cursor.fetchone.return_value = [1]
         db = Mock()
         db.cursor.return_value.__enter__ = Mock(return_value=cursor)
         db.cursor.return_value.__exit__ = Mock(return_value=False)
         with patch.object(rebuild, "connection", db), patch.object(rebuild.transaction, "atomic", return_value=nullcontext()):
-            rebuild.rebuild_yd_wordstat_for_from_raw_sql(region_source="iplast")
+            rebuild.rebuild_yd_wordstat_for_from_raw_sql()
         statements = [call.args[0] for call in cursor.execute.call_args_list]
-        self.assertFalse(any("UPDATE yd_wordstat_region " in sql for sql in statements))
-        insert = next(sql for sql in statements if "INSERT INTO yd_wordstat_macroregion_label" in sql)
-        connection.connection.create_function("NOW", 0, lambda: "2026-09-06 00:00:00")
-        with connection.cursor() as real_cursor:
-            real_cursor.execute(insert)
-        result = YdWordstatMacroregionRaw.objects.get()
-        self.assertEqual(result.count, 42)
-        self.assertEqual(result.macroregion_label, job.dimension)
+        for obsolete in ("yd_wordstat_region", "yd_wordstat_ref_region", "yd_wordstat_macroregion_label"):
+            self.assertFalse(any(obsolete in sql for sql in statements))
+        sql = next(sql for sql in statements if "WITH all_months AS" in sql)
+        aggregate = sql.split("macroregion_year AS (", 1)[1].split("\n                )", 1)[0]
+        aggregate = aggregate.replace("EXTRACT(YEAR FROM date)::int", "CAST(strftime('%Y', date) AS INTEGER)")
+        with connection.cursor() as actual:
+            actual.execute(aggregate)
+            result = actual.fetchone()
+        self.assertEqual(result[:2], ("test", 2026))
+        self.assertEqual(result[4], 42)
+        self.assertEqual(sum(value or 0 for value in result[2:]), 42)
+
+
 
 
 class MigrationTests(unittest.TestCase):
+    def test_cleanup_drops_only_obsolete_tables_and_preserves_active_data(self):
+        from django.db.migrations.loader import MigrationLoader
+
+        graph = MigrationLoader(None)
+        state = graph.project_state([("datasets", "0064_wordstat_count_int64")])
+        models = [model for model in state.apps.get_app_config("datasets").get_models()
+                  if model.__name__.startswith("YdWordstat")]
+        with connection.schema_editor() as editor:
+            for model in models:
+                editor.create_model(model)
+        try:
+            old_regions = state.apps.get_model("datasets", "YdWordstatRegionRaw")
+            old_regions.objects.create(phrase="obsolete", date=date(2026, 8, 1), count=99)
+            YdWordstatIplastRaw.objects.create(phrase="retained", macroregion_label="МОСКВА",
+                                             group_fingerprint="test", date=date(2026, 8, 1), count=42)
+            YdWordstatPhraseRef.objects.create(phrase="retained")
+            YdWordstatIplastRegionRef.objects.create(region_value=213, macroregion_label="МОСКВА")
+            YdWordstatAllRaw.objects.create(phrase="retained", date=date(2026, 8, 1), count=123)
+            with connection.schema_editor() as editor:
+                graph.get_migration("datasets", "0065_remove_legacy_wordstat_regions").apply(state, editor)
+            tables = connection.introspection.table_names()
+            for obsolete in ("yd_wordstat_region", "yd_wordstat_ref_region", "yd_wordstat_macroregion_label"):
+                self.assertNotIn(obsolete, tables)
+            self.assertEqual(YdWordstatIplastRaw.objects.get().count, 42)
+            self.assertEqual(YdWordstatIplastRegionRef.objects.get().region_value, 213)
+            self.assertEqual(YdWordstatPhraseRef.objects.get().phrase, "retained")
+            self.assertEqual(YdWordstatAllRaw.objects.get().count, 123)
+        finally:
+            with connection.schema_editor() as editor:
+                for model in reversed(models):
+                    if model._meta.db_table in connection.introspection.table_names():
+                        editor.delete_model(model)
+
     def test_additive_migrations_preserve_existing_statistics(self):
         from django.db.migrations.loader import MigrationLoader
 
@@ -335,6 +355,28 @@ class ClientTests(unittest.TestCase):
     def test_v2_load_is_opt_in(self):
         with self.assertRaisesRegex(RuntimeError, "disabled"):
             pipeline.run_yd_wordstat_api_pipeline()
+
+
+class RouteTests(unittest.TestCase):
+    def test_wordstat_routes_keep_v2_and_reference_imports_only(self):
+        import ast
+        from pathlib import Path
+
+        backend = Path(__file__).resolve().parents[1]
+        urls = ast.parse((backend / "datasets/api/urls.py").read_text(encoding="utf-8"))
+        views = ast.parse((backend / "datasets/api/views.py").read_text(encoding="utf-8"))
+        defined = {node.name for node in views.body if isinstance(node, (ast.ClassDef, ast.FunctionDef))}
+        defined |= {alias.asname or alias.name for node in views.body if isinstance(node, ast.ImportFrom) for alias in node.names}
+        imported = {alias.name for node in urls.body if isinstance(node, ast.ImportFrom) and node.module == "views" for alias in node.names}
+        self.assertFalse(imported - defined)
+        paths = {node.value for node in ast.walk(urls) if isinstance(node, ast.Constant)
+                 and isinstance(node.value, str) and node.value.startswith("yd-wordstat/")}
+        self.assertEqual(paths, {
+            "yd-wordstat/export/", "yd-wordstat/phrase-ref-upload/",
+            "yd-wordstat/device-ref-upload/", "yd-wordstat/iplast-region-ref-upload/",
+            "yd-wordstat/all/load-from-api/", "yd-wordstat/device/load-from-api/",
+            "yd-wordstat/region/load-from-api/", "yd-wordstat/load-from-api/",
+        })
 
 
 if __name__ == "__main__":

@@ -62,7 +62,6 @@ from .serializers import (
     DatasetSerializer,
     DatasetRowSerializer,
     FbProjectUploadSerializer,
-    YdWordstatUploadSerializer,
     FBPurchasesUploadSerializer,
     FBTurnoverUploadSerializer,
     FBAccreceivUploadSerializer,
@@ -101,8 +100,6 @@ from .serializers import (
 
 
 
-from datasets.services.yd_wordstat_loader import load_yd_wordstat_csv
-from analytics.services.yd_wordstat_sync import sync_yd_wordstat_to_clickhouse
 
 
 from datasets.services.fb_purchases_loader import (
@@ -329,12 +326,8 @@ from datasets.services.external_api.yd_wordstat_ref_excel_loader import (
     load_yd_wordstat_iplast_region_ref_from_excel,
 )
 
-from datasets.services.external_api.yd_wordstat_region_ref_loader import (
-    refresh_yd_wordstat_regions_from_api,
-    refresh_yd_wordstat_regions_from_csv,
-)
 
-from analytics.services.yd_wordstat_csv_pipeline import run_yd_wordstat_csv_pipeline
+
 from analytics.services.yd_wordstat_api_pipeline import run_yd_wordstat_api_pipeline
 
 
@@ -603,49 +596,6 @@ class FbProjectUploadView(APIView):
             "postgres_rows": postgres_count,
             "projects_count": projects_count,
         })
-
-
-
-
-class YdWordstatUploadView(APIView):
-    permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
-    serializer_class = YdWordstatUploadSerializer
-
-    def get_serializer(self, *args, **kwargs):
-        return self.serializer_class(*args, **kwargs)
-
-    def post(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        uploaded_file = serializer.validated_data["file"]
-
-        if not uploaded_file:
-            return Response(
-                {"error": "file is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
-            for chunk in uploaded_file.chunks():
-                temp_file.write(chunk)
-
-            temp_path = temp_file.name
-
-        postgres_count = load_yd_wordstat_csv(temp_path)
-        clickhouse_count = sync_yd_wordstat_to_clickhouse()
-
-        invalidate_dashboard_by_name("Wordstat")
-
-        return Response({
-            "status": "ok",
-            "postgres_rows": postgres_count,
-            "clickhouse_rows": clickhouse_count,
-        })
-
-
-
 
 
 class FBPurchasesUploadView(APIView):
@@ -1927,101 +1877,6 @@ class YdWordstatDeviceRefUploadView(BaseYdWordstatRefExcelUploadView):
 
 class YdWordstatIplastRegionRefUploadView(BaseYdWordstatRefExcelUploadView):
     loader_func = staticmethod(load_yd_wordstat_iplast_region_ref_from_excel)
-
-
-class YdWordstatRegionsRefreshFromApiView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        result = refresh_yd_wordstat_regions_from_api()
-        return Response(result)
-
-
-class YdWordstatRegionsRefreshFromCsvView(APIView):
-    permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
-    serializer_class = ExcelUploadSerializer
-
-    def post(self, request):
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        uploaded_file = serializer.validated_data["file"]
-
-        temp_path = None
-
-        try:
-            suffix = os.path.splitext(uploaded_file.name)[1] or ".csv"
-
-            with tempfile.NamedTemporaryFile(
-                delete=False,
-                suffix=suffix,
-            ) as temp_file:
-                for chunk in uploaded_file.chunks():
-                    temp_file.write(chunk)
-
-                temp_path = temp_file.name
-
-            result = refresh_yd_wordstat_regions_from_csv(temp_path)
-
-            return Response(result)
-
-        finally:
-            if temp_path and os.path.exists(temp_path):
-                os.remove(temp_path)
-
-
-
-class BaseYdWordstatCsvPipelineView(APIView):
-    permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
-    serializer_class = ExcelUploadSerializer
-    source = None
-
-    def post(self, request):
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        uploaded_file = serializer.validated_data["file"]
-
-        temp_path = None
-
-        try:
-            suffix = os.path.splitext(uploaded_file.name)[1] or ".csv"
-
-            with tempfile.NamedTemporaryFile(
-                delete=False,
-                suffix=suffix,
-            ) as temp_file:
-                for chunk in uploaded_file.chunks():
-                    temp_file.write(chunk)
-
-                temp_path = temp_file.name
-
-            result = run_yd_wordstat_csv_pipeline(
-                source=self.source,
-                csv_path=temp_path,
-                truncate_source=True,
-            )
-
-            return Response(result)
-
-        finally:
-            if temp_path and os.path.exists(temp_path):
-                os.remove(temp_path)
-
-
-class YdWordstatAllLoadFromCsvView(BaseYdWordstatCsvPipelineView):
-    source = "all"
-
-
-class YdWordstatDeviceLoadFromCsvView(BaseYdWordstatCsvPipelineView):
-    source = "device"
-
-
-class YdWordstatRegionLoadFromCsvView(BaseYdWordstatCsvPipelineView):
-    source = "region"
-
 
 
 class YdWordstatFullLoadFromApiView(APIView):

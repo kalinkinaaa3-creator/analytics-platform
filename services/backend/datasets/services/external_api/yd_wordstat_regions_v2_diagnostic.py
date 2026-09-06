@@ -47,7 +47,7 @@ def flatten_regions_tree(data):
 
 
 def build_regions_v2_diagnostic(data):
-    from datasets.models import YdWordstatIplastRegionRef, YdWordstatRegionRef
+    from datasets.models import YdWordstatIplastRegionRef
 
     rows, malformed = flatten_regions_tree(data)
     id_counts = Counter(row["id"] for row in rows)
@@ -55,7 +55,6 @@ def build_regions_v2_diagnostic(data):
     numeric_ids = {int(region_id) for region_id in id_counts if region_id.isdigit()}
     non_numeric_ids = sorted(region_id for region_id in id_counts if not region_id.isdigit())
 
-    current_regions = set(YdWordstatRegionRef.objects.values_list("region_value", flat=True))
     mappings = list(
         YdWordstatIplastRegionRef.objects.order_by("macroregion_label", "region_value")
         .values("region_value", "macroregion_label")
@@ -112,11 +111,6 @@ def build_regions_v2_diagnostic(data):
             "malformed_nodes": len(malformed),
             "duplicate_ids": duplicate_ids,
             "non_numeric_ids": non_numeric_ids,
-        },
-        "current_region_reference": {
-            "configured": len(current_regions),
-            "present_in_v2": len(current_regions & numeric_ids),
-            "missing_ids": sorted(current_regions - numeric_ids),
         },
         "iplast_mapping": {
             "configured": len(mapped_ids),

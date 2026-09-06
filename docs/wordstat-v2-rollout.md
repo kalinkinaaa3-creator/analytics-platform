@@ -14,9 +14,9 @@ other applications sharing it can also consume requests.
 
 ## Storage and restart behavior
 
-- `yd_wordstat_iplast_api` stores API aggregates separately. The old
-  `yd_wordstat_region` rows remain available for comparison and are not updated
-  by the new API pipeline.
+- `yd_wordstat_iplast_api` stores API aggregates and supplies the regional
+  dashboard columns directly. The former per-region storage and intermediate
+  macroregion table are removed by migration 0065.
 - `yd_wordstat_api_checkpoint` records each successfully committed combination
   and interval. Only a complete monthly response can replace its interval.
   Empty/malformed/incomplete responses fail without deleting statistics.
@@ -37,10 +37,13 @@ other applications sharing it can also consume requests.
   processes requests sequentially and fails after bounded retries for temporary
   errors; 400/401/403 fail immediately. Restart the command after resolving errors.
 - Publication validates all expected combinations and their saved intervals,
-  then rebuilds the existing dashboard schema from the IPLAST table. Individual
-  regions are not added to the aggregates again.
-- Legacy CSV publication is disabled when v2 loading is enabled, to avoid
-  republishing historical regional sums over the new aggregates.
+  then rebuilds the existing dashboard schema directly from the IPLAST table.
+  Individual regions are not added to the aggregates again.
+- Legacy statistics CSV imports, their HTTP endpoints, the stored region-tree
+  reference and the v1 compatibility client are removed. Excel imports for
+  phrases, devices and the IPLAST mapping remain, as does dashboard Excel export.
+- The active models are PhraseRef, DeviceRef, IplastRegionRef, AllRaw, DeviceRaw,
+  IplastRaw, ApiCheckpoint, ApiQuota and For (all with the YdWordstat prefix).
 
 ## Server rollout (performed by the operator)
 
@@ -61,6 +64,14 @@ change. The following commands are instructions, not a record of execution.
    are preserved. On PostgreSQL widening integer columns can rewrite and lock
    large tables: apply this in a maintenance window with the usual DB backup.
    ClickHouse counters are already Int64; its schema is unchanged.
+
+   Migration 0065 permanently drops these tables and their local contents:
+   `yd_wordstat_region`, `yd_wordstat_ref_region`, `yd_wordstat_macroregion_label`.
+   The operator has confirmed that historical data exists on another server.
+   That other server is not contacted or modified by this migration. Only the
+   database where `migrate` is run is affected. Historical migrations 0025/0064
+   remain in Git so existing installations can upgrade normally; reversing
+   DeleteModel recreates empty tables, not the deleted records.
 
    ```sh
    docker exec analytics-django python manage.py migrate
@@ -106,12 +117,12 @@ change. The following commands are instructions, not a record of execution.
 
    This requests one dynamics series (retries can add requests). It saves quota
    accounting only, not statistics or checkpoints, and does not publish anything.
-   `stored_region_comparison` compares it with the existing per-region sum.
-   `stored_complete=false` means the old baseline is missing regions, contains
-   duplicate rows, or has null counts. A difference with a complete baseline
-   must be investigated, including the baseline's loading dates: Wordstat can
-   revise historical counts. Also probe the full January-2018-to-previous-month
-   interval and samples from other groups/devices before the first full run.
+   Compare the output with the old regional sums held on the other server.
+   There is no automatic lookup of that server or dependency on the removed
+   regional tables. Differences must be investigated, including acquisition
+   dates: Wordstat can revise historical counts. Also probe the full
+   January-2018-to-previous-month interval and samples from other groups/devices
+   before the first full run.
 
 6. After reviewing probes, set `YD_WORDSTAT_V2_LOAD_ENABLED=true` and recreate
    the Django container to apply it. The full command loads and publishes:
@@ -143,8 +154,8 @@ python manage.py makemigrations --check --dry-run --settings=tests.wordstat_sett
 ```
 
 Tests force isolated in-memory SQLite, mock API calls, exercise migration data
-preservation, retries, quota accounting, membership changes, resumability and
-rollback on failures. PostgreSQL lock/concurrency behavior, full PostgreSQL SQL
+preservation of active data, removal of obsolete tables, retries, quota
+accounting, membership changes, resumability and rollback on failures. PostgreSQL lock/concurrency behavior, full PostgreSQL SQL
 rebuild, ClickHouse publication and real API responses require server validation.
 
 Official contracts:

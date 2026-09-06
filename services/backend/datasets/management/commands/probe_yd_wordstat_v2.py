@@ -3,39 +3,10 @@ import json
 from datetime import date
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db.models import Count, Min, Max, Sum
 
 from datasets.services.external_api.yd_wordstat_api_loader import get_configuration
 from datasets.services.external_api.yd_wordstat_contract import parse_monthly_results, validate_group_tree
 from datasets.services.external_api.yd_wordstat_search_api_client import fetch_dynamics, fetch_regions_tree
-
-
-def compare_stored_regions(phrase, regions, rows):
-    from datasets.models import YdWordstatRegionRaw
-
-    stored = {
-        item["date"]: item for item in YdWordstatRegionRaw.objects.filter(
-            phrase=phrase, region_value__in=regions,
-            date__gte=rows[0]["date"], date__lte=rows[-1]["date"],
-        ).values("date").annotate(
-            total=Sum("count"), row_count=Count("id"),
-            regions_count=Count("region_value", distinct=True), nonnull_count=Count("count"),
-            oldest_loaded=Min("date_add"), newest_loaded=Max("date_add"),
-        )
-    }
-    result = []
-    for row in rows:
-        previous = stored.get(row["date"], {})
-        complete = (previous.get("row_count") == previous.get("regions_count")
-                    == previous.get("nonnull_count") == len(regions))
-        result.append({
-            "date": row["date"], "api_count": row["count"],
-            "stored_sum": previous.get("total"), "stored_complete": complete,
-            "difference": row["count"] - previous["total"] if complete else None,
-            "oldest_loaded": previous.get("oldest_loaded"),
-            "newest_loaded": previous.get("newest_loaded"),
-        })
-    return result
 
 
 class Command(BaseCommand):
@@ -62,9 +33,7 @@ class Command(BaseCommand):
             devices=[options["device"]], regions=regions,
         )
         rows = parse_monthly_results(data, options["from_date"], options["to_date"])
-        comparison = compare_stored_regions(options["phrase"], regions, rows) if regions and options["device"] == "all" else None
         self.stdout.write(json.dumps({
             "phrase": options["phrase"], "group": options["group"],
             "regions": regions, "statistics_saved": False, "results": rows,
-            "stored_region_comparison": comparison,
         }, ensure_ascii=False, indent=2, default=str))

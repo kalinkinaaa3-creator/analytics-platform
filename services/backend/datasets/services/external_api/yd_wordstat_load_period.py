@@ -11,12 +11,6 @@ DEFAULT_START_DATE = date(2018, 1, 1)
 MONTHS_TO_RELOAD = 12
 
 
-def get_previous_month_first_day(today: date | None = None) -> date:
-    today = today or date.today()
-    first_day_current_month = today.replace(day=1)
-    previous_month_last_day = first_day_current_month - timedelta(days=1)
-
-    return previous_month_last_day.replace(day=1)
 
 
 def get_previous_month_last_day(today: date | None = None) -> date:
@@ -101,26 +95,3 @@ def get_reload_period_without_delete(
         "date_finish": date_finish,
         "skipped": date_start > date_finish,
     }
-
-
-def has_current_month_loaded(
-    model,
-    filters: dict,
-    today: date | None = None,
-) -> bool:
-    """
-    Аналог старой проверки:
-    есть ли строка за прошлый месяц,
-    добавленная в текущем месяце.
-    """
-
-    today = today or date.today()
-
-    previous_month_first_day = get_previous_month_first_day(today=today)
-
-    return model.objects.filter(
-        **filters,
-        date=previous_month_first_day,
-        date_add__year=today.year,
-        date_add__month=today.month,
-    ).exists()

@@ -192,31 +192,7 @@ def validate_download(config, today):
     return {"ok": not missing, "missing_count": len(missing), "missing_examples": missing[:20]}
 
 
-def run_source(source, today=None, config=None):
-    today = today or timezone.localdate()
-    config = config or get_configuration()
-    result = {"saved": 0, "skipped": 0, "pairs": 0}
-    for job in make_jobs(config, source):
-        item = load_job(job, today)
-        result["saved"] += item["saved"]
-        result["skipped"] += item["skipped"]
-        result["pairs"] += 1
-    return result
 
 
 def check_regions(config):
     return validate_group_tree(config["groups"], fetch_regions_tree())
-
-
-def load_yd_wordstat_all_raw_from_api(today=None):
-    return run_source("all", today)
-
-
-def load_yd_wordstat_device_raw_from_api(today=None):
-    return run_source("device", today)
-
-
-def load_yd_wordstat_region_raw_from_api(today=None):
-    config = get_configuration()
-    check_regions(config)
-    return run_source("region", today, config)
