@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from dashboards.api.views import DashboardViewSet
 from .dashboard_builder_views import DashboardBuilderView
+from .wordstat_demand_views import WordstatDemandView, PublicWordstatDemandView
 
 from dashboards.api.realtime_test_views import DashboardRealtimeTestView
 from dashboards.api.public_dashboard_views import PublicDashboardBuilderView
@@ -18,6 +19,8 @@ router.register(r"", DashboardViewSet, basename="dashboards")
 
 
 urlpatterns = [
+    path("wordstat/demand-analysis/", WordstatDemandView.as_view()),
+    path("public-group/<uuid:token>/wordstat/demand-analysis/", PublicWordstatDemandView.as_view()),
     
     path("menu/", DashboardMenuView.as_view()),
 
@@ -42,4 +45,4 @@ urlpatterns = [
 
 
     path("", include(router.urls)),
-]   
+]

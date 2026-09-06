@@ -60,6 +60,7 @@ def _run_pipeline(source=None):
         validation = None
         rebuild = None
         synced = None
+        demand_synced = None
         if source is None:
             validation = validate_download(config, today)
             if not validation["ok"]:
@@ -71,6 +72,8 @@ def _run_pipeline(source=None):
 
             rebuild = rebuild_yd_wordstat_for_from_raw_sql()
             synced = sync_yd_wordstat_to_clickhouse()
+            from analytics.services.wordstat_demand_mart import sync_wordstat_demand
+            demand_synced = sync_wordstat_demand()
             invalidate_dashboard_by_name("Wordstat")
             notify_dashboard_updated("Wordstat")
             _notify("[b]Wordstat v2[/b] Загрузка и публикация завершены. Региональный срез: 7 групп IPLAST.")
@@ -78,6 +81,7 @@ def _run_pipeline(source=None):
             "status": "ok", "source": source or "full", "region_mode": "iplast",
             "region_check": region_check, "raw": results,
             "validation": validation, "rebuild": rebuild, "clickhouse": synced,
+            "demand_clickhouse": demand_synced,
         }
 
 

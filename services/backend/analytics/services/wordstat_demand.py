@@ -1,0 +1,202 @@
+"""Read-only demand analysis over monthly facts. Missing/duplicate facts are not zeroes."""
+from calendar import monthrange
+from collections import defaultdict
+from datetime import date
+from statistics import median
+
+from django.conf import settings
+from django.utils import timezone
+
+
+def shift(month, offset):
+    index = month.year * 12 + month.month - 1 + offset
+    return date(index // 12, index % 12 + 1, 1)
+
+
+def complete_sum(values):
+    values = list(values)
+    return sum(values) if values and all(v is not None for v in values) else None
+
+
+def metrics(current, previous, threshold=2):
+    delta = current - previous if current is not None and previous is not None else None
+    growth = delta * 100 / previous if delta is not None and previous > 0 else None
+    status = ("missing" if delta is None else "new" if previous == 0 else
+              "growth" if growth > threshold else "decline" if growth < -threshold else "stable")
+    return dict(current_volume=current, previous_volume=previous, absolute_change=delta,
+                growth_percent=growth, status=status)
+
+
+def distribution(items):
+    total = complete_sum(item["current_volume"] for item in items)
+    result = {}
+    for status in ("growth", "decline", "stable", "new", "missing"):
+        members = [item for item in items if item["status"] == status]
+        volume = complete_sum(item["current_volume"] for item in members) if members else 0
+        result[status] = dict(count=len(members), share=len(members) * 100 / len(items) if items else None,
+                              volume_share=volume * 100 / total if total and volume is not None else None)
+    return result
+
+
+def season_profile(monthly, today):
+    years = []
+    coefficients = []
+    for year in sorted({d.year for d in monthly if d.year < today.year}):
+        values = [monthly.get(date(year, month, 1)) for month in range(1, 13)]
+        total = complete_sum(values)
+        if total is None or total <= 0:
+            continue
+        years.append(year)
+        coefficients.append([value * 12 / total for value in values])
+    return dict(years=years, coefficients=[sum(row[m] for row in coefficients) / len(years)
+                                          if years else None for m in range(12)])
+
+
+def read_facts(today):
+    from analytics.clickhouse.client import get_clickhouse_client
+    client = get_clickhouse_client()
+    try:
+        if not client.execute("EXISTS TABLE default.yd_wordstat_demand")[0][0]:
+            return {}, {}, ""
+        rows = client.execute("SELECT feature, category, phrase, date, count, snapshot "
+                              "FROM default.yd_wordstat_demand WHERE source = 'all' AND date < %(until)s ORDER BY date",
+                              {"until": today.replace(day=1)})
+    finally:
+        client.disconnect()
+    return unpack_facts(rows, today)
+
+
+def unpack_facts(rows, today):
+    refs, facts = {}, defaultdict(dict)
+    snapshot = ""
+    for feature, category, phrase, day, value, snapshot in rows:
+        if not phrase:
+            continue
+        refs[phrase] = dict(phrase=phrase, feature=feature or "Без категории",
+                            category=category or "Без подкатегории")
+        if day >= today.replace(day=1) or day.day != 1:
+            continue
+        facts[phrase][day] = None if day in facts[phrase] or value is None or value < 0 else value
+    return refs, facts, snapshot
+
+
+def aggregate_months(phrases, facts):
+    days = {day for phrase in phrases for day in facts.get(phrase, {})}
+    return {day: complete_sum(facts.get(phrase, {}).get(day) for phrase in phrases) for day in days}
+
+
+def build_demand(params, today=None, source=None):
+    today = today or timezone.localdate()
+    refs, facts, snapshot = source if source is not None else read_facts(today)
+    global_months = aggregate_months(list(refs), facts)
+    available = sorted(day for day, value in global_months.items() if value is not None)
+    end = params.get("end_month") or (available[-1] if available else None)
+    feature, category, phrase = (params.get(k, "") for k in ("feature", "category", "phrase"))
+    level = params.get("level", "feature")
+    periods = params.get("period_months", 12)
+    threshold = float(getattr(settings, "WORDSTAT_DEMAND_NEUTRAL_PERCENT", 2))
+    minimum = int(getattr(settings, "WORDSTAT_DEMAND_MIN_BASE", 100))
+    selected = [p for p, r in refs.items() if (not feature or r["feature"] == feature)
+                and (not category or r["category"] == category)]
+    options = dict(features=sorted({r["feature"] or "Без категории" for r in refs.values()}),
+                   categories=sorted({refs[p]["category"] or "Без подкатегории" for p in selected}))
+    response = dict(context=dict(feature=feature, category=category, phrase=phrase, level=level),
+                    available_months=[d.strftime("%Y-%m") for d in available], options=options,
+                    latest_month=available[-1].strftime("%Y-%m") if available else None,
+                    neutral_percent=threshold, minimum_base=minimum, items=[], seasonality=[],
+                    regions={}, devices={}, summary={}, period=None)
+    if end is None:
+        return response
+    current = [shift(end, offset) for offset in range(1 - periods, 1)]
+    previous = [shift(day, -12) for day in current]
+    response["period"] = dict(period_months=periods, end_month=end.strftime("%Y-%m"),
+        current_start=current[0].isoformat(), current_end=end.replace(day=monthrange(end.year, end.month)[1]).isoformat(),
+        previous_start=previous[0].isoformat(),
+        previous_end=previous[-1].replace(day=monthrange(previous[-1].year, previous[-1].month)[1]).isoformat())
+
+    def measure(phrases):
+        monthly = aggregate_months(phrases, facts)
+        return metrics(complete_sum(monthly.get(d) for d in current),
+                       complete_sum(monthly.get(d) for d in previous), threshold)
+
+    grouped = defaultdict(list)
+    for p in selected:
+        r = refs[p]
+        identity = (r["feature"] or "Без категории", r["category"] or "Без подкатегории", p)
+        key = identity[:{"feature": 1, "category": 2, "phrase": 3}[level]]
+        grouped[key].append(p)
+    items, profiles = [], []
+    for key, phrases in grouped.items():
+        item = dict(id="\x1f".join(key), name=key[-1], feature=key[0],
+                    category=key[1] if len(key) > 1 else "", phrase=key[2] if len(key) > 2 else "",
+                    query_count=len(phrases), **measure(phrases))
+        item["children"] = distribution([measure([p]) for p in phrases])
+        items.append(item)
+        profiles.append(dict(id=item["id"], name=item["name"], **season_profile(aggregate_months(phrases, facts), today)))
+    items.sort(key=lambda item: (-(item["current_volume"] or 0), item["id"]))
+    focus = [phrase] if phrase and phrase in selected else selected
+    total = measure(selected)
+    response.update(items=items, seasonality=profiles, summary=dict(**total, count=len(items),
+                    distribution=distribution(items)),
+                    median_volume=median([i["current_volume"] for i in items if i["current_volume"] is not None])
+                    if any(i["current_volume"] is not None for i in items) else None)
+    parent = (selected if phrase else [p for p in refs if refs[p]["feature"] == feature]
+              if category else list(refs) if feature else [])
+    slices = read_slices(focus, parent, current, previous, snapshot) if source is None else {}
+    for label, kind, names in (
+        ("devices", "device", [("phone", "Телефоны"), ("desktop", "ПК"), ("tablet", "Планшеты")]),
+        ("regions", "region", [(name, name) for name in ("ЕКАТЕРИНБУРГ", "КРАСНОДАР", "МОСКВА", "НИЖНЕКАМСК", "НОВОСИБИРСК", "СПБ", "СНГ")]),
+    ):
+        response[label] = describe_slices(slices, kind, names, measure(focus), measure(parent), current, previous, minimum)
+    return response
+
+
+def read_slices(focus, parent, current, previous, snapshot):
+    from analytics.clickhouse.client import get_clickhouse_client
+    if not focus or not snapshot:
+        return {}
+    client = get_clickhouse_client()
+    result = {}
+    try:
+        # Pin to the same publication as the totals. A concurrent EXCHANGE may yield
+        # no slices, but never mixes devices from one generation with demand from another.
+        for scope, phrases in (("focus", focus), ("parent", parent)):
+            if not phrases:
+                continue
+            rows = client.execute("""
+                SELECT source, dimension, date, sum(count), count(), count(count), uniqExact(phrase)
+                FROM default.yd_wordstat_demand
+                WHERE source IN ('device', 'region') AND phrase IN %(phrases)s
+                  AND date IN %(dates)s AND snapshot = %(snapshot)s
+                GROUP BY source, dimension, date
+            """, {"phrases": tuple(phrases), "dates": tuple(current + previous), "snapshot": snapshot})
+            for kind, dimension, day, value, count, valid, distinct in rows:
+                if count == valid == distinct == len(phrases):
+                    result[scope, kind, dimension, day] = value
+    finally:
+        client.disconnect()
+    return result
+
+
+def describe_slices(values, kind, names, total, parent_total, current, previous, minimum):
+    items = []
+    for dimension, name in names:
+        item = dict(id=dimension, name=name, **metrics(
+            complete_sum(values.get(("focus", kind, dimension, d)) for d in current),
+            complete_sum(values.get(("focus", kind, dimension, d)) for d in previous)))
+        item["share"] = item["current_volume"] * 100 / total["current_volume"] if total["current_volume"] and item["current_volume"] is not None else None
+        old_share = item["previous_volume"] * 100 / total["previous_volume"] if total["previous_volume"] and item["previous_volume"] is not None else None
+        item["change_pp"] = item["share"] - old_share if item["share"] is not None and old_share is not None else None
+        parent_volume = complete_sum(values.get(("parent", kind, dimension, d)) for d in current)
+        parent_share = parent_volume * 100 / parent_total["current_volume"] if parent_total["current_volume"] and parent_volume is not None else None
+        item["difference_vs_parent_pp"] = item["share"] - parent_share if item["share"] is not None and parent_share is not None else None
+        items.append(item)
+    complete = all(item["share"] is not None for item in items)
+    share_sum = sum(item["share"] for item in items) if complete else None
+    consistent = share_sum is not None and share_sum <= 100.000001
+    ranked = sorted(items, key=lambda p: -(p["share"] or 0)) if complete and consistent else []
+    return dict(items=items, complete=complete, consistent=consistent, leader=ranked[0] if ranked else None,
+        top=ranked[:3], top3_share=sum(p["share"] for p in ranked[:3]) if ranked else None,
+        other_share=max(0, 100 - share_sum) if consistent else None,
+        fastest_growing=max((p for p in items if p["status"] == "growth" and p["previous_volume"] >= minimum),
+                            key=lambda p: p["growth_percent"], default=None))

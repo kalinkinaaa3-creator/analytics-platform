@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { useDropdownPosition } from "../../components/useDropdownPosition";
+import { WordstatDemandAnalysis } from "./WordstatDemandAnalysis";
+import "../seoAnalytics/seo_analytics.css";
 import "./wordstat.css";
 import "../spinner.css";
 
@@ -437,7 +439,7 @@ function WordstatHeader() {
   );
 }
 
-export function WordstatDashboard({ data }) {
+function WordstatStatistics({ data }) {
   const wrapperRef = useRef(null);
 
   const [rows, setRows] = useState(data?.rows || []);
@@ -593,7 +595,6 @@ export function WordstatDashboard({ data }) {
 
   return (
     <div className="wordstat-dashboard">
-      <h2>Тренды и сезонность</h2>
 
       <form id="filterForm" onSubmit={(event) => event.preventDefault()}>
         <div className="wordstat-filter-actions">
@@ -659,4 +660,18 @@ export function WordstatDashboard({ data }) {
       {isApplyingFilters && <GlobalSpinner />}
     </div>
   );
+}
+
+export function WordstatDashboard({ data, publicToken = null }) {
+  const [tab, setTab] = useState("demand");
+  return <section className="seo-dashboard wd-dashboard">
+    <h2 className="wd-title">Тренды и сезонность</h2>
+    <p className="wd-subtitle">Анализ поискового спроса по категориям, подкатегориям и запросам</p>
+    <div className="seo-menu wd-tabs"><nav aria-label="Разделы Wordstat">
+      <button type="button" className={tab === "demand" ? "is-active" : ""} aria-pressed={tab === "demand"} onClick={() => setTab("demand")}>Анализ спроса</button>
+      <button type="button" className={tab === "statistics" ? "is-active" : ""} aria-pressed={tab === "statistics"} onClick={() => setTab("statistics")}>Статистика запросов</button>
+    </nav></div>
+    <div hidden={tab !== "demand"}><WordstatDemandAnalysis publicToken={publicToken} revision={data} active={tab === "demand"} /></div>
+    <div hidden={tab !== "statistics"}><WordstatStatistics data={data} /></div>
+  </section>;
 }
