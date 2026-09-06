@@ -6,6 +6,7 @@ from django.db import connection
 
 from context_analytics.services.refresh import DEFAULT_INCREMENTAL_DAYS
 from django.utils import timezone
+import json
 
 from analytics.services.bitrix_notify import send_bitrix_message
 
@@ -467,6 +468,23 @@ def check_seo_analytics_health(cursor, today, problems, ok):
                 started_at,
                 finished_at,
             ) = latest_run
+
+            if isinstance(stats, str):
+                try:
+                    stats = json.loads(stats)
+                except (json.JSONDecodeError, TypeError):
+                    local_problems.append(
+                        f"{name}: запуск #{run_id} содержит некорректный stats"
+                    )
+                    stats = {}
+
+            if not isinstance(stats, dict):
+                local_problems.append(
+                    f"{name}: запуск #{run_id} содержит stats неожиданного типа "
+                    f"{type(stats).__name__}"
+                )
+                stats = {}
+
             if started_date != today:
                 local_problems.append(
                     f"{name}: последний плановый запуск={started_date}, нужно={today}"
@@ -620,6 +638,21 @@ def check_context_analytics_health(cursor, today, problems, ok):
             local_problems.append(f"{name}: отсутствуют плановые запуски")
         else:
             run_id, status, started_date, finished_date, stats, error_text, started_at, finished_at = latest_run
+            if isinstance(stats, str):
+                try:
+                    stats = json.loads(stats)
+                except (json.JSONDecodeError, TypeError):
+                    local_problems.append(
+                        f"{name}: запуск #{run_id} содержит некорректный stats"
+                    )
+                    stats = {}
+
+            if not isinstance(stats, dict):
+                local_problems.append(
+                    f"{name}: запуск #{run_id} содержит stats неожиданного типа "
+                    f"{type(stats).__name__}"
+                )
+                stats = {}
             if started_date != today:
                 local_problems.append(f"{name}: последний плановый запуск={started_date}, нужно={today}")
             if status != "success":

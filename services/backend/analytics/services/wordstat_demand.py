@@ -2,6 +2,7 @@
 from calendar import monthrange
 from collections import defaultdict
 from datetime import date
+from decimal import Decimal, ROUND_HALF_UP
 from statistics import median
 import hashlib
 import json
@@ -41,18 +42,32 @@ def distribution(items):
     return result
 
 
-def season_profile(monthly, today):
-    years = []
+def season_profile(monthly, today, year=None):
+    """Match the per-query annual coefficients in the statistics table."""
+    year = year or today.year
+    values = [monthly.get(date(year, m, 1)) if date(year, m, 1) < today.replace(day=1)
+              else None for m in range(1, 13)]
+    known = [Decimal(v) for v in values if v is not None]
+    average = sum(known) / len(known) if known else None
+    coefficients = [
+        None if value is None or average is None else
+        float((Decimal(value) / average if average else Decimal(0)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP))
+        for value in values
+    ]
+    return dict(years=[year] if known else [], coefficients=coefficients)
+
+
+def grouped_seasonality(phrases, facts, today, year):
+    # Statistics summaries average individual query coefficients, not volumes.
+    profiles = [season_profile(facts.get(p, {}), today, year) for p in phrases]
     coefficients = []
-    for year in sorted({d.year for d in monthly if d.year < today.year}):
-        values = [monthly.get(date(year, month, 1)) for month in range(1, 13)]
+    for month in range(12):
+        values = [p["coefficients"][month] for p in profiles]
         total = complete_sum(values)
-        if total is None or total <= 0:
-            continue
-        years.append(year)
-        coefficients.append([value * 12 / total for value in values])
-    return dict(years=years, coefficients=[sum(row[m] for row in coefficients) / len(years)
-                                          if years else None for m in range(12)])
+        coefficients.append(round(total / len(values), 2) if total is not None else None)
+    return dict(years=[year] if any(v is not None for v in coefficients) else [],
+                coefficients=coefficients)
 
 
 def read_facts(today):
@@ -106,14 +121,14 @@ def cached_demand(params):
     digest = hashlib.sha256(json.dumps(params, sort_keys=True, default=str).encode()).hexdigest()
     for _ in range(2):
         snapshot = demand_snapshot()
-        key = f"wordstat:demand:v3:{snapshot}:{today}:{digest}"
+        key = f"wordstat:demand:v4:{snapshot}:{today}:{digest}"
         result = cache.get(key) if snapshot else None
         if result is not None:
             return result
         result = build_demand(params, today)
         if result["snapshot"] == snapshot == demand_snapshot():
             if snapshot:
-                cache.set(key, result, timeout=300)
+                cache.set(key, result, timeout=24 * 3600)
             return result
     raise RuntimeError("Wordstat publication changed during reading; retry the request")
 
@@ -136,11 +151,11 @@ def build_demand(params, today=None, source=None):
     available = [shift(first, n) for n in range((last.year - first.year) * 12 + last.month - first.month + 1)]
     complete = sorted(d for d, value in monthly.items() if value is not None)
     observed = sorted({d for p in selected for d, value in facts.get(p, {}).items() if value is not None})
-    end = params.get("end_month") or (observed[-1] if observed else last)
+    end = params.get("end_month") or (complete[-1] if complete else None)
     options = dict(features=sorted({r["feature"] or "Без категории" for r in refs.values()}),
                    categories=sorted({refs[p]["category"] or "Без подкатегории" for p in selected}))
     response = dict(context=dict(feature=feature, category=category, phrase=phrase, level=level),
-                    available_months=[d.strftime("%Y-%m") for d in available], options=options,
+                    available_months=[d.strftime("%Y-%m") for d in complete], options=options,
                     snapshot=snapshot,
                     latest_month=complete[-1].strftime("%Y-%m") if complete else None,
                     month_coverage={d.strftime("%Y-%m"): "complete" if monthly.get(d) is not None else
@@ -174,7 +189,7 @@ def build_demand(params, today=None, source=None):
                     query_count=len(phrases), **measure(phrases))
         item["children"] = distribution([measure([p]) for p in phrases])
         items.append(item)
-        profiles.append(dict(id=item["id"], name=item["name"], **season_profile(aggregate_months(phrases, facts), today)))
+        profiles.append(dict(id=item["id"], name=item["name"], **grouped_seasonality(phrases, facts, today, end.year)))
     items.sort(key=lambda item: (-(item["current_volume"] or 0), item["id"]))
     focus = [phrase] if phrase and phrase in selected else selected
     total = measure(selected)

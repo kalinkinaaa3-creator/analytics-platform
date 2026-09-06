@@ -97,7 +97,7 @@ class DemandMathTests(unittest.TestCase):
         r = build_demand(dict(end_month=date(2026, 8, 1), period_months=1), TODAY, (refs, facts, snap))
         self.assertIsNone(r["summary"]["current_volume"])
         self.assertEqual(r["latest_month"], "2026-07")
-        self.assertIn("2026-08", r["available_months"])
+        self.assertNotIn("2026-08", r["available_months"])
         self.assertEqual(r["month_coverage"]["2026-08"], "partial")
 
     def test_other_category_gap_does_not_hide_complete_selected_month(self):
@@ -126,17 +126,33 @@ class DemandMathTests(unittest.TestCase):
         self.assertEqual(r["summary"]["current_volume"], 1000)
         self.assertEqual(r["summary"]["count"], 2)
 
-    def test_seasonality_independent_of_period(self):
+    def test_seasonality_uses_selected_year_including_current(self):
         a = build_demand(dict(period_months=1), TODAY, source())
-        b = build_demand(dict(period_months=12, end_month=date(2025, 6, 1)), TODAY, source())
+        b = build_demand(dict(period_months=12), TODAY, source())
         self.assertEqual(a["seasonality"], b["seasonality"])
-        self.assertEqual(a["seasonality"][0]["years"], [2023, 2024, 2025])
-        self.assertEqual(a["seasonality"][0]["coefficients"], [1] * 12)
+        self.assertEqual(a["seasonality"][0]["years"], [2026])
+        self.assertEqual(a["seasonality"][0]["coefficients"], [1] * 8 + [None] * 4)
+        old = build_demand(dict(end_month=date(2025, 6, 1)), TODAY, source())
+        self.assertEqual(old["seasonality"][0]["coefficients"], [1] * 12)
 
-    def test_incomplete_and_zero_years_excluded_from_season(self):
-        monthly = {date(2025, m, 1): 0 for m in range(1, 13)}
-        monthly[date(2024, 1, 1)] = 10
-        self.assertEqual(season_profile(monthly, TODAY)["years"], [])
+    def test_seasonality_matches_average_of_rounded_query_coefficients(self):
+        refs, facts, snap = source()
+        facts["a"] = {date(2026, 1, 1): 10, date(2026, 2, 1): 30}
+        facts["b"] = {date(2026, 1, 1): 900, date(2026, 2, 1): 900}
+        result = build_demand(dict(end_month=date(2026, 2, 1)), TODAY, (refs, facts, snap))
+        self.assertEqual(result["seasonality"][0]["coefficients"][:2], [.75, 1.25])
+
+    def test_zero_seasonality_and_missing_month_are_different(self):
+        monthly = {date(2026, 1, 1): 0, date(2026, 2, 1): 0}
+        self.assertEqual(season_profile(monthly, TODAY)["coefficients"][:3], [0, 0, None])
+
+    def test_current_year_positive_and_negative_changes_are_numeric(self):
+        refs, facts, snap = source()
+        facts["a"][date(2026, 8, 1)] = 200
+        facts["b"][date(2026, 8, 1)] = 450
+        result = build_demand(dict(level="phrase", period_months=1), TODAY, (refs, facts, snap))
+        growth = {i["phrase"]: i["growth_percent"] for i in result["items"]}
+        self.assertEqual(growth, {"a": 100, "b": -50})
 
     def test_slice_shares_percentage_points_and_parent(self):
         current, previous = [date(2026, 8, 1)], [date(2025, 8, 1)]
@@ -189,6 +205,43 @@ class CacheTests(unittest.TestCase):
 
 
 class PublicationTests(unittest.TestCase):
+    def test_statistics_staging_failure_preserves_published_table(self):
+        import importlib.util
+        import sys
+        from pathlib import Path
+        from types import SimpleNamespace
+        path = Path(__file__).parents[1] / "analytics/services/yd_wordstat_sync.py"
+        for fail in (False, True):
+            client = Mock()
+            def execute(sql, rows=None):
+                if sql.startswith("SELECT engine"):
+                    return [("Atomic",)]
+                if sql.startswith("INSERT") and fail:
+                    raise RuntimeError("staging failed")
+                if sql.startswith("SELECT count"):
+                    return [(1,)]
+            client.execute.side_effect = execute
+            with patch.dict(sys.modules, {
+                "analytics.clickhouse.repository": SimpleNamespace(YD_WORDSTAT_COLUMNS=["phrase", "year", "month_1"]),
+                "analytics.clickhouse.client": SimpleNamespace(get_clickhouse_client=lambda: client),
+                "analytics.clickhouse.schema": SimpleNamespace(ensure_yd_wordstat_for_table=Mock()),
+            }):
+                spec = importlib.util.spec_from_file_location("wordstat_sync_test", path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                with patch.object(module, "YdWordstatFor") as model:
+                    model.objects.all.return_value.order_by.return_value.values.return_value = [
+                        dict(phrase="a", year=2026, month_1=100)]
+                    if fail:
+                        with self.assertRaisesRegex(RuntimeError, "staging failed"):
+                            module.sync_yd_wordstat_to_clickhouse()
+                    else:
+                        self.assertEqual(module.sync_yd_wordstat_to_clickhouse(), 1)
+            sql = [c.args[0] for c in client.execute.call_args_list]
+            self.assertEqual(any(q.startswith("EXCHANGE") for q in sql), not fail)
+            self.assertFalse(any("TRUNCATE" in q for q in sql))
+            client.disconnect.assert_called_once()
+
     def client(self, fail=None):
         client = Mock()
         inserted = []

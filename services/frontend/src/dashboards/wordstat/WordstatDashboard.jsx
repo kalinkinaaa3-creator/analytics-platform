@@ -458,6 +458,9 @@ function WordstatStatistics({ data, active, publicToken }) {
 
   const requestRef = useRef(null);
   const filtersRef = useRef(localFilters);
+  const loadedRevision = useRef(null);
+  const revision = data?.revision || "initial";
+  const publicationKey = JSON.stringify([revision, publicToken]);
   const [error, setError] = useState("");
   useEffect(() => { filtersRef.current = localFilters; }, [localFilters]);
 
@@ -487,6 +490,7 @@ function WordstatStatistics({ data, active, publicToken }) {
       if (!append && wrapperRef.current) wrapperRef.current.scrollTop = 0;
       setPagination(nextData.pagination || {});
       setFilterValues(nextData.filter_values || {});
+      loadedRevision.current = publicationKey;
     } catch (failure) {
       if (!controller.signal.aborted) setError(typeof failure.response?.data?.detail === "string" ? failure.response.data.detail : "Не удалось загрузить статистику запросов.");
     } finally {
@@ -495,14 +499,14 @@ function WordstatStatistics({ data, active, publicToken }) {
         setIsLoadingMore(false);
       }
     }
-  }, [publicToken]);
+  }, [publicToken, publicationKey]);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || loadedRevision.current === publicationKey) return;
     // Refresh the current selection, never replace it with the parent widget's defaults.
     const timer = setTimeout(() => fetchWordstat(filtersRef.current), 0);
     return () => { clearTimeout(timer); requestRef.current?.abort(); };
-  }, [data, active, fetchWordstat]);
+  }, [publicationKey, active, fetchWordstat]);
 
   async function applyFilters(next = currentFilters) {
     await fetchWordstat(next);
@@ -639,7 +643,7 @@ export function WordstatDashboard({ data, publicToken = null }) {
       <button type="button" className={tab === "demand" ? "is-active" : ""} aria-pressed={tab === "demand"} onClick={() => setTab("demand")}>Анализ спроса</button>
       <button type="button" className={tab === "statistics" ? "is-active" : ""} aria-pressed={tab === "statistics"} onClick={() => setTab("statistics")}>Статистика запросов</button>
     </nav>
-    <div hidden={tab !== "demand"}><WordstatDemandAnalysis publicToken={publicToken} revision={data} active={tab === "demand"} /></div>
+    <div hidden={tab !== "demand"}><WordstatDemandAnalysis publicToken={publicToken} revision={data?.revision} active={tab === "demand"} /></div>
     <div hidden={tab !== "statistics"}><WordstatStatistics data={data} active={tab === "statistics"} publicToken={publicToken} /></div>
   </section>;
 }

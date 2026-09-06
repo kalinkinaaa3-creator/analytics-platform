@@ -36,19 +36,7 @@ export function PublicDashboardPage() {
   const loadDashboardRef = useRef(null);
   const dashboardSlugRef = useRef(null);
 
-  useEffect(() => {
-    const refresh = () => {
-      if (dashboardSlugRef.current === "wordstat" && document.visibilityState === "visible") {
-        loadDashboardRef.current?.({ showSpinner: false });
-      }
-    };
-    document.addEventListener("visibilitychange", refresh);
-    window.addEventListener("online", refresh);
-    return () => {
-      document.removeEventListener("visibilitychange", refresh);
-      window.removeEventListener("online", refresh);
-    };
-  }, []);
+
 
   const defaultDatesReady = true;
 
@@ -110,7 +98,6 @@ export function PublicDashboardPage() {
       socket = new WebSocket(wsUrl);
 
       socket.onopen = () => {
-        if (reconnectAttempt > 0 && dashboardSlugRef.current === "wordstat") loadDashboardRef.current?.({ showSpinner: false });
         reconnectAttempt = 0;
         console.log("Public dashboard WebSocket connected");
       };

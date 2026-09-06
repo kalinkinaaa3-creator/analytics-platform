@@ -80,12 +80,13 @@ def _run_pipeline(source=None):
 
             rebuild = rebuild_yd_wordstat_for_from_raw_sql()
             synced = sync_yd_wordstat_to_clickhouse()
-            # The statistics publication must invalidate even if demand rebuilding fails.
-            invalidate_dashboard_by_name("Wordstat")
-            notify_wordstat_updated()
             from analytics.services.wordstat_demand_mart import sync_wordstat_demand
-            demand_synced = sync_wordstat_demand()
-            notify_wordstat_updated()
+            try:
+                demand_synced = sync_wordstat_demand()
+            finally:
+                # Invalidate also on demand failure: statistics has already changed.
+                invalidate_dashboard_by_name("Wordstat")
+                notify_wordstat_updated()
             _notify("[b]Wordstat v2[/b] Загрузка и публикация завершены. Региональный срез: 7 групп IPLAST.")
         return {
             "status": "ok", "source": source or "full", "region_mode": "iplast",

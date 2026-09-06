@@ -7,7 +7,7 @@
 .wd-demand .seo-filters { display:block; container-type:inline-size; }
 .wd-adaptive-control { min-width:0; }
 .wd-demand .wd-adaptive-control .wd-compact-control { display:none; }
-.wd-demand .wd-filters { display:grid; grid-template-columns:200px 180px 160px 250px minmax(140px,230px) auto; align-items:end; gap:8px; }
+.wd-demand .wd-filters { display:grid; grid-template-columns:180px 170px 225px 250px minmax(140px,230px) auto; align-items:end; gap:8px; }
 .wd-demand .wd-control { display:flex; flex-direction:column; min-width:0; gap:0; position:relative; }
 .wd-demand .wd-control-label { display:flex; justify-content:center; align-items:center; gap:3px; min-height:18px; margin:0 0 4px; color:#444841; font:700 12px/18px Helvetica,sans-serif; text-align:center; white-space:nowrap; }
 .wd-demand .wd-control-label label { margin:0; min-height:0; font:inherit; color:inherit; }
@@ -16,6 +16,7 @@
 .wd-demand .wd-segments { width:auto; height:44px; position:static; display:block; transform:none; margin:0; padding:0; border:0; box-shadow:none; }
 .wd-demand .wd-segments nav { display:flex; position:static; width:auto; max-width:none; height:44px; opacity:1; pointer-events:auto; transform:none; box-shadow:none; padding:0!important; gap:3px; overflow:visible!important; }
 .wd-demand .wd-segments nav button { height:44px; min-height:44px; min-width:0; font-size:12px; flex:1; white-space:nowrap; padding:6px 7px; box-sizing:border-box; }
+.wd-demand .wd-period-control .wd-segments nav button { padding-inline:3px; }
 .wd-demand .wd-filters .seo-toolbar { position:static; display:flex; justify-content:flex-end; margin:0 0 0 auto; padding:0; }
 .wd-demand .wd-breadcrumbs { display:flex; flex-wrap:wrap; align-items:center; gap:9px; margin:12px 0 0; }
 .wd-link,.wd-breadcrumbs button { background:none; border:0; padding:3px 0; color:#536f50; font:inherit; text-align:left; cursor:pointer; }
@@ -81,9 +82,9 @@
 .wd-empty { display:flex; min-height:90px; padding:15px; align-items:center; justify-content:center; text-align:center; color:#747a71; font-size:13px; line-height:1.6; }
 .wd-muted { color:#747a71; font-size:12px; line-height:1.5; }
 .wd-error { margin:14px 0; padding:18px; color:#aa584b; background:#fff; border:1px solid #dcc5bf; border-radius:7px; }
-@media (min-width:1600px) { .wd-demand .wd-filters { grid-template-columns:210px 190px 175px 275px minmax(180px,280px) auto; } }
-@container (max-width:1280px) { .wd-demand .wd-filters { grid-template-columns:minmax(160px,1fr) minmax(155px,1fr) minmax(140px,1fr) minmax(225px,1.25fr) minmax(115px,1fr) 85px; gap:6px; } }
-@container (max-width:1040px) { .wd-demand .wd-filters { grid-template-columns:minmax(80px,.65fr) minmax(135px,1.1fr) minmax(120px,1fr) minmax(115px,1fr) minmax(100px,1fr) 85px; gap:5px; } .wd-demand .wd-expanded-control { display:none; } .wd-demand .wd-adaptive-control .wd-compact-control { display:flex; } }
+@media (min-width:1600px) { .wd-demand .wd-filters { grid-template-columns:190px 180px 225px 260px minmax(180px,280px) auto; } }
+@container (max-width:1280px) { .wd-demand .wd-filters { grid-template-columns:minmax(160px,1fr) minmax(155px,1fr) minmax(215px,1fr) minmax(225px,1.25fr) minmax(115px,1fr) 85px; gap:6px; } }
+@container (max-width:1120px) { .wd-demand .wd-filters { grid-template-columns:minmax(80px,.65fr) minmax(135px,1.1fr) minmax(120px,1fr) minmax(115px,1fr) minmax(100px,1fr) 85px; gap:5px; } .wd-demand .wd-expanded-control { display:none; } .wd-demand .wd-adaptive-control .wd-compact-control { display:flex; } }
 @container (max-width:800px) { .wd-demand .wd-control-label { min-height:36px; white-space:normal; line-height:15px; } .wd-demand .wd-filters { grid-template-columns:minmax(65px,.65fr) minmax(110px,1.1fr) minmax(95px,1fr) minmax(100px,1fr) minmax(90px,1fr) 80px; gap:4px; } }
 @container (max-width:600px) { .wd-demand .wd-filters { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; } }
 @media (max-width:1200px) { .wd-overview { height:auto; grid-template-columns:1fr; } .wd-kpis { height:220px; } .wd-demand .seo-report-grid { grid-template-columns:1fr; } }

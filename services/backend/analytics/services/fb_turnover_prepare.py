@@ -1,4 +1,5 @@
 from collections import defaultdict
+from calendar import monthrange
 from datetime import datetime, date, timedelta
 from decimal import Decimal, getcontext
 import math
@@ -151,7 +152,8 @@ def build_turnover_chart_data(rows, indicator_rows, date_start, date_end):
     date_start_dt = datetime.strptime(date_start, "%Y-%m-%d").date()
     date_end_dt = datetime.strptime(date_end, "%Y-%m-%d").date()
 
-    yesterday = date.today() - timedelta(days=1)
+    today = date.today()
+    yesterday = today - timedelta(days=1)
 
     delta_days = (date_end_dt - date_start_dt).days
     same_month = (
@@ -240,7 +242,13 @@ def build_turnover_chart_data(rows, indicator_rows, date_start, date_end):
         month_date = datetime.strptime(f"{month}-01", "%Y-%m-%d").date()
         if month_date > date_end_dt or (month_date.year, month_date.month) < (date_start_dt.year, date_start_dt.month):
             continue
-        key = f"{month}-01" if group_by_day else month
+        if group_by_day and month_date < today.replace(day=1):
+            # Historical facts are month-end snapshots. Attach the monthly plan
+            # to that same date rather than adding a separate first-day point.
+            month_date = month_date.replace(day=monthrange(month_date.year, month_date.month)[1])
+            if not date_start_dt <= month_date <= date_end_dt:
+                continue
+        key = month_date.isoformat() if group_by_day else month
         if key not in points_data:
             points_data[key] = {"final_stock": None, "mutual_finstock": indicator}
 

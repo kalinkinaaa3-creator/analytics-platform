@@ -46,8 +46,8 @@ def get_dashboard_cache_timeout(dashboard: Dashboard) -> int:
 
 def get_dashboard_cache_schema_version(dashboard: Dashboard) -> int:
     return {
-        "Wordstat": 3,
-        "Turnover": 2,
+        "Wordstat": 4,
+        "Turnover": 3,
     }.get(dashboard.name, 1)
 
 
@@ -339,7 +339,7 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
             )
 
         elif wordstat_metadata:
-            widget_data["data"] = {"filters": {key: runtime_filters.get(key, []) for key in ("feature", "category", "phrase")}}
+            widget_data["data"] = {"revision": cache_key_payload.get("generation", "initial"), "filters": {key: runtime_filters.get(key, []) for key in ("feature", "category", "phrase")}}
 
         elif widget.type == "yd_wordstat_table":
             page = int(runtime_filters.get("page", 1))
