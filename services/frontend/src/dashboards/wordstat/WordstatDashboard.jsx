@@ -664,7 +664,7 @@ function WordstatStatistics({ data }) {
 
 export function WordstatDashboard({ data, publicToken = null }) {
   const [tab, setTab] = useState("demand");
-  return <section className="seo-dashboard wd-dashboard">
+  return <section className="seo-dashboard wd-dashboard" data-dashboard-type="wordstat">
     <h2 className="wd-title">Тренды и сезонность</h2>
     <p className="wd-subtitle">Анализ поискового спроса по категориям, подкатегориям и запросам</p>
     <div className="seo-menu wd-tabs"><nav aria-label="Разделы Wordstat">
