@@ -28,6 +28,7 @@ from bitrix24.services.refresh import (
 )
 from bitrix24.services.sync_state import recover_interrupted_sync_runs
 from dashboards.realtime import notify_dashboard_updated
+from lead_generation.clickhouse import rebuild_mart_safely
 
 
 class Command(BaseCommand):
@@ -71,6 +72,7 @@ class Command(BaseCommand):
                 {"status": "success", "finished_at": finished_at, "rows": rows},
                 timeout=None,
             )
+            rebuild_mart_safely()
             notify_dashboard_updated("CRMAnalytics", updated_at=finished_at)
             self.stdout.write(self.style.SUCCESS(f"CRM analytics refreshed: rows={rows}."))
         except BaseException as exc:

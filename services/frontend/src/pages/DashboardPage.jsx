@@ -11,6 +11,9 @@ const DASHBOARD_WS_NAMES = {
   accreceiv: "Accreceiv",
   turnover: "Turnover",
   revenue: "Revenue",
+  "seo-analytics": "SEOAnalytics",
+  "context-analytics": "ContextAnalytics",
+  "lead-generation": "LeadGeneration",
 };
 
 function buildDashboardWsUrl() {
@@ -80,10 +83,13 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (!defaultDatesReady) {
-      return;
+      return undefined;
     }
 
-    loadDashboard({ showSpinner: true });
+    const timer = setTimeout(() => {
+      loadDashboard({ showSpinner: true });
+    }, 0);
+    return () => clearTimeout(timer);
   }, [loadDashboard, defaultDatesReady]);
 
   useEffect(() => {
@@ -109,7 +115,7 @@ export function DashboardPage() {
       };
 
       socket.onmessage = (event) => {
-        let message = null;
+        let message;
 
         try {
           message = JSON.parse(event.data);
@@ -122,6 +128,8 @@ export function DashboardPage() {
           return;
         }
 
+        console.info("Dashboard WebSocket update:", message);
+
         const currentSlug = dashboardSlugRef.current;
         const expectedDashboardName = DASHBOARD_WS_NAMES[currentSlug];
 
@@ -130,6 +138,7 @@ export function DashboardPage() {
         }
 
         if (message.dashboard === expectedDashboardName) {
+          window.dispatchEvent(new CustomEvent("dashboard:updated", { detail: message }));
           loadDashboardRef.current?.({ showSpinner: false });
         }
       };

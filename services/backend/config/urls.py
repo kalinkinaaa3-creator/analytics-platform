@@ -6,10 +6,11 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from dashboards.api.auth_views import LoggingTokenObtainPairView
-
+from config.health import health
 
 
 urlpatterns = [
+    path("api/health/", health),
     path("admin/", admin.site.urls),
 
     path("api/token/", LoggingTokenObtainPairView.as_view()),
@@ -19,6 +20,9 @@ urlpatterns = [
     path("api/v1/datasets/", include("datasets.api.urls")),
 
     path("api/v1/bitrix24/", include("bitrix24.api.urls")),
+    path("api/v1/seo/", include("seo_analytics.api.urls")),
+    path("api/v1/context/", include("context_analytics.api.urls")),
+    path("api/v1/lead-generation/", include("lead_generation.api.urls")),
     
     path("api/v1/dashboards/", include("dashboards.api.urls")),
 ]

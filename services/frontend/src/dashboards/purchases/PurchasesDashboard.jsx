@@ -3,6 +3,11 @@ import { api } from "../../api/client";
 import { DashboardMultiSelect } from "../../components/DashboardMultiSelect";
 import { DateRangePicker } from "../../components/DateRangePicker";
 import "./purchases.css";
+import { PlanEditor, ProcurementTooltip, procurementNumber } from "./ProcurementEnhancements";
+
+function GlobalSpinner() {
+  return <div className="global-spinner-overlay show"><div className="spinner-container"><div className="infinite-spinner" /><div className="spinner-text">Обновление данных...</div></div></div>;
+}
 
 function formatNumber(value) {
   if (value === null || value === undefined || value === "") return "—";
@@ -15,6 +20,22 @@ function formatNumber(value) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
+}
+
+function formatChartPeriod(value, tooltip = false) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/);
+  if (!match) return String(value || "");
+  if (match[3]) return `${match[3]}.${match[2]}.${match[1]}`;
+  return new Intl.DateTimeFormat("ru-RU", { month: tooltip ? "long" : "short", year: "numeric", timeZone: "UTC" })
+    .format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1)))
+    .replace(/\s*г\.$/u, "");
+}
+
+function localIsoDate(value) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function numberClass(value) {
@@ -55,7 +76,7 @@ function IndicatorCard({ title, value }) {
   );
 }
 
-function PurchasesIndicators({ indicators }) {
+function PurchasesIndicators({ indicators, planEditor }) {
   const deviation = Number(indicators?.deviation || 0);
 
   return (
@@ -63,7 +84,7 @@ function PurchasesIndicators({ indicators }) {
       <div className="indicators-container">
         <div className="indicators-column">
           <IndicatorCard title="Факт, руб/кг" value={indicators?.fact} />
-          <IndicatorCard title="План, руб/кг" value={indicators?.plan} />
+          <div className="indicator-card indicator-card--editable"><div className="title">План, руб/кг</div><div className="value">{formatNumber(indicators?.plan)}</div>{planEditor}</div>
         </div>
 
         <div className="indicators-column indicators-center">
@@ -124,17 +145,44 @@ function makeAreaPath(points) {
 }
 
 function shouldShowXLabel(total, index) {
-  if (total <= 8) return true;
-  if (total <= 16) return index % 2 === 0;
-  if (total <= 28) return index % 3 === 0;
-  return index % 4 === 0;
+  const count = Math.min(total, 10);
+  if (count < 2 || total <= count) return true;
+  return Array.from(
+    { length: count },
+    (_, position) => Math.round(position * (total - 1) / (count - 1)),
+  ).includes(index);
+}
+
+function shouldShowPointValue(points, index, labelsCount) {
+  if (labelsCount <= 8) return true;
+  const values = points.map((point) => Number(point?.value));
+  const valid = values.map((value, position) => ({ value, position })).filter(({ value }) => Number.isFinite(value));
+  if (!valid.length) return false;
+  const minimum = valid.reduce((best, item) => item.value < best.value ? item : best);
+  const maximum = valid.reduce((best, item) => item.value > best.value ? item : best);
+  return new Set([0, points.length - 1, minimum.position, maximum.position]).has(index);
 }
 
 function PurchasesChart({ chart }) {
+  const [tooltip, setTooltip] = useState(null);
   const fact = chart?.fact || [];
   const plan = chart?.plan || [];
   const yTicks = chart?.y_axis?.ticks || [];
   const xLabels = chart?.x_labels || [];
+  const tooltipFor = (point, event) => {
+    const match = (items) => items.find((item) => Math.abs(Number(item.x) - Number(point.x)) < .0001);
+    const factPoint = match(fact); const planPoint = match(plan);
+    const factValue = factPoint?.value; const planValue = planPoint?.value;
+    const deviation = Number.isFinite(Number(factValue)) && Number.isFinite(Number(planValue)) ? Number(factValue) - Number(planValue) : null;
+    const deviationPercent = deviation !== null && Number(planValue) !== 0 ? deviation * 100 / Number(planValue) : null;
+    const period = xLabels.reduce((best, item) => Math.abs(Number(item.pos) - Number(point.x)) < Math.abs(Number(best?.pos ?? 99) - Number(point.x)) ? item : best, null);
+    setTooltip({ x: event.clientX, y: event.clientY, title: formatChartPeriod(period?.label, true), rows: [
+      { label: "Факт", value: factValue, suffix: " руб/кг", color: "#7f4a88" },
+      { label: "План", value: planValue, suffix: " руб/кг", color: "#307672" },
+      { label: "Отклонение", value: deviation, suffix: " руб/кг", color: "#a46258" },
+      { label: "Отклонение, %", value: deviationPercent, suffix: "%", color: deviation < 0 ? "#4f7d51" : deviation > 0 ? "#b4433b" : "#71806e", valueColor: deviation < 0 ? "#4f7d51" : deviation > 0 ? "#d65a50" : undefined },
+    ] });
+  };
 
   if (!chart || (!fact.length && !plan.length)) {
     return (
@@ -218,8 +266,8 @@ function PurchasesChart({ chart }) {
                   left: `${normalized.x * 100}%`,
                   top: `${(1 - normalized.y) * 100}%`,
                 }}
-                title={`Факт: ${formatNumber(normalized.value)}`}
-              ></div>
+                onMouseEnter={(event) => tooltipFor(normalized, event)} onMouseMove={(event) => tooltipFor(normalized, event)} onMouseLeave={() => setTooltip(null)}
+              >{shouldShowPointValue(fact, index, xLabels.length) && <span className="procurement-point-value">{procurementNumber(normalized.value)}</span>}</div>
             );
           })}
 
@@ -236,8 +284,8 @@ function PurchasesChart({ chart }) {
                   left: `${normalized.x * 100}%`,
                   top: `${(1 - normalized.y) * 100}%`,
                 }}
-                title={`План: ${formatNumber(normalized.value)}`}
-              ></div>
+                onMouseEnter={(event) => tooltipFor(normalized, event)} onMouseMove={(event) => tooltipFor(normalized, event)} onMouseLeave={() => setTooltip(null)}
+              />
             );
           })}
 
@@ -252,10 +300,11 @@ function PurchasesChart({ chart }) {
                     : "none",
                 }}
               >
-                {label.label}
+                {formatChartPeriod(label.label)}
               </span>
             ))}
           </div>
+          <ProcurementTooltip state={tooltip} title={tooltip?.title} rows={tooltip?.rows} />
         </div>
       </div>
     </div>
@@ -468,17 +517,19 @@ export function PurchasesDashboard({
   const [expandedMonths, setExpandedMonths] = useState(new Set());
   const [expandedCodes, setExpandedCodes] = useState(new Set());
   const [exporting, setExporting] = useState(false);
+  const [planUpdating, setPlanUpdating] = useState(false);
 
   const defaultFilters = useMemo(() => {
-    const now = new Date();
-    const year = now.getFullYear();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const year = yesterday.getFullYear();
 
     return {
       nomenclature_code: [],
       nomenclature: [],
       partner: [],
       date_start: `${year}-01-01`,
-      date_end: now.toISOString().slice(0, 10),
+      date_end: localIsoDate(yesterday),
     };
   }, []);
 
@@ -510,6 +561,7 @@ export function PurchasesDashboard({
     });
     setExpandedMonths(new Set());
     setExpandedCodes(new Set());
+    setPlanUpdating(false);
   }, [filters, purchasesTree]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -621,9 +673,10 @@ export function PurchasesDashboard({
         <div className="dashboard-filter-actions">
         <button
           type="button"
-          className="filters-export"
+          className={`filters-export${exporting ? " is-loading" : ""}`}
           onClick={exportExcel}
           disabled={exporting}
+          aria-busy={exporting}
         >
           {exporting ? "Экспорт..." : "Экспорт"}
         </button>
@@ -643,7 +696,7 @@ export function PurchasesDashboard({
         </div>
       </form>
 
-      <PurchasesIndicators indicators={indicators} />
+      <PurchasesIndicators indicators={indicators} planEditor={<PlanEditor kind="purchases" publicToken={publicToken} dateStart={localFilters.date_start} dateEnd={localFilters.date_end} onSavingChange={setPlanUpdating} onSaved={() => onFiltersChange?.({ ...localFilters })} />} />
 
       <PurchasesChart chart={chart} />
 
@@ -655,6 +708,7 @@ export function PurchasesDashboard({
         onToggleCode={toggleCode}
         onToggleAll={toggleAll}
       />
+      {planUpdating && <GlobalSpinner />}
     </div>
   );
 }

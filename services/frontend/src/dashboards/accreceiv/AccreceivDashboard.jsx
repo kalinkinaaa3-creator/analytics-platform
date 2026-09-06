@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { DashboardMultiSelect } from "../../components/DashboardMultiSelect";
 import { DateRangePicker } from "../../components/DateRangePicker";
 import "../spinner.css";
 import "./accreceiv.css";
+import { ProcurementTooltip, procurementNumber } from "../purchases/ProcurementEnhancements";
 
 const FILTERS = [
   ["partner", "Контрагент"],
@@ -71,6 +72,15 @@ function formatNumber(value) {
   });
 }
 
+function formatChartPeriod(value, tooltip = false) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/);
+  if (!match) return String(value || "");
+  if (match[3]) return `${match[3]}.${match[2]}.${match[1]}`;
+  return new Intl.DateTimeFormat("ru-RU", { month: tooltip ? "long" : "short", year: "numeric", timeZone: "UTC" })
+    .format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1)))
+    .replace(/\s*г\.$/u, "");
+}
+
 function normalizePoint(point) {
   return {
     x: Number(point?.x || 0),
@@ -107,11 +117,21 @@ function makeAreaPath(points) {
 }
 
 function shouldShowXLabel(total, index) {
-  if (total <= 8) return true;
-  if (total <= 16) return index % 2 === 0;
-  if (total <= 28) return index % 3 === 0;
+  const count = Math.min(total, 10);
+  if (count < 2 || total <= count) return true;
+  return Array.from(
+    { length: count },
+    (_, position) => Math.round(position * (total - 1) / (count - 1)),
+  ).includes(index);
+}
 
-  return index % 4 === 0;
+function shouldShowPointValue(points, index, labelsCount) {
+  if (labelsCount <= 8) return true;
+  const valid = points.map((point, position) => ({ value: Number(point?.value), position })).filter(({ value }) => Number.isFinite(value));
+  if (!valid.length) return false;
+  const minimum = valid.reduce((best, item) => item.value < best.value ? item : best);
+  const maximum = valid.reduce((best, item) => item.value > best.value ? item : best);
+  return new Set([0, points.length - 1, minimum.position, maximum.position]).has(index);
 }
 
 function AccreceivIndicators({ indicators }) {
@@ -122,7 +142,7 @@ function AccreceivIndicators({ indicators }) {
           <div className="indicator-card">
             <div className="title">Σ (кон. остаток), руб</div>
             <div className="value" id="indicator-cost">
-              {formatNumber(indicators?.cost)}
+              {procurementNumber(indicators?.cost, "", 0)}
             </div>
           </div>
         </div>
@@ -132,9 +152,16 @@ function AccreceivIndicators({ indicators }) {
 }
 
 function AccreceivChart({ chart }) {
+  const [tooltip, setTooltip] = useState(null);
   const finalStock = chart?.final_stock || [];
   const yTicks = chart?.y_axis?.ticks || [];
   const xLabels = chart?.x_labels || [];
+  const tooltipFor = (point, event) => {
+    const period = xLabels.reduce((best, item) => Math.abs(Number(item.pos) - Number(point.x)) < Math.abs(Number(best?.pos ?? 99) - Number(point.x)) ? item : best, null);
+    setTooltip({ x: event.clientX, y: event.clientY, title: formatChartPeriod(period?.label, true), rows: [
+      { label: "Дебиторская задолженность", value: point.value, suffix: " руб", digits: 0, color: "#307672" },
+    ] });
+  };
 
   if (!chart || !finalStock.length) {
     return (
@@ -151,7 +178,7 @@ function AccreceivChart({ chart }) {
       <div id="price-chart" className="chart">
         <div className="chart-title">
           <span className="chart-title-text">
-            {chart.title || "Динамика ДЗ, руб"}
+            {chart.title || "Динамика дебиторской задолженности, руб"}
           </span>
 
           <span className="chart-legend">
@@ -201,8 +228,8 @@ function AccreceivChart({ chart }) {
                   left: `${normalized.x * 100}%`,
                   top: `${(1 - normalized.y) * 100}%`,
                 }}
-                title={`Σ (кон. остаток): ${formatNumber(normalized.value)}`}
-              ></div>
+                onMouseEnter={(event) => tooltipFor(normalized, event)} onMouseMove={(event) => tooltipFor(normalized, event)} onMouseLeave={() => setTooltip(null)}
+              >{shouldShowPointValue(finalStock, index, xLabels.length) && <span className="procurement-point-value">{procurementNumber(normalized.value, "", 0)}</span>}</div>
             );
           })}
 
@@ -217,10 +244,11 @@ function AccreceivChart({ chart }) {
                     : "none",
                 }}
               >
-                {label.label}
+                {formatChartPeriod(label.label)}
               </span>
             ))}
           </div>
+          <ProcurementTooltip state={tooltip} title={tooltip?.title} rows={tooltip?.rows} />
         </div>
       </div>
     </div>
@@ -397,12 +425,15 @@ function TreePartner({
   );
 }
 
-export function AccreceivDashboard({ data, publicToken = null }) {
+export function AccreceivDashboard({ data, dashboard, publicToken = null }) {
   const [dashboardData, setDashboardData] = useState(data || {});
   const [expandedMonths, setExpandedMonths] = useState(new Set());
   const [expandedCodes, setExpandedCodes] = useState(new Set());
   const [isApplyingFilters, setIsApplyingFilters] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [uploadingManagers, setUploadingManagers] = useState(false);
+  const [managerUploadError, setManagerUploadError] = useState("");
+  const managerFileRef = useRef(null);
 
   const filters = dashboardData?.filters || {};
   const filterValues = dashboardData?.filter_values || {};
@@ -622,13 +653,34 @@ export function AccreceivDashboard({ data, publicToken = null }) {
     }
   }
 
+  async function uploadManagers(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploadingManagers(true);
+    setManagerUploadError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      await api.post("/v1/datasets/fb-accreceiv/indicator-upload/", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      await fetchAccreceiv(currentFilters);
+    } catch (requestError) {
+      setManagerUploadError(requestError.response?.data?.detail || requestError.response?.data?.error || "Не удалось загрузить менеджеров.");
+    } finally {
+      setUploadingManagers(false);
+      event.target.value = "";
+    }
+  }
+
   return (
     <div className="accreceiv">
-      <h2>ДЗ</h2>
+      <h2>Дебиторская задолженность</h2>
 
       <form id="filterForm" onSubmit={(event) => event.preventDefault()}>
         <div className="dashboard-filter-actions">
-        <button type="button" className="filters-export" onClick={exportExcel} disabled={exporting || isApplyingFilters}>{exporting ? "Экспорт..." : "Экспорт"}</button>
+        {Boolean(dashboard?.can_edit) && !publicToken && <><button type="button" className={`filters-upload${uploadingManagers ? " is-loading" : ""}`} onClick={() => managerFileRef.current?.click()} disabled={uploadingManagers || isApplyingFilters}>{uploadingManagers ? "Загрузка..." : "Загрузить менеджеров"}</button><input ref={managerFileRef} type="file" accept=".xlsx" hidden onChange={uploadManagers} /></>}
+        <button type="button" className={`filters-export${exporting ? " is-loading" : ""}`} onClick={exportExcel} disabled={exporting || isApplyingFilters} aria-busy={exporting}>{exporting ? "Экспорт..." : "Экспорт"}</button>
         <button type="button" id="resetFilters" className="filters-reset" onClick={resetFilters} disabled={isApplyingFilters}>Очистить</button>
         </div>
         <div className="dashboard-filter-grid">
@@ -648,6 +700,7 @@ export function AccreceivDashboard({ data, publicToken = null }) {
         <DateRangePicker start={localFilters.date_start} end={localFilters.date_end} resetRange={{ start: defaultFilters.date_start, end: defaultFilters.date_end }} onChange={({ start, end }) => { const next = { ...currentFilters, date_start: start, date_end: end }; setLocalFilters(next); applyFilters(next); }} />
         </div>
       </form>
+      {managerUploadError && <div role="alert" className="accreceiv-upload-error">{managerUploadError}</div>}
 
       <AccreceivIndicators indicators={indicators} />
 
@@ -662,7 +715,7 @@ export function AccreceivDashboard({ data, publicToken = null }) {
         onToggleAll={toggleAll}
       />
 
-      {isApplyingFilters && <GlobalSpinner />}
+      {(isApplyingFilters || uploadingManagers) && <GlobalSpinner />}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { DashboardMultiSelect } from "../../components/DashboardMultiSelect";
 import { DateRangePicker } from "../../components/DateRangePicker";
 import "../spinner.css";
 import "./turnover.css";
+import { PlanEditor, ProcurementTooltip, procurementNumber } from "../purchases/ProcurementEnhancements";
 
 const FILTERS = [
   ["nomenclature", "Номенклатура"],
@@ -72,6 +73,15 @@ function formatNumber(value) {
   });
 }
 
+function formatChartPeriod(value, tooltip = false) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/);
+  if (!match) return String(value || "");
+  if (match[3]) return `${match[3]}.${match[2]}.${match[1]}`;
+  return new Intl.DateTimeFormat("ru-RU", { month: tooltip ? "long" : "short", year: "numeric", timeZone: "UTC" })
+    .format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1)))
+    .replace(/\s*г\.$/u, "");
+}
+
 function normalizePoint(point) {
   return {
     x: Number(point?.x || 0),
@@ -108,14 +118,24 @@ function makeAreaPath(points) {
 }
 
 function shouldShowXLabel(total, index) {
-  if (total <= 8) return true;
-  if (total <= 16) return index % 2 === 0;
-  if (total <= 28) return index % 3 === 0;
-
-  return index % 4 === 0;
+  const count = Math.min(total, 10);
+  if (count < 2 || total <= count) return true;
+  return Array.from(
+    { length: count },
+    (_, position) => Math.round(position * (total - 1) / (count - 1)),
+  ).includes(index);
 }
 
-function TurnoverIndicators({ indicators }) {
+function shouldShowPointValue(points, index, labelsCount) {
+  if (labelsCount <= 8) return true;
+  const valid = points.map((point, position) => ({ value: Number(point?.value), position })).filter(({ value }) => Number.isFinite(value));
+  if (!valid.length) return false;
+  const minimum = valid.reduce((best, item) => item.value < best.value ? item : best);
+  const maximum = valid.reduce((best, item) => item.value > best.value ? item : best);
+  return new Set([0, points.length - 1, minimum.position, maximum.position]).has(index);
+}
+
+function TurnoverIndicators({ indicators, planEditor }) {
   return (
     <div id="indicators-container">
       <div className="indicators-container">
@@ -123,7 +143,7 @@ function TurnoverIndicators({ indicators }) {
           <div className="indicator-card">
             <div className="title">Факт, руб</div>
             <div className="value" id="indicator-cost">
-              {formatNumber(indicators?.cost)}
+              {procurementNumber(indicators?.cost, "", 0)}
             </div>
           </div>
         </div>
@@ -135,17 +155,18 @@ function TurnoverIndicators({ indicators }) {
               className={`value deviation ${indicators?.deviation_color || ""}`}
               id="indicator-deviation"
             >
-              {formatNumber(indicators?.deviation)}
+              {procurementNumber(indicators?.deviation, "", 0)}
             </div>
           </div>
         </div>
 
         <div className="indicators-column">
-          <div className="indicator-card">
+          <div className="indicator-card indicator-card--editable">
             <div className="title">План, руб</div>
             <div className="value" id="indicator-plan">
-              {formatNumber(indicators?.indicator)}
+              {procurementNumber(indicators?.indicator, "", 0)}
             </div>
+            {planEditor}
           </div>
         </div>
       </div>
@@ -154,10 +175,24 @@ function TurnoverIndicators({ indicators }) {
 }
 
 function TurnoverChart({ chart }) {
+  const [tooltip, setTooltip] = useState(null);
   const factPoints = chart?.final_stock || [];
   const planPoints = chart?.mutual_finstock || [];
   const yTicks = chart?.y_axis?.ticks || [];
   const xLabels = chart?.x_labels || [];
+  const tooltipFor = (point, event) => {
+    const match = (items) => items.find((item) => Math.abs(Number(item.x) - Number(point.x)) < .0001);
+    const factValue = match(factPoints)?.value; const planValue = match(planPoints)?.value;
+    const deviation = Number.isFinite(Number(factValue)) && Number.isFinite(Number(planValue)) ? Number(factValue) - Number(planValue) : null;
+    const deviationPercent = deviation !== null && Number(planValue) !== 0 ? deviation * 100 / Number(planValue) : null;
+    const period = xLabels.reduce((best, item) => Math.abs(Number(item.pos) - Number(point.x)) < Math.abs(Number(best?.pos ?? 99) - Number(point.x)) ? item : best, null);
+    setTooltip({ x: event.clientX, y: event.clientY, title: formatChartPeriod(period?.label, true), rows: [
+      { label: "Факт", value: factValue, suffix: " руб", digits: 0, color: "#7f4a88" },
+      { label: "План", value: planValue, suffix: " руб", digits: 0, color: "#307672" },
+      { label: "Отклонение", value: deviation, suffix: " руб", digits: 0, color: "#a46258" },
+      { label: "Отклонение, %", value: deviationPercent, suffix: "%", color: deviation < 0 ? "#4f7d51" : deviation > 0 ? "#b4433b" : "#71806e", valueColor: deviation < 0 ? "#4f7d51" : deviation > 0 ? "#d65a50" : undefined },
+    ] });
+  };
 
   if (!chart || (!factPoints.length && !planPoints.length)) {
     return (
@@ -235,8 +270,8 @@ function TurnoverChart({ chart }) {
                   left: `${normalized.x * 100}%`,
                   top: `${(1 - normalized.y) * 100}%`,
                 }}
-                title={`Факт: ${formatNumber(normalized.value)}`}
-              ></div>
+                onMouseEnter={(event) => tooltipFor(normalized, event)} onMouseMove={(event) => tooltipFor(normalized, event)} onMouseLeave={() => setTooltip(null)}
+              >{shouldShowPointValue(factPoints, index, xLabels.length) && <span className="procurement-point-value">{procurementNumber(normalized.value, "", 0)}</span>}</div>
             );
           })}
 
@@ -253,8 +288,8 @@ function TurnoverChart({ chart }) {
                   left: `${normalized.x * 100}%`,
                   top: `${(1 - normalized.y) * 100}%`,
                 }}
-                title={`План: ${formatNumber(normalized.value)}`}
-              ></div>
+                onMouseEnter={(event) => tooltipFor(normalized, event)} onMouseMove={(event) => tooltipFor(normalized, event)} onMouseLeave={() => setTooltip(null)}
+              />
             );
           })}
 
@@ -269,10 +304,11 @@ function TurnoverChart({ chart }) {
                     : "none",
                 }}
               >
-                {label.label}
+                {formatChartPeriod(label.label)}
               </span>
             ))}
           </div>
+          <ProcurementTooltip state={tooltip} title={tooltip?.title} rows={tooltip?.rows} />
         </div>
       </div>
     </div>
@@ -794,7 +830,7 @@ export function TurnoverDashboard({ data, publicToken = null }) {
 
       <form id="filterForm" onSubmit={(event) => event.preventDefault()}>
         <div className="dashboard-filter-actions">
-        <button type="button" className="filters-export" onClick={exportExcel} disabled={exporting || isApplyingFilters}>{exporting ? "Экспорт..." : "Экспорт"}</button>
+        <button type="button" className={`filters-export${exporting ? " is-loading" : ""}`} onClick={exportExcel} disabled={exporting || isApplyingFilters} aria-busy={exporting}>{exporting ? "Экспорт..." : "Экспорт"}</button>
         <button type="button" id="resetFilters" className="filters-reset" onClick={resetFilters} disabled={isApplyingFilters}>Очистить</button>
         </div>
         <div className="dashboard-filter-grid">
@@ -815,7 +851,7 @@ export function TurnoverDashboard({ data, publicToken = null }) {
         </div>
       </form>
 
-      <TurnoverIndicators indicators={indicators} />
+      <TurnoverIndicators indicators={indicators} planEditor={<PlanEditor kind="turnover" publicToken={publicToken} dateStart={localFilters.date_start} dateEnd={localFilters.date_end} onSaved={() => fetchTurnover(currentFilters)} />} />
 
       <TurnoverChart chart={chart} />
 

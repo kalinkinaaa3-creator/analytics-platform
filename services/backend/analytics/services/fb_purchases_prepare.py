@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from decimal import Decimal, getcontext
 import math
 
@@ -27,7 +27,7 @@ def date_to_str(value):
 def get_default_purchases_filters(filters=None):
     filters = filters or {}
 
-    now = datetime.now().date()
+    yesterday = datetime.now().date() - timedelta(days=1)
 
     def values(key):
         value = filters.get(key, [])
@@ -37,8 +37,8 @@ def get_default_purchases_filters(filters=None):
         "nomenclature_code": values("nomenclature_code"),
         "nomenclature": values("nomenclature"),
         "partner": values("partner"),
-        "date_start": filters.get("date_start") or f"{now.year}-01-01",
-        "date_end": filters.get("date_end") or now.isoformat(),
+        "date_start": filters.get("date_start") or f"{yesterday.year}-01-01",
+        "date_end": filters.get("date_end") or yesterday.isoformat(),
     }
 
 
@@ -154,26 +154,20 @@ def add_deviation_to_purchases(purchases_list):
     return purchases_list
 
 
-def build_purchases_indicators(purchases_list):
+def build_purchases_indicators(purchases_list, indicator_rows=None):
     total_quantity = Decimal("0")
     total_revenue = Decimal("0")
-    indicator_sum = Decimal("0")
-    indicator_count = 0
 
     for item in purchases_list:
         qty = to_decimal(item.get("quantity_1C"))
         rev = to_decimal(item.get("revenue_1C"))
-        ind = item.get("indicator")
-
         total_quantity += qty
         total_revenue += rev
 
-        if ind is not None:
-            indicator_sum += to_decimal(ind)
-            indicator_count += 1
+    plan_values = [to_decimal(row.get("indicator")) for row in (indicator_rows or []) if row.get("indicator") is not None]
 
     fact = (total_revenue / total_quantity).quantize(Decimal("0.01")) if total_quantity else Decimal("0")
-    plan = (indicator_sum / indicator_count).quantize(Decimal("0.01")) if indicator_count else Decimal("0")
+    plan = (sum(plan_values) / len(plan_values)).quantize(Decimal("0.01")) if plan_values else Decimal("0")
     deviation = (fact - plan).quantize(Decimal("0.01"))
 
     return {
@@ -285,7 +279,7 @@ def serialize_purchase_row(row):
 
 
 def build_price_chart_data(rows, indicator_rows):
-    if not rows:
+    if not rows and not indicator_rows:
         return None
 
     indicator_map = build_indicator_map(indicator_rows)
@@ -297,7 +291,7 @@ def build_price_chart_data(rows, indicator_rows):
         "indicator_count": 0,
     })
 
-    dates = [r.get("date_draft") for r in rows if r.get("date_draft")]
+    dates = [r.get("date_draft") for r in [*rows, *indicator_rows] if r.get("date_draft")]
 
     if not dates:
         return None
@@ -324,14 +318,22 @@ def build_price_chart_data(rows, indicator_rows):
 
         qty = to_decimal(row.get("quantity_1C"))
         revenue = to_decimal(row.get("revenue_1C")) - to_decimal(row.get("VAT_1C"))
-        indicator = indicator_map.get(d_str)
-
         grouped[key]["revenue"] += revenue
         grouped[key]["quantity"] += qty
 
-        if indicator is not None:
-            grouped[key]["indicator_sum"] += indicator
-            grouped[key]["indicator_count"] += 1
+    monthly_indicators = defaultdict(list)
+    for indicator_date, indicator in indicator_map.items():
+        monthly_indicators[indicator_date[:7]].append(indicator)
+    for key in list(grouped):
+        values = monthly_indicators.get(key[:7], [])
+        if values:
+            grouped[key]["indicator_sum"] = sum(values)
+            grouped[key]["indicator_count"] = len(values)
+    for month, values in monthly_indicators.items():
+        key = f"{month}-01" if group_by_day else month
+        if key not in grouped:
+            grouped[key]["indicator_sum"] = sum(values)
+            grouped[key]["indicator_count"] = len(values)
 
     keys_sorted = sorted(grouped.keys())
 
@@ -427,7 +429,7 @@ def prepare_fb_purchases_dashboard(rows, indicator_rows, filters=None, filter_op
     purchases_list = add_indicator_to_purchases(purchases_list, indicator_rows)
     purchases_list = add_deviation_to_purchases(purchases_list)
 
-    indicators = build_purchases_indicators(purchases_list)
+    indicators = build_purchases_indicators(purchases_list, indicator_rows)
     purchases_tree = build_purchases_tree(purchases_list)
     chart = build_price_chart_data(rows, indicator_rows)
 

@@ -36,6 +36,10 @@ from .views import (
     PublicFBTurnoverExportView, 
     PublicFBAccreceivExportView,
     PublicFBPurchasesExportView,
+    PurchasesPlanView,
+    TurnoverPlanView,
+    PublicPurchasesPlanView,
+    PublicTurnoverPlanView,
 
 
     ParserPrefixUploadView,
@@ -157,6 +161,8 @@ urlpatterns = [
     path("yd-wordstat/export/", WordstatExportView.as_view()),
     path("fb-purchases/export/", FBPurchasesExportView.as_view()),
     path("fb-turnover/export/", FBTurnoverExportView.as_view()),
+    path("fb-purchases/plans/", PurchasesPlanView.as_view()),
+    path("fb-turnover/plans/", TurnoverPlanView.as_view()),
     path("fb-accreceiv/export/", FBAccreceivExportView.as_view()),
 
     path("revenue/export/", RevenueExportView.as_view()),
@@ -173,6 +179,8 @@ urlpatterns = [
         "public-group/<uuid:token>/fb-purchases/export/",
         PublicFBPurchasesExportView.as_view(),
     ),
+    path("public-group/<uuid:token>/fb-purchases/plans/", PublicPurchasesPlanView.as_view()),
+    path("public-group/<uuid:token>/fb-turnover/plans/", PublicTurnoverPlanView.as_view()),
 
 
 

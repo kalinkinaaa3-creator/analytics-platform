@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 
 from bitrix24.services.clickhouse import sync_lead_analytics_to_clickhouse
+from lead_generation.clickhouse import rebuild_mart_safely
 
 
 class Command(BaseCommand):
@@ -14,6 +15,7 @@ class Command(BaseCommand):
         if chunk_size <= 0 or chunk_size > 10000:
             raise ValueError("--chunk-size must be between 1 and 10000.")
         inserted = sync_lead_analytics_to_clickhouse(chunk_size=chunk_size)
+        rebuild_mart_safely()
         self.stdout.write(
             self.style.SUCCESS(
                 f"Bitrix24 ClickHouse mart published: rows={inserted}."

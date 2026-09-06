@@ -24,6 +24,7 @@ from bitrix24.services.refresh import (
 )
 from bitrix24.services.sync_state import recover_interrupted_sync_runs
 from dashboards.realtime import notify_dashboard_updated
+from lead_generation.clickhouse import rebuild_mart_safely
 
 
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
@@ -110,6 +111,7 @@ class Command(BaseCommand):
                 },
                 timeout=None,
             )
+            rebuild_mart_safely()
             notify_dashboard_updated("CRMAnalytics", updated_at=finished_at)
             self.stdout.write(
                 self.style.SUCCESS(

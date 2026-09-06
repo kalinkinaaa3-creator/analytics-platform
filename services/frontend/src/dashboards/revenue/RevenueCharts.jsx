@@ -2,7 +2,6 @@ import {
   Bar,
   CartesianGrid,
   ComposedChart,
-  LabelList,
   Legend,
   ResponsiveContainer,
   Tooltip,
@@ -83,30 +82,24 @@ function formatValue(value, unit) {
   });
 }
 
-function formatLabelValue(value, unit) {
-  const number = Number(value || 0);
+function formatPeriod(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})/);
+  if (!match) return String(value || "");
+  return new Intl.DateTimeFormat("ru-RU", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1))).replace(/\s*г\.$/u, "");
+}
 
-  if (!number) return "";
-
-  if (unit === "млн") {
-    return `${(number / 1000000).toLocaleString("ru-RU", {
-      maximumFractionDigits: 1,
-    })} млн`;
-  }
-
-  if (number >= 1000000) {
-    return `${(number / 1000000).toLocaleString("ru-RU", {
-      maximumFractionDigits: 1,
-    })} млн`;
-  }
-
-  if (number >= 10000) {
-    return `${Math.round(number / 1000).toLocaleString("ru-RU")} тыс`;
-  }
-
-  return number.toLocaleString("ru-RU", {
-    maximumFractionDigits: 0,
-  });
+function monthAxisTicks(rows = []) {
+  const periods = rows.map((row) => row.period).filter(Boolean);
+  const count = Math.min(periods.length, 10);
+  if (count < 2) return periods;
+  return [...new Set(Array.from(
+    { length: count },
+    (_, index) => periods[Math.round(index * (periods.length - 1) / (count - 1))],
+  ))];
 }
 
 function prepareChartRows(charts, config) {
@@ -146,80 +139,6 @@ function prepareChartRows(charts, config) {
   return Object.values(map).sort((a, b) => a.period.localeCompare(b.period));
 }
 
-function shouldShowLabel(index, total, width, y, value, unit) {
-  if (!value || Number(value) === 0) return false;
-  if (width < 24) return false;
-  if (y < 18) return false;
-
-  if (unit === "млн") {
-    if (total <= 6) return true;
-    if (total <= 12) return index % 2 === 0;
-    if (total <= 24) return index % 4 === 0;
-    return index % 6 === 0;
-  }
-
-  if (total <= 12) return true;
-  if (total <= 24) return index % 2 === 0;
-  if (total <= 36) return index % 3 === 0;
-
-  return index % 4 === 0;
-}
-
-function renderBarLabel(unit, total) {
-  return function BarLabel(props) {
-    const { x, y, width, value, index } = props;
-
-    if (!shouldShowLabel(index, total, width, y, value, unit)) {
-      return null;
-    }
-
-    const label = formatLabelValue(value, unit);
-    if (!label) return null;
-
-    return (
-      <text
-        x={x + width / 2}
-        y={y - 8}
-        textAnchor="middle"
-        fontSize={12}
-        fontWeight={700}
-        fill="#334155"
-        pointerEvents="none"
-      >
-        {label}
-      </text>
-    );
-  };
-}
-
-function renderStackedLabel(unit, total) {
-  return function StackedLabel(props) {
-    const { x, y, width, index } = props;
-    const value = props.value;
-
-    if (!shouldShowLabel(index, total, width, y, value, unit)) {
-      return null;
-    }
-
-    const label = formatLabelValue(value, unit);
-    if (!label) return null;
-
-    return (
-      <text
-        x={x + width / 2}
-        y={y - 8}
-        textAnchor="middle"
-        fontSize={12}
-        fontWeight={700}
-        fill="#334155"
-        pointerEvents="none"
-      >
-        {label}
-      </text>
-    );
-  };
-}
-
 function CustomTooltip({ active, payload, label, unit, config }) {
   if (!active || !payload?.length) return null;
 
@@ -236,7 +155,7 @@ function CustomTooltip({ active, payload, label, unit, config }) {
         fontWeight: 700,
       }}
     >
-      <div style={{ fontWeight: "bold", marginBottom: "4px" }}>{label}</div>
+      <div style={{ fontWeight: "bold", marginBottom: "4px" }}>{formatPeriod(label)}</div>
 
       {payload.map((item) => {
         let labelText = config.barLabel;
@@ -261,8 +180,6 @@ function CustomTooltip({ active, payload, label, unit, config }) {
 
 function RevenueChart({ charts, config }) {
   const chartRows = prepareChartRows(charts, config);
-  const totalPoints = chartRows.length;
-  const showLabels = chartRows.length <= 18;
 
   if (!chartRows.length) {
     return null;
@@ -325,8 +242,11 @@ function RevenueChart({ charts, config }) {
 
           <XAxis
             dataKey="period"
+            ticks={monthAxisTicks(chartRows)}
             tick={{ fontSize: 12 }}
+            tickFormatter={formatPeriod}
             interval="preserveStartEnd"
+            minTickGap={10}
             padding={{ left: 8, right: 18 }}
             tickMargin={8}
           />
@@ -338,6 +258,7 @@ function RevenueChart({ charts, config }) {
           />
 
           <Tooltip
+            labelFormatter={formatPeriod}
             content={
               <CustomTooltip
                 unit={config.unit}
@@ -375,12 +296,6 @@ function RevenueChart({ charts, config }) {
                 radius={[4, 4, 0, 0]}
                 maxBarSize={26}
               >
-                {showLabels && (
-                <LabelList
-                    dataKey="value"
-                    content={renderStackedLabel(config.unit, totalPoints)}
-                />
-                )}
               </Bar>
             </>
           ) : (
@@ -391,9 +306,6 @@ function RevenueChart({ charts, config }) {
               radius={[4, 4, 0, 0]}
               maxBarSize={26}
             >
-              {showLabels && (
-                <LabelList content={renderStackedLabel(config.unit, totalPoints)} />
-              )}
             </Bar>
           )}
         </ComposedChart>

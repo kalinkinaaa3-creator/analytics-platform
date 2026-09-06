@@ -65,8 +65,14 @@ def acquire_refresh_cache_lock() -> bool:
 
 
 def refresh_state() -> dict:
+    from bitrix24.models import BitrixSyncRun
+
     state = cache.get(STATE_KEY) or {}
-    return {"running": bool(cache.get(LOCK_KEY)), **state}
+    completed = list(BitrixSyncRun.objects.filter(
+        entity="leads", status=BitrixSyncRun.Status.SUCCESS, finished_at__isnull=False,
+    ).values_list("started_at", "finished_at")[:3])
+    average_duration_seconds = round(sum((finished - started).total_seconds() for started, finished in completed) / len(completed)) if completed else None
+    return {"running": bool(cache.get(LOCK_KEY)), **state, "average_duration_seconds": average_duration_seconds}
 
 
 def launch_refresh(*, skip_bitrix: bool = False) -> int:

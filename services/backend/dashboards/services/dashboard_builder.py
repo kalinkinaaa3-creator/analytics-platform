@@ -178,10 +178,10 @@ def apply_default_filters_for_dashboard(dashboard: Dashboard, filters: dict) -> 
 
     elif dashboard.name == "Purchases":
         if not result.get("date_start"):
-            result["date_start"] = f"{today.year}-01-01"
+            result["date_start"] = f"{yesterday.year}-01-01"
 
         if not result.get("date_end"):
-            result["date_end"] = today.isoformat()
+            result["date_end"] = yesterday.isoformat()
 
     elif dashboard.name in ("Turnover", "Accreceiv"):
         if not result.get("date_start"):
@@ -531,6 +531,14 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
         elif widget.type == "crm_analytics_dashboard":
             # The dedicated CRM component loads compact aggregate and paginated
             # endpoints. Do not duplicate that payload in the generic builder.
+            widget_data["data"] = {}
+
+        elif widget.type == "seo_analytics_dashboard":
+            # SEO pages load independent cached blocks through their own API.
+            widget_data["data"] = {}
+        elif widget.type == "context_analytics_dashboard":
+            widget_data["data"] = {}
+        elif widget.type == "lead_generation_dashboard":
             widget_data["data"] = {}
 
 

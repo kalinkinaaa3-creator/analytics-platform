@@ -145,6 +145,7 @@ class LeadDashboardQuery:
             f"""
             SELECT
                 count() AS total,
+                countIf(is_apm = 0) AS total_excluding_apm,
                 countIf(dashboard_status = 'target') AS target,
                 countIf(is_apm = 1) AS apm,
                 countIf(dashboard_status = 'in_progress') AS in_progress,
@@ -166,6 +167,7 @@ class LeadDashboardQuery:
         )
         return rows[0] if rows else {
             "total": 0,
+            "total_excluding_apm": 0,
             "target": 0,
             "apm": 0,
             "in_progress": 0,

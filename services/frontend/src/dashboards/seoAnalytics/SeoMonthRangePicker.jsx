@@ -1,0 +1,37 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import "./seo_month_range_picker.css";
+
+
+const MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+function monthValue(iso) { const match = String(iso || "").match(/^(\d{4})-(\d{2})/); return match ? { year: Number(match[1]), month: Number(match[2]) } : null; }
+function indexOf(value) { return value.year * 12 + value.month - 1; }
+function fromIndex(index) { return { year: Math.floor(index / 12), month: index % 12 + 1 }; }
+function monthStart(value) { return `${value.year}-${String(value.month).padStart(2, "0")}-01`; }
+function monthEnd(value) { const day = new Date(value.year, value.month, 0).getDate(); return `${value.year}-${String(value.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`; }
+function display(value) { return value ? `${String(value.month).padStart(2, "0")}.${value.year}` : ""; }
+function parseInput(value) { const digits = String(value || "").replace(/\D/g, ""); if (digits.length !== 6) return null; const result = { month: Number(digits.slice(0, 2)), year: Number(digits.slice(2)) }; return result.month >= 1 && result.month <= 12 && result.year >= 2000 && result.year <= 2200 ? result : null; }
+function maskInput(value) { const digits = String(value || "").replace(/\D/g, "").slice(0, 6); return digits.length <= 2 ? digits : `${digits.slice(0, 2)}.${digits.slice(2)}`; }
+function normalized(changed, start, end) { if (changed === "end" && indexOf(end) < indexOf(start)) start = fromIndex(indexOf(end) - 1); if (changed === "start" && indexOf(start) > indexOf(end)) end = fromIndex(indexOf(start) + 1); return { start, end }; }
+function CalendarIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v3M18 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" /></svg>; }
+
+export function SeoMonthRangePicker({ start, end, onChange, resetRange, minMonth = "2022-01-01", maxMonth, label = "Период" }) {
+  const root = useRef(null); const externalStart = monthValue(start); const externalEnd = monthValue(end);
+  const now = useMemo(() => { const value = new Date(); return { year: value.getFullYear(), month: value.getMonth() + 1 }; }, []);
+  const minimum = monthValue(minMonth) || { year: 2022, month: 1 }; const maximum = monthValue(maxMonth) || now;
+  const years = useMemo(() => Array.from({ length: maximum.year - minimum.year + 1 }, (_, index) => minimum.year + index), [maximum.year, minimum.year]);
+  const [open, setOpen] = useState(false); const [side, setSide] = useState("right");
+  const [draft, setDraft] = useState({ start: externalStart, end: externalEnd });
+  const [startInput, setStartInput] = useState(display(externalStart)); const [endInput, setEndInput] = useState(display(externalEnd));
+
+  const bounded = (next) => { const low = indexOf(minimum); const high = indexOf(maximum); let from = Math.min(high, Math.max(low, indexOf(next.start))); let to = Math.min(high, Math.max(low, indexOf(next.end))); if (from > to) from = to; return { start: fromIndex(from), end: fromIndex(to) }; };
+  const commit = (next, close = false) => { if (!next.start || !next.end) return; const safe = bounded(next); setDraft(safe); setStartInput(display(safe.start)); setEndInput(display(safe.end)); onChange({ start: monthStart(safe.start), end: monthEnd(safe.end) }); if (close) setOpen(false); };
+  const applyInputs = (close = false) => { const parsedStart = parseInput(startInput); const parsedEnd = parseInput(endInput); if (!parsedStart || !parsedEnd) { setStartInput(display(draft.start)); setEndInput(display(draft.end)); if (close) setOpen(false); return; } commit(normalized("end", parsedStart, parsedEnd), close); };
+  const change = (boundary, field, raw) => { const value = { ...draft[boundary], [field]: Number(raw) }; const next = normalized(boundary, boundary === "start" ? value : draft.start, boundary === "end" ? value : draft.end); setDraft(next); setStartInput(display(next.start)); setEndInput(display(next.end)); };
+  const preset = (kind) => { if (kind === "current") commit({ start: { year: maximum.year, month: 1 }, end: maximum }); if (kind === "previous") commit({ start: { year: maximum.year - 1, month: 1 }, end: { year: maximum.year - 1, month: 12 } }); if (kind === "all") commit({ start: minimum, end: maximum }); if (kind === "reset") commit({ start: monthValue(resetRange?.start || start), end: monthValue(resetRange?.end || end) }); };
+  const openPicker = () => { const bounds = root.current?.getBoundingClientRect(); setSide(bounds && window.innerWidth - bounds.left < 545 && bounds.right > 545 ? "left" : "right"); setDraft({ start: externalStart, end: externalEnd }); setStartInput(display(externalStart)); setEndInput(display(externalEnd)); setOpen(true); };
+
+  useEffect(() => { if (!open) return undefined; const close = (event) => { if (!root.current?.contains(event.target)) applyInputs(true); }; const escape = (event) => { if (event.key === "Escape") setOpen(false); }; document.addEventListener("mousedown", close); document.addEventListener("keydown", escape); return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", escape); }; });
+
+  return <div className="seo-month-picker" ref={root}><span>{label}</span><div className="seo-month-picker__control" onClick={() => { if (!open) openPicker(); }}><input value={open ? startInput : display(externalStart)} inputMode="numeric" aria-label="Период с" onFocus={openPicker} onChange={(event) => setStartInput(maskInput(event.target.value))} onKeyDown={(event) => { if (event.key === "Enter") applyInputs(true); }} /><i aria-hidden="true">—</i><input value={open ? endInput : display(externalEnd)} inputMode="numeric" aria-label="Период по" onFocus={openPicker} onChange={(event) => setEndInput(maskInput(event.target.value))} onKeyDown={(event) => { if (event.key === "Enter") applyInputs(true); }} /><button type="button" aria-label="Выбрать период по месяцам" onClick={() => open ? applyInputs(true) : openPicker()}><CalendarIcon /></button></div>{open && <div className={`seo-month-picker__popover seo-month-picker__popover--${side}`}><aside><button type="button" onClick={() => preset("current")}><CalendarIcon />Текущий год</button><button type="button" onClick={() => preset("previous")}><CalendarIcon />Прошлый год</button><button type="button" onClick={() => preset("all")}><CalendarIcon />Все время</button><hr /><button type="button" onClick={() => preset("reset")}><b aria-hidden="true">↻</b>Сбросить</button></aside><section><div><label>С</label><select value={draft.start?.month || 1} onChange={(event) => change("start", "month", event.target.value)}>{MONTHS.map((month, index) => <option value={index + 1} key={month}>{month}</option>)}</select><select value={draft.start?.year || maximum.year} onChange={(event) => change("start", "year", event.target.value)}>{years.map((year) => <option value={year} key={year}>{year}</option>)}</select></div><div><label>По</label><select value={draft.end?.month || maximum.month} onChange={(event) => change("end", "month", event.target.value)}>{MONTHS.map((month, index) => <option value={index + 1} key={month}>{month}</option>)}</select><select value={draft.end?.year || maximum.year} onChange={(event) => change("end", "year", event.target.value)}>{years.map((year) => <option value={year} key={year}>{year}</option>)}</select></div></section></div>}</div>;
+}

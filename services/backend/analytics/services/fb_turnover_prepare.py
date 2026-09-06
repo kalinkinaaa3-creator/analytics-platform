@@ -101,7 +101,7 @@ def format_currency(value):
     if abs(value) >= 1_000:
         return f"{value / 1_000:.0f} тыс"
 
-    return str(round(value, 2))
+    return str(round(value))
 
 
 def nice_step(y_range, num_ticks=5):
@@ -145,7 +145,7 @@ def get_indicator_for_date(indicator_map, target_date):
 
 
 def build_turnover_chart_data(rows, indicator_rows, date_start, date_end):
-    if not rows:
+    if not rows and not indicator_rows:
         return None
 
     date_start_dt = datetime.strptime(date_start, "%Y-%m-%d").date()
@@ -164,6 +164,7 @@ def build_turnover_chart_data(rows, indicator_rows, date_start, date_end):
     )
 
     indicator_map = build_indicator_map(indicator_rows)
+    monthly_indicator_map = {key[:7]: value for key, value in indicator_map.items()}
 
     grouped = defaultdict(lambda: {
         "middle_rubstock_values": [],
@@ -189,7 +190,7 @@ def build_turnover_chart_data(rows, indicator_rows, date_start, date_end):
         )
 
         middle_rubstock = to_decimal(row.get("middle_rubstock"))
-        indicator_value = get_indicator_for_date(indicator_map, d)
+        indicator_value = monthly_indicator_map.get(d.strftime("%Y-%m"), Decimal("0"))
 
         grouped[key]["middle_rubstock_values"].append(middle_rubstock)
         grouped[key]["indicator_values"].append(indicator_value)
@@ -235,6 +236,14 @@ def build_turnover_chart_data(rows, indicator_rows, date_start, date_end):
             "mutual_finstock": total_indicator,
         }
 
+    for month, indicator in monthly_indicator_map.items():
+        month_date = datetime.strptime(f"{month}-01", "%Y-%m-%d").date()
+        if month_date > date_end_dt or (month_date.year, month_date.month) < (date_start_dt.year, date_start_dt.month):
+            continue
+        key = f"{month}-01" if group_by_day else month
+        if key not in points_data:
+            points_data[key] = {"final_stock": None, "mutual_finstock": indicator}
+
     keys_sorted = sorted(points_data.keys())
 
     points = [
@@ -250,6 +259,7 @@ def build_turnover_chart_data(rows, indicator_rows, date_start, date_end):
         value
         for point in points
         for value in (point["final_stock"], point["mutual_finstock"])
+        if value is not None
     ]
 
     if not all_values or all(value == 0 for value in all_values):
@@ -274,14 +284,15 @@ def build_turnover_chart_data(rows, indicator_rows, date_start, date_end):
     for index, point in enumerate(points):
         x_norm = (index + 0.5) / n_points
 
-        final_value = float(point["final_stock"])
+        final_value = float(point["final_stock"]) if point["final_stock"] is not None else None
         plan_value = float(point["mutual_finstock"])
 
-        final_stock_coords.append({
-            "x": round(x_norm, 4),
-            "y": round((final_value - y_min_axis) / y_axis_range, 4),
-            "value": final_value,
-        })
+        if final_value is not None:
+            final_stock_coords.append({
+                "x": round(x_norm, 4),
+                "y": round((final_value - y_min_axis) / y_axis_range, 4),
+                "value": final_value,
+            })
 
         mutual_finstock_coords.append({
             "x": round(x_norm, 4),
@@ -570,7 +581,6 @@ def build_turnover_month_nodes(turnover_list):
 def build_turnover_indicators(chart_data):
     if (
         not chart_data
-        or not chart_data.get("final_stock")
         or not chart_data.get("mutual_finstock")
     ):
         return {
@@ -581,8 +591,8 @@ def build_turnover_indicators(chart_data):
             "deviation_color": "",
         }
 
-    last_final_stock = Decimal(str(chart_data["final_stock"][-1]["value"]))
     last_mutual_finstock = Decimal(str(chart_data["mutual_finstock"][-1]["value"]))
+    last_final_stock = Decimal(str(chart_data["final_stock"][-1]["value"])) if chart_data.get("final_stock") else Decimal("0")
 
     deviation = last_final_stock - last_mutual_finstock
 

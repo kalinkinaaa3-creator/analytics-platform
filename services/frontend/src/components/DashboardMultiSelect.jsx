@@ -7,7 +7,12 @@ export function DashboardMultiSelect({ label, options = [], selected = [], onApp
   const selectedRef = useRef(selected); const draftRef = useRef(selected); const onApplyRef = useRef(onApply);
   const [open, setOpen] = useState(false); const [draft, setDraft] = useState(selected); const [search, setSearch] = useState("");
   useEffect(() => { selectedRef.current = selected; onApplyRef.current = onApply; if (!open) draftRef.current = selected; }, [selected, onApply, open]);
-  const visible = useMemo(() => { const query = search.trim().toLocaleLowerCase("ru-RU"); return options.filter((item) => !query || String(item).toLocaleLowerCase("ru-RU").includes(query)); }, [options, search]);
+  const normalizedOptions = useMemo(() => [...new Map(options.map((item) => [String(item), item])).values()], [options]);
+  const visible = useMemo(() => {
+    const normalize = (value) => String(value ?? "").normalize("NFKC").toLocaleLowerCase("ru-RU").replace(/\s+/g, " ").trim();
+    const query = normalize(search);
+    return normalizedOptions.filter((item) => !query || normalize(item).includes(query));
+  }, [normalizedOptions, search]);
   const updateDraft = (next) => { draftRef.current = next; setDraft(next); };
   const commit = () => { const current = selectedRef.current; const next = draftRef.current; if (current.length !== next.length || current.some((value, index) => value !== next[index])) onApplyRef.current(next); };
   useEffect(() => { const close = (event) => { if (openRef.current && !rootRef.current?.contains(event.target)) { commit(); openRef.current = false; setOpen(false); setSearch(""); } }; document.addEventListener("mousedown", close); return () => document.removeEventListener("mousedown", close); }, []);

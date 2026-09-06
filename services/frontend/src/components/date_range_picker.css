@@ -112,6 +112,8 @@
 
 .date-range-picker__days button.is-outside:hover > span,.date-range-picker__days button.is-outside:focus-visible > span { background: #f3f4f1; color: #959b93; }
 
+.date-range-picker__days button.is-unavailable { cursor: not-allowed; pointer-events: none; opacity: .32; }
+
 .date-range-picker__days button.is-in-range::before { background: #f0f2ec; }
 
 .date-range-picker__days button.is-start::before { left: 50%; border-radius: 8px 0 0 8px; }

@@ -15,6 +15,8 @@ const MONTHS_SHORT = [
 ];
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const MIN_YEAR = 2022;
+const MAX_YEAR = new Date().getFullYear();
 
 
 function localDate(year, month, day) {
@@ -86,6 +88,13 @@ function monthIndex(value) {
 }
 
 
+function boundedMonth(value) {
+  if (value.getFullYear() < MIN_YEAR) return localDate(MIN_YEAR, 0, 1);
+  if (value.getFullYear() > MAX_YEAR) return localDate(MAX_YEAR, 11, 1);
+  return monthStart(value);
+}
+
+
 function startOfWeek(value) {
   const weekday = value.getDay() || 7;
   return addDays(value, 1 - weekday);
@@ -104,9 +113,9 @@ function normalizedRange(start, end) {
 
 
 function initialCalendarMonths(start, end) {
-  const startDate = fromIso(start);
-  const endDate = fromIso(end);
-  const fallback = monthStart(new Date());
+  const startDate = fromIso(start) ? boundedMonth(fromIso(start)) : null;
+  const endDate = fromIso(end) ? boundedMonth(fromIso(end)) : null;
+  const fallback = boundedMonth(new Date());
 
   if (startDate && endDate) {
     const startMonth = monthStart(startDate);
@@ -114,16 +123,16 @@ function initialCalendarMonths(start, end) {
 
     if (monthIndex(startMonth) < monthIndex(endMonth)) return { left: startMonth, right: endMonth };
 
-    if (monthIndex(startMonth) === monthIndex(endMonth)) return { left: addMonths(startMonth, -1), right: startMonth };
+    if (monthIndex(startMonth) === monthIndex(endMonth)) return { left: boundedMonth(addMonths(startMonth, -1)), right: startMonth };
 
     return { left: endMonth, right: startMonth };
   }
 
-  if (endDate) return { left: addMonths(monthStart(endDate), -1), right: monthStart(endDate) };
+  if (endDate) return { left: boundedMonth(addMonths(monthStart(endDate), -1)), right: monthStart(endDate) };
 
-  if (startDate) return { left: addMonths(monthStart(startDate), -1), right: monthStart(startDate) };
+  if (startDate) return { left: boundedMonth(addMonths(monthStart(startDate), -1)), right: monthStart(startDate) };
 
-  return { left: addMonths(fallback, -1), right: fallback };
+  return { left: boundedMonth(addMonths(fallback, -1)), right: fallback };
 }
 
 
@@ -149,11 +158,11 @@ function CalendarMonth({ month, side, start, end, selecting, hover, preserveEnd,
   const preview = selecting && hover && !preserveEnd ? normalizedRange(selecting, hover) : normalizedRange(start, end);
   const menuOpen = menu?.side === side;
   const yearMode = menuOpen && menu?.mode === "years";
-  const years = useMemo(() => Array.from({ length: 21 }, (_, index) => month.getFullYear() - 10 + index), [month]);
+  const years = useMemo(() => Array.from({ length: MAX_YEAR - MIN_YEAR + 1 }, (_, index) => MIN_YEAR + index), []);
 
   return <section className="date-range-picker__month"><div className="date-range-picker__month-header"><button type="button" className={`date-range-picker__period-selector${menuOpen ? " is-open" : ""}`} onClick={() => onMenu(menuOpen ? null : { side, mode: "months" })}><span>{MONTHS[month.getMonth()]} {month.getFullYear()}</span><i aria-hidden="true">⌄</i></button>{menuOpen && <div className="date-range-picker__period-menu">{!yearMode ? <><div className="date-range-picker__period-year"><button type="button" aria-label="Предыдущий год" onClick={() => onYearChange(side, month.getFullYear() - 1)}>‹</button><button type="button" className="date-range-picker__period-year-value" onClick={() => onMenu({ side, mode: "years" })}>{month.getFullYear()}<span aria-hidden="true">⌄</span></button><button type="button" aria-label="Следующий год" onClick={() => onYearChange(side, month.getFullYear() + 1)}>›</button></div><div className="date-range-picker__period-months">{MONTHS_SHORT.map((name, index) => <button type="button" key={name} className={index === month.getMonth() ? "is-selected" : ""} onClick={() => onMonthChange(side, index)}>{name}</button>)}</div></> : <><div className="date-range-picker__years-header"><button type="button" onClick={() => onMenu({ side, mode: "months" })}>‹</button><strong>Выберите год</strong><span /></div><div className="date-range-picker__period-years">{years.map((year) => <button type="button" key={year} className={year === month.getFullYear() ? "is-selected" : ""} onClick={() => { onYearChange(side, year); onMenu({ side, mode: "months" }); }}>{year}</button>)}</div></>}</div>}</div><div className="date-range-picker__weekdays">{WEEKDAYS.map((day) => <span key={day}>{day}</span>)}</div><div className="date-range-picker__days">{cells.map((day) => {
-    const iso = toIso(day); const outside = day.getMonth() !== month.getMonth(); const isStart = !outside && iso === preview?.start; const isEnd = !outside && iso === preview?.end; const inRange = !outside && preview && iso >= preview.start && iso <= preview.end;
-    return <button type="button" key={iso} className={`${outside ? "is-outside " : ""}${inRange ? "is-in-range " : ""}${isStart ? "is-start " : ""}${isEnd ? "is-end" : ""}`.trim()} onMouseEnter={() => onHover(iso)} onFocus={() => onHover(iso)} onClick={() => onSelect(side, iso)} aria-label={displayDate(iso)} aria-pressed={Boolean(inRange)}><span>{day.getDate()}</span></button>;
+    const iso = toIso(day); const outside = day.getMonth() !== month.getMonth(); const unavailable = day.getFullYear() < MIN_YEAR || day.getFullYear() > MAX_YEAR; const isStart = !outside && iso === preview?.start; const isEnd = !outside && iso === preview?.end; const inRange = !outside && preview && iso >= preview.start && iso <= preview.end;
+    return <button type="button" key={iso} disabled={unavailable} className={`${outside ? "is-outside " : ""}${unavailable ? "is-unavailable " : ""}${inRange ? "is-in-range " : ""}${isStart ? "is-start " : ""}${isEnd ? "is-end" : ""}`.trim()} onMouseEnter={() => !unavailable && onHover(iso)} onFocus={() => !unavailable && onHover(iso)} onClick={() => onSelect(side, iso)} aria-label={displayDate(iso)} aria-pressed={Boolean(inRange)}><span>{day.getDate()}</span></button>;
   })}</div></section>;
 }
 
@@ -252,12 +261,13 @@ export function DateRangePicker({ start, end, onChange, label = "Период", 
 
 
   const setVisibleMonth = (side, nextMonth) => {
+    const boundedNextMonth = boundedMonth(nextMonth);
     if (side === "left") {
-      setLeftViewMonth(nextMonth);
-      if (monthIndex(nextMonth) >= monthIndex(rightViewMonth)) setRightViewMonth(addMonths(nextMonth, 1));
+      setLeftViewMonth(boundedNextMonth);
+      if (monthIndex(boundedNextMonth) >= monthIndex(rightViewMonth)) setRightViewMonth(boundedMonth(addMonths(boundedNextMonth, 1)));
     } else {
-      setRightViewMonth(nextMonth);
-      if (monthIndex(nextMonth) <= monthIndex(leftViewMonth)) setLeftViewMonth(addMonths(nextMonth, -1));
+      setRightViewMonth(boundedNextMonth);
+      if (monthIndex(boundedNextMonth) <= monthIndex(leftViewMonth)) setLeftViewMonth(boundedMonth(addMonths(boundedNextMonth, -1)));
     }
   };
 
@@ -326,5 +336,5 @@ export function DateRangePicker({ start, end, onChange, label = "Период", 
   const selectedText = draft.start && draft.end ? `${displayDate(draft.start)} — ${displayDate(draft.end)}` : "Выберите период";
 
 
-  return <div className={`crm-filter date-range-picker${open ? " date-range-picker--open" : ""}`} ref={root}><span>{label}</span><div className="date-range-picker__control" onClick={openPicker}><input value={startInput} maxLength={10} inputMode="numeric" aria-label="Дата начала" onFocus={openPicker} onChange={(event) => setStartInput(maskDisplayDate(event.target.value, startInput))} onKeyDown={inputKeyDown} /><b>—</b><input value={endInput} maxLength={10} inputMode="numeric" aria-label="Дата окончания" onFocus={openPicker} onChange={(event) => setEndInput(maskDisplayDate(event.target.value, endInput))} onKeyDown={inputKeyDown} /><button type="button" aria-label={open ? "Закрыть календарь" : "Открыть календарь"} onClick={(event) => { event.stopPropagation(); if (open) applyInputs(true); else openPicker(); }}><CalendarIcon /></button></div>{open && <div ref={popover} className={`date-range-picker__popover date-range-picker__popover--${popoverSide}`} style={{ ...menuStyle, right: "auto" }} onMouseDownCapture={closePeriodMenuOutside}><aside className="date-range-picker__presets"><button type="button" onClick={() => preset("today")}><PresetIcon />Сегодня</button><button type="button" onClick={() => preset("yesterday")}><PresetIcon />Вчера</button><button type="button" onClick={() => preset("current-week")}><PresetIcon list />Текущая неделя</button><button type="button" onClick={() => preset("previous-week")}><PresetIcon list />Прошлая неделя</button><button type="button" onClick={() => preset("current-month")}><PresetIcon />Текущий месяц</button><button type="button" onClick={() => preset("previous-month")}><PresetIcon />Прошлый месяц</button><hr /><button type="button" onClick={() => preset("reset")}><PresetIcon reset />Сбросить</button></aside><div className="date-range-picker__calendars"><button type="button" className="date-range-picker__nav date-range-picker__nav--previous" aria-label="Предыдущий месяц" onClick={() => moveLeftMonth(-1)}>‹</button><CalendarMonth month={leftViewMonth} side="left" start={draft.start} end={draft.end} selecting={anchor} hover={hover} preserveEnd={preserveEnd} menu={calendarMenu} onMenu={setCalendarMenu} onMonthChange={selectVisibleMonth} onYearChange={selectVisibleYear} onHover={setHover} onSelect={selectDate} /><CalendarMonth month={rightViewMonth} side="right" start={draft.start} end={draft.end} selecting={anchor} hover={hover} preserveEnd={preserveEnd} menu={calendarMenu} onMenu={setCalendarMenu} onMonthChange={selectVisibleMonth} onYearChange={selectVisibleYear} onHover={setHover} onSelect={selectDate} /><button type="button" className="date-range-picker__nav date-range-picker__nav--next" aria-label="Следующий месяц" onClick={() => moveRightMonth(1)}>›</button></div><footer>Выбрано: <strong>{selectedText}</strong></footer></div>}</div>;
+  return <div className={`crm-filter date-range-picker${open ? " date-range-picker--open" : ""}`} ref={root}><span>{label}</span><div className="date-range-picker__control" onClick={openPicker}><input value={open ? startInput : displayDate(start)} maxLength={10} inputMode="numeric" aria-label="Дата начала" onFocus={openPicker} onChange={(event) => setStartInput(maskDisplayDate(event.target.value, startInput))} onKeyDown={inputKeyDown} /><b>—</b><input value={open ? endInput : displayDate(end)} maxLength={10} inputMode="numeric" aria-label="Дата окончания" onFocus={openPicker} onChange={(event) => setEndInput(maskDisplayDate(event.target.value, endInput))} onKeyDown={inputKeyDown} /><button type="button" aria-label={open ? "Закрыть календарь" : "Открыть календарь"} onClick={(event) => { event.stopPropagation(); if (open) applyInputs(true); else openPicker(); }}><CalendarIcon /></button></div>{open && <div ref={popover} className={`date-range-picker__popover date-range-picker__popover--${popoverSide}`} style={{ ...menuStyle, right: "auto" }} onMouseDownCapture={closePeriodMenuOutside}><aside className="date-range-picker__presets"><button type="button" onClick={() => preset("today")}><PresetIcon />Сегодня</button><button type="button" onClick={() => preset("yesterday")}><PresetIcon />Вчера</button><button type="button" onClick={() => preset("current-week")}><PresetIcon list />Текущая неделя</button><button type="button" onClick={() => preset("previous-week")}><PresetIcon list />Прошлая неделя</button><button type="button" onClick={() => preset("current-month")}><PresetIcon />Текущий месяц</button><button type="button" onClick={() => preset("previous-month")}><PresetIcon />Прошлый месяц</button><hr /><button type="button" onClick={() => preset("reset")}><PresetIcon reset />Сбросить</button></aside><div className="date-range-picker__calendars"><button type="button" className="date-range-picker__nav date-range-picker__nav--previous" aria-label="Предыдущий месяц" onClick={() => moveLeftMonth(-1)}>‹</button><CalendarMonth month={leftViewMonth} side="left" start={draft.start} end={draft.end} selecting={anchor} hover={hover} preserveEnd={preserveEnd} menu={calendarMenu} onMenu={setCalendarMenu} onMonthChange={selectVisibleMonth} onYearChange={selectVisibleYear} onHover={setHover} onSelect={selectDate} /><CalendarMonth month={rightViewMonth} side="right" start={draft.start} end={draft.end} selecting={anchor} hover={hover} preserveEnd={preserveEnd} menu={calendarMenu} onMenu={setCalendarMenu} onMonthChange={selectVisibleMonth} onYearChange={selectVisibleYear} onHover={setHover} onSelect={selectDate} /><button type="button" className="date-range-picker__nav date-range-picker__nav--next" aria-label="Следующий месяц" onClick={() => moveRightMonth(1)}>›</button></div><footer>Выбрано: <strong>{selectedText}</strong></footer></div>}</div>;
 }

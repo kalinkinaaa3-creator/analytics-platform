@@ -1,0 +1,188 @@
+.seo-month-picker {
+  position:relative;
+  width:220px;
+  min-width:0;
+  color:#30352e;
+  font-family:Helvetica,Arial,sans-serif
+}
+.seo-month-picker>span {
+  display:block;
+  min-height:18px;
+  margin:0 0 4px;
+  overflow:hidden;
+  color:#444841;
+  font:700 12px Helvetica,Arial,sans-serif;
+  text-align:center;
+  text-overflow:ellipsis;
+  white-space:nowrap
+}
+.seo-month-picker__control {
+  display:grid;
+  height:34px;
+  box-sizing:border-box;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) 34px;
+  background:#fff;
+  border:1px solid #aeb3aa;
+  border-radius:5px;
+  box-shadow:0 1px 3px rgba(45,53,42,.05)
+}
+.seo-month-picker__control:focus-within {
+  border-color:#718469;
+  box-shadow:0 0 0 2px rgba(91,116,82,.12)
+}
+.seo-month-picker__control input {
+  min-width:0;
+  padding:0 3px;
+  background:transparent;
+  border:0;
+  outline:0;
+  color:#272c26;
+  font:500 12px Helvetica,Arial,sans-serif;
+  text-align:center
+}
+.seo-month-picker__control input:first-child {
+  text-align:right
+}
+.seo-month-picker__control input:nth-of-type(2) {
+  text-align:left
+}
+.seo-month-picker__control>i {
+  align-self:center;
+  color:#646b61;
+  font:400 12px Helvetica,Arial,sans-serif
+}
+.seo-month-picker__control button {
+  display:grid;
+  padding:0;
+  place-items:center;
+  background:transparent;
+  border:0;
+  color:#526b4d;
+  cursor:pointer
+}
+.seo-month-picker svg {
+  width:19px;
+  height:19px;
+  fill:none;
+  stroke:currentColor;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  stroke-width:1.7
+}
+.seo-month-picker__popover {
+  position:absolute;
+  top:calc(100% + 6px);
+  z-index:1600;
+  display:grid;
+  width:520px;
+  max-width:calc(100vw - 36px);
+  grid-template-columns:145px minmax(0,1fr);
+  background:#fff;
+  border:1px solid #d3d8cf;
+  border-radius:9px;
+  box-shadow:0 16px 42px rgba(45,53,42,.2)
+}
+.seo-month-picker__popover--right {
+  left:0
+}
+.seo-month-picker__popover--left {
+  right:0
+}
+.seo-month-picker__popover aside {
+  display:flex;
+  padding:14px 12px;
+  border-right:1px solid #e0e4dd;
+  flex-direction:column;
+  gap:4px
+}
+.seo-month-picker__popover aside button {
+  display:flex;
+  min-height:39px;
+  align-items:center;
+  gap:10px;
+  padding:7px 8px;
+  background:transparent;
+  border:0;
+  border-radius:6px;
+  color:#343c32;
+  font:500 12px Helvetica,Arial,sans-serif;
+  cursor:pointer
+}
+.seo-month-picker__popover aside button:hover {
+  background:#eef2eb
+}
+.seo-month-picker__popover aside b {
+  display:grid;
+  width:19px;
+  place-items:center;
+  font-size:22px;
+  font-weight:400
+}
+.seo-month-picker__popover aside hr {
+  width:100%;
+  height:1px;
+  margin:8px 0;
+  background:#e0e4dd;
+  border:0
+}
+.seo-month-picker__popover>section {
+  display:grid;
+  min-width:0;
+  padding:8px;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  align-items:start;
+  gap:4px
+}
+.seo-month-picker__popover>section>div {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 76px;
+  gap:7px
+}
+.seo-month-picker__popover label {
+  grid-column:1/-1;
+  margin-bottom:2px;
+  color:#30352e;
+  font-size:14px
+}
+.seo-month-picker__popover select {
+  width:100%;
+  height:38px;
+  padding:0 8px;
+  background:#fff;
+  border:1px solid #d2d7ce;
+  border-radius:6px;
+  color:#30362e;
+  font:500 12px Helvetica,Arial,sans-serif;
+  outline:0
+}
+.seo-month-picker__popover select:focus {
+  border-color:#718469
+}
+.seo-month-picker__popover>section>i {
+  align-self:end;
+  height:38px;
+  color:#596254;
+  font-style:normal;
+  line-height:38px;
+  text-align:center
+}
+@media(max-width:650px) {
+  .seo-month-picker {
+    width:100%;
+    min-width:0
+  }
+  .seo-month-picker__popover {
+    width:min(420px,calc(100vw - 24px));
+    grid-template-columns:125px minmax(0,1fr)
+  }
+  .seo-month-picker__popover>section {
+    padding:18px 12px;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)
+  }
+  .seo-month-picker__popover>section>i {
+    display:none
+  }
+  .seo-month-picker__popover>section>div {
+    grid-template-columns:minmax(0,1fr) 72px
+  }
+}

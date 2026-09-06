@@ -111,7 +111,7 @@ def format_currency(value):
     if abs(value) >= 1_000:
         return f"{value / 1_000:.0f} тыс"
 
-    return str(round(value, 2))
+    return str(round(value))
 
 
 def nice_step(y_range, num_ticks=5):
@@ -296,7 +296,7 @@ def build_accreceiv_chart_data(rows, date_start, date_end):
     ]
 
     return {
-        "title": "Динамика ДЗ, руб",
+        "title": "Динамика дебиторской задолженности, руб",
         "x_labels": x_labels,
         "y_axis": {
             "min": float(y_min_axis),

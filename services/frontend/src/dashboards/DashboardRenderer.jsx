@@ -6,6 +6,10 @@ import { AccreceivDashboard } from "./accreceiv/AccreceivDashboard";
 import { TurnoverDashboard } from "./turnover/TurnoverDashboard";
 import { RevenueDashboard } from "./revenue/RevenueDashboard";
 import { CrmAnalyticsDashboard } from "./crmAnalytics/CrmAnalyticsDashboard";
+import { SeoAnalyticsDashboard } from "./seoAnalytics/SeoAnalyticsDashboard";
+import { ContextAnalyticsDashboard } from "./contextAnalytics/ContextAnalyticsDashboard";
+import { LeadGenerationDashboard } from "./leadGeneration/LeadGenerationDashboard";
+import { DashboardHeadingRefreshIcons, DashboardRefreshTooltips } from "../components/RefreshInfoTooltip";
 
 import "./spinner.css";
 
@@ -36,6 +40,8 @@ export function DashboardRenderer({
 
   return (
     <>
+      <DashboardRefreshTooltips />
+      <DashboardHeadingRefreshIcons />
       {data.widgets.map((widget) => {
         if (widget.type === "planned_sales_dashboard") {
           return (
@@ -123,6 +129,16 @@ export function DashboardRenderer({
 
         if (widget.type === "crm_analytics_dashboard") {
           return <CrmAnalyticsDashboard key={widget.id} dashboard={data.dashboard} />;
+        }
+
+        if (widget.type === "seo_analytics_dashboard") {
+          return <SeoAnalyticsDashboard key={widget.id} dashboard={data.dashboard} />;
+        }
+        if (widget.type === "context_analytics_dashboard") {
+          return <ContextAnalyticsDashboard key={widget.id} dashboard={data.dashboard} />;
+        }
+        if (widget.type === "lead_generation_dashboard") {
+          return <LeadGenerationDashboard key={widget.id} dashboard={data.dashboard} />;
         }
 
         return (

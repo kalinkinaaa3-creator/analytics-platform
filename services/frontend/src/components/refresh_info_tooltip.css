@@ -1,0 +1,18 @@
+.refresh-info-tooltip-anchor { display:inline-flex; }
+.dashboard-refresh-info { display:inline-grid; width:18px; height:18px; margin-left:7px; padding:0; place-items:center; vertical-align:2px; background:#f8faf6; border:1px solid #aeb9aa; border-radius:50%; color:#586653; font:700 11px/1 Georgia,serif; box-shadow:0 2px 5px rgba(37,48,34,.1); cursor:help; }
+.dashboard-refresh-info:hover,.dashboard-refresh-info:focus-visible { background:#eef3eb; border-color:#74856f; outline:none; }
+.refresh-info-tooltip { position:fixed; z-index:10000; width:min(320px,calc(100vw - 20px)); box-sizing:border-box; padding:15px 16px; background:linear-gradient(145deg,#30382e,#424b3e); border:1px solid rgba(255,255,255,.14); border-radius:11px; color:#f7f8f5; box-shadow:0 16px 38px rgba(27,33,25,.28),0 3px 10px rgba(27,33,25,.18); font:12px/1.4 Helvetica,Arial,sans-serif; pointer-events:none; animation:refresh-tooltip-in .14s ease-out; }
+.refresh-info-tooltip::before { position:absolute; top:50%; width:10px; height:10px; background:#394136; border:inherit; content:""; transform:translateY(-50%) rotate(45deg); }
+.refresh-info-tooltip.is-right::before { left:-6px; border-top:0; border-right:0; }
+.refresh-info-tooltip.is-left::before { right:-6px; border-bottom:0; border-left:0; }
+.refresh-info-tooltip__eyebrow { margin-bottom:11px; color:#cbd6c6; font-size:10px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; }
+.refresh-info-tooltip__row,.refresh-info-tooltip__schedule { display:grid; gap:2px; }
+.refresh-info-tooltip__row + .refresh-info-tooltip__row { margin-top:10px; }
+.refresh-info-tooltip__row span,.refresh-info-tooltip__schedule span { color:#b9c4b5; }
+.refresh-info-tooltip__row strong,.refresh-info-tooltip__schedule strong { color:#fff; font-size:13px; font-weight:700; }
+.refresh-info-tooltip__warning { margin-bottom:10px; padding:8px 10px; background:rgba(216,189,134,.12); border:1px solid rgba(216,189,134,.25); border-radius:6px; color:#f0d69f; font-weight:700; }
+.refresh-info-tooltip__divider { height:1px; margin:12px 0; background:linear-gradient(90deg,rgba(255,255,255,.18),rgba(255,255,255,.04)); }
+.refresh-info-tooltip__section>span { display:block; margin-bottom:3px; color:#b9c4b5; }
+.refresh-info-tooltip__section>strong { display:block; color:#fff; font-size:12px; font-weight:700; line-height:1.5; }
+@keyframes refresh-tooltip-in { from { opacity:0; transform:translateY(3px) scale(.985); } to { opacity:1; transform:none; } }
+@media(max-width:560px){.refresh-info-tooltip::before{display:none}}

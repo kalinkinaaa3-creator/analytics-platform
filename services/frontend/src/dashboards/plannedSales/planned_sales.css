@@ -60,8 +60,9 @@
   cursor: pointer;
   background: linear-gradient(90deg, #6c6c5a, #4e4e43);
   color: white;
-  border: #4d5747;
+  border: 1px solid #4d5747;
   transition: all 0.3s ease;
+  font: 700 12px Helvetica, sans-serif;
 }
 
 .planned-sales-dashboard .filters-export:hover {
@@ -701,16 +702,6 @@
   gap: 14px;
   align-items: flex-end;
   justify-content: flex-end;
-}
-
-.planned-sales-dashboard .filters-export {
-  border-radius: 4px;
-  height: 44px;
-  cursor: pointer;
-  background: linear-gradient(90deg, #6c6c5a, #4e4e43);
-  color: white;
-  border: #4d5747;
-  transition: all 0.3s ease;
 }
 
 .planned-sales-dashboard .filters-export:hover {

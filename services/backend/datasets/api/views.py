@@ -1,6 +1,7 @@
 
 import tempfile
 import os
+import calendar
 
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -37,6 +38,8 @@ from datasets.models import (
     BaseProductPrice,
     ParserProductClassification,
     ParserProductUrl,
+    FBPurchasesUseIndicator,
+    TurnoverIndicator,
 
 )
 
@@ -168,6 +171,7 @@ from dashboards.api.permissions import (
 )
 from dashboards.services.access import (
     user_can_edit_dashboard,
+    user_can_view_dashboard,
 )
 from dashboards.services.audit import (
     log_dashboard_view,
@@ -302,8 +306,8 @@ from dashboards.cache.iprice_cache import (
 
 from django.core.paginator import Paginator
 
-from rest_framework.exceptions import NotFound, PermissionDenied
-from dashboards.models import DashboardPublicGroup
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from dashboards.models import DashboardPublicAccess, DashboardPublicGroup
 
 
 from datasets.services.parsers.prefix_loader import load_parser_prefixes_from_excel
@@ -404,6 +408,143 @@ def check_public_dashboard_access(token, dashboard_slug):
         raise PermissionDenied("Dashboard is not available in this public group")
 
     return group_item
+
+
+def check_any_public_dashboard_access(token, dashboard_slug):
+    """Accept both a public-group token and a direct dashboard public token."""
+    group = DashboardPublicGroup.objects.filter(token=token).first()
+    if group is not None:
+        if not group.is_valid():
+            raise PermissionDenied("Public group expired")
+        item = group.items.select_related("dashboard").filter(dashboard__slug=dashboard_slug).first()
+        if item is None:
+            raise PermissionDenied("Dashboard is not available in this public group")
+        return item.dashboard
+    public_access = DashboardPublicAccess.objects.select_related("dashboard").filter(
+        token=token, dashboard__slug=dashboard_slug,
+    ).first()
+    if public_access is None:
+        raise NotFound("Public dashboard link not found")
+    if not public_access.is_valid():
+        raise PermissionDenied("Public dashboard link is inactive or expired")
+    return public_access.dashboard
+
+
+def _plan_date(value, field_name):
+    text = str(value or "").strip()
+    try:
+        parsed = datetime.strptime(text, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        raise ValidationError({field_name: "Укажите дату в формате ГГГГ-ММ-ДД."})
+    return parsed
+
+
+def _days_between(start, end):
+    current = start
+    while current <= end:
+        yield current
+        current += timedelta(days=1)
+
+
+class ProcurementPlanView(APIView):
+    permission_classes = [IsAuthenticated]
+    dashboard_slug = ""
+    dashboard_name = ""
+    model = None
+    date_field = ""
+    sync = None
+
+    def _authorize(self, request, **kwargs):
+        dashboard = Dashboard.objects.filter(slug=self.dashboard_slug).first()
+        if dashboard is None:
+            raise NotFound("Dashboard not found")
+        if not user_can_view_dashboard(request.user, dashboard):
+            raise PermissionDenied("Нет доступа к дашборду.")
+
+    def _range(self, data):
+        start = _plan_date(data.get("date_start"), "date_start")
+        end = _plan_date(data.get("date_end"), "date_end")
+        if start > end:
+            raise ValidationError({"period": "Начало периода не может быть позже окончания."})
+        if start.day != 1 or end.day != calendar.monthrange(end.year, end.month)[1]:
+            raise ValidationError({
+                "period": "Период плана должен начинаться с первого числа месяца и заканчиваться последним числом месяца."
+            })
+        if (end - start).days > 3652:
+            raise ValidationError({"period": "Период не должен превышать 10 лет."})
+        return start, end
+
+    def _existing(self, start, end):
+        rows = self.model.objects.filter(**{
+            f"{self.date_field}__gte": start,
+            f"{self.date_field}__lte": end,
+        }).order_by(self.date_field, "id").values(self.date_field, "indicator")
+        return [{"period": row[self.date_field].isoformat(), "value": int(row["indicator"])} for row in rows]
+
+    def get(self, request, **kwargs):
+        self._authorize(request, **kwargs)
+        start, end = self._range(request.query_params)
+        return Response({"existing": self._existing(start, end)})
+
+    def post(self, request, **kwargs):
+        self._authorize(request, **kwargs)
+        start, end = self._range(request.data)
+        try:
+            value = int(str(request.data.get("value", "")).strip())
+        except (TypeError, ValueError):
+            raise ValidationError({"value": "Введите целое плановое значение."})
+        if value <= 0:
+            raise ValidationError({"value": "Плановое значение должно быть больше нуля."})
+        days = list(_days_between(start, end))
+        existing = self._existing(start, end)
+        with transaction.atomic():
+            self.model.objects.filter(**{
+                f"{self.date_field}__gte": start,
+                f"{self.date_field}__lte": end,
+            }).delete()
+            self.model.objects.bulk_create([
+                self.model(**{self.date_field: day, "indicator": value}) for day in days
+            ])
+        self.sync()
+        invalidate_dashboard_by_name(self.dashboard_name)
+        notify_dashboard_updated(self.dashboard_name)
+        return Response({
+            "status": "ok", "updated_days": len(days), "value": value,
+            "date_start": start.isoformat(), "date_end": end.isoformat(),
+            "replaced": existing,
+        })
+
+
+class PurchasesPlanView(ProcurementPlanView):
+    dashboard_slug = "purchases"
+    dashboard_name = "Purchases"
+    model = FBPurchasesUseIndicator
+    date_field = "date_draft"
+    sync = staticmethod(sync_fb_purchases_to_clickhouse)
+
+
+class TurnoverPlanView(ProcurementPlanView):
+    dashboard_slug = "turnover"
+    dashboard_name = "Turnover"
+    model = TurnoverIndicator
+    date_field = "date_start"
+    sync = staticmethod(sync_fb_turnover_to_clickhouse)
+
+
+class PublicProcurementPlanMixin:
+    authentication_classes = []
+    permission_classes = []
+
+    def _authorize(self, request, token=None, **kwargs):
+        check_any_public_dashboard_access(token, self.dashboard_slug)
+
+
+class PublicPurchasesPlanView(PublicProcurementPlanMixin, PurchasesPlanView):
+    pass
+
+
+class PublicTurnoverPlanView(PublicProcurementPlanMixin, TurnoverPlanView):
+    pass
 
 
 
@@ -632,6 +773,12 @@ class FBAccreceivIndicatorUploadView(APIView):
         return self.serializer_class(*args, **kwargs)
 
     def post(self, request):
+        dashboard = Dashboard.objects.filter(slug="accreceiv").first()
+        if dashboard is None:
+            raise NotFound("Dashboard not found")
+        if not user_can_edit_dashboard(request.user, dashboard):
+            raise PermissionDenied("Нет права редактирования дашборда.")
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -642,16 +789,20 @@ class FBAccreceivIndicatorUploadView(APIView):
                 temp_file.write(chunk)
             temp_path = temp_file.name
 
-        postgres_result = load_fb_accreceiv_indicator_xlsx(temp_path)
-        clickhouse_result = sync_fb_accreceiv_to_clickhouse()
+        try:
+            postgres_result = load_fb_accreceiv_indicator_xlsx(temp_path)
+            clickhouse_result = sync_fb_accreceiv_to_clickhouse()
 
-        invalidate_dashboard_by_name("Accreceiv")
+            invalidate_dashboard_by_name("Accreceiv")
 
-        return Response({
-            "status": "ok",
-            "postgres": postgres_result,
-            "clickhouse": clickhouse_result,
-        })
+            return Response({
+                "status": "ok",
+                "postgres": postgres_result,
+                "clickhouse": clickhouse_result,
+            })
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
 
 class FBPurchasesIndicatorUploadView(APIView):
