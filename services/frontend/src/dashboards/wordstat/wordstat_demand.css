@@ -31,7 +31,7 @@
 .wd-select-options > button:hover,.wd-select-options > button[data-active="true"] { background:#f4f5f1; }
 .wd-select-options > button[aria-selected="true"] { background:#e8eee3; color:#355b37; font-weight:700; }
 .wd-demand .wd-select .dashboard-multiselect__menu { min-width:240px; }
-.wd-overview { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:14px 0; height:452px; }
+.wd-overview { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:14px 0; height:240px; }
 .wd-kpis { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:repeat(2,minmax(0,1fr)); gap:12px; min-width:0; }
 .wd-kpis .seo-card { min-width:0; min-height:0; height:100%; box-sizing:border-box; padding:13px 15px; overflow:auto; }
 .wd-kpis .seo-card > strong { display:block; font-size:clamp(22px,1.7vw,29px); margin:10px 0 6px; overflow-wrap:anywhere; }
@@ -41,7 +41,7 @@
 .wd-demand .seo-panel { min-width:0; min-height:0; box-sizing:border-box; }
 .wd-demand .seo-panel header { display:flex; flex:none; gap:10px; justify-content:space-between; align-items:center; min-height:38px; }
 .wd-demand .seo-panel h3 { display:flex; align-items:center; gap:4px; margin:0; font-size:15px; white-space:nowrap; }
-.wd-demand .wd-slice { display:flex; flex-direction:column; height:452px; overflow:hidden; }
+.wd-demand .wd-slice { display:flex; flex-direction:column; height:240px; overflow:hidden; }
 .wd-scroll { min-height:0; overflow:auto; scrollbar-width:thin; scrollbar-color:#a6b29d #f2f4ef; }
 .wd-slice .wd-scroll { flex:1; }
 .wd-slice p { font-size:12px; line-height:1.5; }
