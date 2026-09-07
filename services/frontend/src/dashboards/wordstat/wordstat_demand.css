@@ -40,6 +40,7 @@
 .wd-slices { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; min-width:0; }
 .wd-demand .seo-panel { min-width:0; min-height:0; box-sizing:border-box; }
 .wd-demand .seo-panel header { display:flex; flex:none; gap:10px; justify-content:space-between; align-items:center; min-height:38px; }
+.wd-demand .seo-panel header { color: #242722;font-size: 12px; }
 .wd-demand .seo-panel h3 { display:flex; align-items:center; gap:4px; margin:0; font-size:15px; white-space:nowrap; }
 .wd-demand .wd-slice { display:flex; flex-direction:column; height:240px; overflow:hidden; }
 .wd-scroll { min-height:0; overflow:auto; scrollbar-width:thin; scrollbar-color:#a6b29d #f2f4ef; }
