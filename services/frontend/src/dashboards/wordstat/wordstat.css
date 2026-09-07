@@ -350,6 +350,10 @@
   line-height: 30px;
 }
 
+.wordstat-dashboard .wordstat-heading-label { display:inline-flex; max-width:100%; align-items:center; justify-content:center; line-height:18px; vertical-align:middle; }
+.wordstat-dashboard thead .header-row th { height:60px; padding:4px; line-height:18px; }
+.wordstat-dashboard th.wordstat-growth-heading { width:115px; min-width:115px; }
+
 /* Тренд над столбцами 3-5 */
 .wordstat-dashboard thead tr.trend-row th:nth-child(n+3) {
   position: sticky;

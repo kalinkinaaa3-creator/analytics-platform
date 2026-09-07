@@ -73,9 +73,18 @@ class ContractTests(unittest.TestCase):
                      {"results": [{**valid, "count": "oops"}]},
                      {"results": [{**valid, "date": "2026-08-02T00:00:00Z"}]},
                      {"results": [{**valid, "count": -1}]},
+                     {"results": [{**valid, "count": None}]},
                      {"results": [{**valid, "count": 1.5}]}]:
             with self.subTest(data=data), self.assertRaises(ValueError):
                 contract.parse_monthly_results(data, date(2026, 8, 1), date(2026, 8, 31))
+
+    def test_date_only_results_are_zero_but_missing_month_is_an_error(self):
+        data = {"results": [{"date": f"2025-{month:02d}-01T00:00:00Z"} for month in range(6, 13)]}
+        rows = contract.parse_monthly_results(data, date(2025, 6, 1), date(2025, 12, 31))
+        self.assertEqual([row["count"] for row in rows], [0] * 7)
+        data["results"].pop()
+        with self.assertRaisesRegex(ValueError, "incomplete"):
+            contract.parse_monthly_results(data, date(2025, 6, 1), date(2025, 12, 31))
 
     def test_groups_and_stable_membership_fingerprint(self):
         groups = contract.build_iplast_groups(mappings())
@@ -195,6 +204,18 @@ class DatabaseTests(unittest.TestCase):
                 pipeline._run_pipeline()
         invalidate.assert_called_once_with("Wordstat")
         publish.assert_called_once()
+
+    def test_date_only_results_are_saved_for_every_source(self):
+        def response(phrase, start, finish, **kwargs):
+            return {"results": [{"date": day.isoformat() + "T00:00:00Z"}
+                                for day in contract.month_dates(start, finish)]}
+        with patch.object(loader, "fetch_dynamics", side_effect=response):
+            for job in loader.make_jobs(loader.get_configuration()):
+                loader.load_job(job, TODAY)
+                saved = job.model.objects.filter(**job.data_filters)
+                self.assertTrue(saved.exists())
+                self.assertEqual(set(saved.values_list("count", flat=True)), {0})
+                self.assertTrue(loader.checkpoint_is_complete(job, TODAY))
 
     def test_resume_skips_saved_groups(self):
         config = loader.get_configuration()

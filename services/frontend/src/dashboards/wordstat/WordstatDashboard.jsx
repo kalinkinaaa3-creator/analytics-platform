@@ -3,7 +3,6 @@ import { api } from "../../api/client";
 import { useDropdownPosition } from "../../components/useDropdownPosition";
 import { WordstatDemandAnalysis } from "./WordstatDemandAnalysis";
 import { Help } from "./WordstatControls";
-import "../seoAnalytics/seo_analytics.css";
 import "./wordstat.css";
 import "../spinner.css";
 
@@ -388,12 +387,8 @@ function WordstatHeader() {
         <th className="b-thick group-regions" colSpan={8}>
           Регионы
         </th>
-        <th className="b-thick group-season" colSpan={12}>
-          Сезонность <Help>Коэффициент месяца = частотность месяца ÷ средняя месячная частотность этого года. Среднее рассчитывается по загруженным месяцам. В итоговых строках усредняются коэффициенты запросов.</Help>
-        </th>
-        <th className="b-thick group-coefficients" colSpan={4}>
-          Коэффициенты, % <Help>Доля квартала = сумма коэффициентов сезонности трёх месяцев квартала ÷ 12 × 100%.</Help>
-        </th>
+        <th className="b-thick group-season" colSpan={12}><span className="wordstat-heading-label">Сезонность <Help>Коэффициент месяца = частотность месяца ÷ средняя месячная частотность этого года. Среднее рассчитывается по загруженным месяцам.</Help></span></th>
+        <th className="b-thick group-coefficients" colSpan={4}><span className="wordstat-heading-label">Коэффициенты, % <Help>Доля квартала = сумма коэффициентов сезонности трёх месяцев квартала ÷ 12 × 100%.</Help></span></th>
       </tr>
 
       <tr className="header-row">
@@ -408,12 +403,12 @@ function WordstatHeader() {
 
         <th className="b-thick">Сумма</th>
         <th className="b-thick">Среднее</th>
-        <th className="b-thick">Годовой прирост, % <Help>(Средняя месячная частотность года ÷ средняя месячная частотность предыдущего представленного года − 1) × 100%. Сравниваются средние, а не годовые суммы. При нулевой базе: 100% для положительного среднего, иначе 0%.</Help></th>
+        <th className="b-thick wordstat-growth-heading"><span className="wordstat-heading-label">Годовой прирост, % <Help>(Средняя месячная частотность года ÷ средняя месячная частотность предыдущего представленного года − 1) × 100%. Сравниваются средние, а не годовые суммы. При нулевой базе: 100% для положительного среднего, иначе 0%.</Help></span></th>
 
         <th className="b-thick group-devices">ПК</th>
         <th className="group-devices">Телефоны</th>
         <th className="group-devices">Планшеты</th>
-        <th className="group-devices">Прочее <Help>Общий спрос без разрезов минус сумма ПК, телефонов и планшетов. Разрезы запрашиваются отдельно, поэтому их сумма может превышать общий спрос; разность может быть отрицательной.</Help></th>
+        <th className="group-devices"><span className="wordstat-heading-label">Прочее <Help>Общий спрос без разрезов минус сумма ПК, телефонов и планшетов. Разрезы запрашиваются отдельно, поэтому их сумма может превышать общий спрос; разность может быть отрицательной.</Help></span></th>
 
         <th className="b-thick group-regions">ЕКБ</th>
         <th className="group-regions">КРАС</th>
@@ -640,7 +635,7 @@ function WordstatStatistics({ data, active, publicToken }) {
 
 export function WordstatDashboard({ data, publicToken = null }) {
   const [tab, setTab] = useState("demand");
-  return <section className="seo-dashboard wd-dashboard" data-dashboard-type="wordstat">
+  return <section className="wd-dashboard" data-dashboard-type="wordstat">
     <h2 className="wd-title">Тренды и сезонность</h2>
     <nav className="wd-tabs" aria-label="Разделы Wordstat">
       <button type="button" className={tab === "demand" ? "is-active" : ""} aria-pressed={tab === "demand"} onClick={() => setTab("demand")}>Анализ спроса</button>

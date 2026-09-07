@@ -121,7 +121,7 @@ def cached_demand(params):
     digest = hashlib.sha256(json.dumps(params, sort_keys=True, default=str).encode()).hexdigest()
     for _ in range(2):
         snapshot = demand_snapshot()
-        key = f"wordstat:demand:v6:{snapshot}:{today}:{digest}"
+        key = f"wordstat:demand:v7:{snapshot}:{today}:{digest}"
         result = cache.get(key) if snapshot else None
         if result is not None:
             return result
@@ -218,7 +218,7 @@ def build_demand(params, today=None, source=None):
     query_items = [dict(id="\x1f".join(phrase_identity(p)), phrase=p, name=p, **measure([p])) for p in selected]
     total = measure(selected)
     response.update(items=items, query_items=query_items, seasonality=profiles, summary=dict(**total, count=len(selected),
-                    distribution=distribution(query_items)),
+                    distribution=distribution(items)),
                     median_volume=median([i["current_volume"] for i in items if i["current_volume"] is not None])
                     if any(i["current_volume"] is not None for i in items) else None)
     parent = (scope if element_ids or phrase else [p for p in refs if refs[p]["feature"] == feature]

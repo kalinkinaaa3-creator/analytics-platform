@@ -147,12 +147,28 @@ class DemandMathTests(unittest.TestCase):
         refs, facts, snap = source()
         facts["a"][date(2026, 8, 1)] = 200
         data = refs, facts, snap
-        report = build_demand(dict(period_months=1), TODAY, data)
+        report = build_demand(dict(level="phrase", period_months=1), TODAY, data)
         self.assertEqual(report["summary"]["distribution"]["growth"]["count"], 1)
         ids = [q["id"] for q in report["query_items"] if q["status"] == "growth"]
         narrowed = build_demand(dict(level="phrase", element_ids=ids, period_months=1), TODAY, data)
         self.assertEqual(narrowed["summary"]["current_volume"], 200)
         self.assertEqual(narrowed["summary"]["distribution"]["growth"]["share"], 100)
+
+    def test_card_counts_and_selection_follow_each_level(self):
+        refs, facts, snap = source([("a", "A", "AA", 100), ("b", "A", "AA", 100),
+                                    ("c", "B", "BB", 100)])
+        for phrase in ("a", "b"):
+            facts[phrase][date(2026, 8, 1)] = 200
+        data = refs, facts, snap
+        for level, expected in (("feature", 1), ("category", 1), ("phrase", 2)):
+            with self.subTest(level=level):
+                report = build_demand(dict(level=level, period_months=1), TODAY, data)
+                self.assertEqual(report["summary"]["distribution"]["growth"]["count"], expected)
+                ids = [item["id"] for item in report["items"] if item["status"] == "growth"]
+                selected = build_demand(dict(level=level, period_months=1, element_ids=ids), TODAY, data)
+                self.assertEqual(len(selected["items"]), expected)
+                self.assertEqual(selected["summary"]["current_volume"], 400)
+                self.assertEqual(selected["context"]["level"], level)
 
     def test_latest_loaded_month_remains_available_when_another_query_is_missing(self):
         refs, facts, snap = source()

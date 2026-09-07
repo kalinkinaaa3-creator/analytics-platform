@@ -61,7 +61,9 @@ def parse_monthly_results(data, start, finish):
         try:
             stamp = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
             row_date = stamp.date()
-            raw_count = item["count"]
+            # Protobuf JSON omits scalar defaults: a returned month without
+            # count represents zero. An absent month is still incomplete.
+            raw_count = item.get("count", 0)
             if isinstance(raw_count, bool) or not isinstance(raw_count, (str, int)):
                 raise ValueError("Invalid count type")
             count = int(raw_count)
