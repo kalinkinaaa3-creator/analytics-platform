@@ -35,3 +35,15 @@ export function defaultSeasonIds(items, selectedPhrase) {
   const focused = sorted.find((p) => selectedPhrase && p.phrase === selectedPhrase);
   return (focused ? [focused, ...sorted.filter((p) => p !== focused)] : sorted).slice(0, 3).map((p) => p.id);
 }
+
+export function statusDistribution(items = []) {
+  const completeTotal = items.length > 0 && items.every((item) => item.current_volume != null);
+  const total = completeTotal ? items.reduce((sum, item) => sum + item.current_volume, 0) : null;
+  return Object.fromEntries(["growth", "decline", "stable", "new", "missing"].map((status) => {
+    const members = items.filter((item) => item.status === status);
+    const volume = members.every((item) => item.current_volume != null)
+      ? members.reduce((sum, item) => sum + item.current_volume, 0) : null;
+    return [status, { count: members.length, share: items.length ? members.length * 100 / items.length : null,
+      volume_share: total > 0 && volume != null ? volume * 100 / total : null }];
+  }));
+}

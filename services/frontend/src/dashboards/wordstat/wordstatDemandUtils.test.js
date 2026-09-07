@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { defaultSeasonIds, isParentSummary, objectNoun, sortedChanges } from "./wordstatDemandUtils.js";
+import { defaultSeasonIds, isParentSummary, objectNoun, sortedChanges, statusDistribution } from "./wordstatDemandUtils.js";
 
 test("all positive and negative changes are retained, including neutral and zero-base rows", () => {
   const items = Array.from({ length: 30 }, (_, i) => ({ id: String(i), absolute_change: 1, growth_percent: 0.1, current_volume: i, status: "stable" }));
@@ -10,6 +10,24 @@ test("all positive and negative changes are retained, including neutral and zero
   assert.equal(sorted.at(-1).id, "new");
   assert.equal(sortedChanges(items, "decline", { key: "absolute_change", direction: "asc" })[0].id, "down");
   assert.equal(sortedChanges(items, "growth", { key: "current_volume", direction: "desc" })[0].current_volume, 29);
+});
+
+test("cards count grouped items, retain missing values and use the same items as selection", () => {
+  const items = [{ id:"category-a", status:"growth", current_volume:900, query_count:433 },
+    { id:"category-b", status:"decline", current_volume:100, query_count:828 }];
+  const result = statusDistribution(items);
+  assert.equal(result.growth.count, 1);
+  assert.equal(result.growth.share, 50);
+  assert.equal(result.growth.volume_share, 90);
+  assert.equal(statusDistribution([...items, { status:"missing", current_volume:null }]).growth.volume_share, null);
+  assert.equal(statusDistribution([]).growth.share, null);
+});
+
+test("seasonality always selects at most three maxima from the eligible selection", () => {
+  const items = Array.from({length:8}, (_, i) => ({id:String(i), growth_percent:i, absolute_change:i}));
+  assert.deepEqual(defaultSeasonIds(items), ["7", "6", "5"]);
+  assert.deepEqual(defaultSeasonIds(items.filter(p => Number(p.id) < 5)), ["4", "3", "2"]);
+  assert.deepEqual(defaultSeasonIds(items.slice(0, 1)), ["0"]);
 });
 test("season defaults use growth rather than volume and retain the selected phrase", () => {
   const items = [1, 4, 2, 3].map((growth_percent) => ({ id: String(growth_percent), phrase: String(growth_percent), growth_percent, absolute_change: growth_percent, current_volume: 100 - growth_percent }));

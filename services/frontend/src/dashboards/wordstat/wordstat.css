@@ -429,17 +429,7 @@
 
 
 /* Тень под второй строкой заголовков */
-.wordstat-dashboard thead tr.header-row th:first-child::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  width: 100vw;     /* на всю ширину, даже при скролле */
-  height: 16px;
-  pointer-events: none;
-  display: block;
-  box-shadow: 0 6px 10px rgba(0,0,0,0.25);
-  z-index: 200;     /* выше таблицы, но ниже контекстных элементов */
-}
+.wordstat-dashboard thead tr.header-row th { box-shadow:0 1px 0 #aca5a5; }
 
 
 
@@ -447,6 +437,7 @@
 .wordstat-dashboard tr.phrase-group.first-row td {
     border-top: 4px solid #666;       /* верхняя граница пула */
 }
+.wordstat-dashboard tbody > tr.phrase-group:first-child td { border-top:0; }
 
 /* Убираем горизонтальные границы внутри первого столбца для остальных строк пула */
 .wordstat-dashboard tr.phrase-group td.phrase-cell.empty-cell {

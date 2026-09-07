@@ -3,7 +3,7 @@ import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Sca
 import { api } from "../../api/client";
 import { DashboardMultiSelect } from "../../components/DashboardMultiSelect";
 import { FloatingTooltip, Help, LoadingBlock, SelectField } from "./WordstatControls";
-import { MONTHS, TONES, LEVELS, number, signed, percent, growth, dateLabel, monthLabel, seriesColor, objectNoun, sortedChanges, isParentSummary, defaultSeasonIds } from "./wordstatDemandUtils";
+import { MONTHS, TONES, LEVELS, number, signed, percent, growth, dateLabel, monthLabel, seriesColor, objectNoun, sortedChanges, isParentSummary, defaultSeasonIds, statusDistribution } from "./wordstatDemandUtils";
 import "./wordstat_demand.css";
 
 const DEFAULTS = { level: "feature", feature: "", category: "", phrase: "", period_months: 12, end_month: "", scope_ids: [], element_ids: [], comparison: "year_over_year" };
@@ -21,20 +21,21 @@ function ChartTooltip({ active, payload, label, coordinate, chartRef, period, se
     <p>{dateLabel(period.current_start)} — {dateLabel(period.current_end)}: <b>{number(item.current_volume)}</b></p><p>{dateLabel(period.previous_start)} — {dateLabel(period.previous_end)}: <b>{number(item.previous_volume)}</b></p><p>Изменение: <b>{signed(item.absolute_change, 0)}</b> · {growth(item)}</p></>}</FloatingTooltip>;
 }
 
-function Seasonality({ report, chosen, setChosen, selectedPhrase, selectedIds }) {
+function Seasonality({ report, chosen, setChosen }) {
   const chartRef = useRef(null);
   const names = useMemo(() => {
     const profiles = (report.seasonality || []).filter((p) => { const item = report.items.find((i) => i.id === p.id); return item && !isParentSummary(item, report.context); });
     return profiles.map((p, index) => ({ ...p, color: seriesColor(index), label: `${p.name}${profiles.filter((s) => s.name === p.name).length > 1 ? ` (${p.id.split("\u001f")[0]})` : ""}` }));
   }, [report]);
-  const defaults = selectedIds?.length ? names.map((p) => p.id) : defaultSeasonIds(report.items.filter((p) => names.some((n) => n.id === p.id)), selectedPhrase);
-  const selected = names.filter((p) => (chosen === null ? defaults : chosen).includes(p.id));
+  const eligible = report.items.filter((p) => names.some((n) => n.id === p.id));
+  const defaults = defaultSeasonIds(eligible);
+  const selected = names.filter((p) => (chosen === null ? defaults : defaultSeasonIds(eligible.filter((p) => chosen.includes(p.id)))).includes(p.id));
   const selectedYear = report.period?.end_month?.slice(0, 4);
   const publishedMonths = (report.available_months || []).filter((m) => m.startsWith(selectedYear));
   const lastMonth = publishedMonths.length ? Math.max(...publishedMonths.map((m) => Number(m.slice(5)))) : 0;
   const chart = MONTHS.slice(0, lastMonth).map((month, i) => Object.assign({ month }, ...selected.map((p, index) => ({ [`s${index}`]: p.coefficients[i] }))));
   const notes = selected.map((p) => ({ ...p, coefficients: p.coefficients.slice(0, lastMonth), values: p.coefficients.slice(0, lastMonth).filter((v) => v != null) })).sort((a, b) => Math.max(-Infinity, ...b.values) - Math.max(-Infinity, ...a.values));
-  return <article className="wd-panel wd-visual wd-season"><header><h3>Сезонность <Help>Частотность месяца ÷ средняя месячная частотность года по загруженным месяцам. Для группы — среднее коэффициентов её запросов.</Help></h3><DashboardMultiSelect label="Показать" options={names.map((p) => p.label)} selected={selected.map((p) => p.label)} onApply={(labels) => setChosen(names.filter((p) => labels.includes(p.label)).map((p) => p.id))} /></header>
+  return <article className="wd-panel wd-visual wd-season"><header><h3>Сезонность <Help>Частотность месяца ÷ средняя месячная частотность года по загруженным месяцам. Для группы — среднее коэффициентов её запросов.</Help></h3><DashboardMultiSelect label="Показать" options={names.map((p) => p.label)} selected={selected.map((p) => p.label)} onApply={(labels) => setChosen(defaultSeasonIds(eligible.filter((p) => names.some((n) => n.id === p.id && labels.includes(n.label)))))} /></header>
     {selected.some((p) => p.years.length) ? <div ref={chartRef} className="wd-chart"><ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 600, height: 300 }}><LineChart data={chart} margin={{ top: 15, right: 34, left: 8, bottom: 5 }}>
       <CartesianGrid strokeDasharray="3 4" vertical={false} /><XAxis dataKey="month" tick={{ fontSize: 10 }} minTickGap={10} padding={{ left: 12, right: 18 }} interval="preserveStartEnd" /><YAxis tickFormatter={(v) => number(v, 2)} width={42} domain={["auto", "auto"]} /><ReferenceLine y={1} stroke="#89939c" strokeDasharray="5 4" />
       <Tooltip content={(props) => <ChartTooltip {...props} chartRef={chartRef} seasonal />} />{selected.map((p, i) => <Line key={p.id} name={p.name} dataKey={`s${i}`} stroke={p.color} strokeWidth={2.5} dot={{ r: 2.5 }} activeDot={{ r: 5 }} connectNulls={false} isAnimationActive={false} />)}
@@ -59,7 +60,7 @@ function GrowthVolume({ report, onSelect, selectedPhrase }) {
       {label && <text x={cx} y={cy + (payload.growth_percent > 0 ? -radius - 10 : radius + 17)} textAnchor="middle" className="wd-extreme-label">{label}</text>}</g>;
   };
   return <article className="wd-panel wd-visual wd-growth"><header><h3>Рост × объём <Help>Объём и изменение по выбранным месяцам.</Help></h3><span className="wd-chart-caption">Нажмите на точку для детализации.</span></header>
-    <div className="wd-axis-caption"><span>↑ Рост / ↓ Падение</span></div>
+    <div className="wd-axis-caption"><span className="wd-axis-label wd-axis-label--growth">↑ Рост</span><span className="wd-axis-label wd-axis-label--decline">↓ Падение</span></div>
     {points.length ? <div ref={chartRef} className="wd-chart"><ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 600, height: 300 }}><ScatterChart margin={{ top: 18, right: 30, bottom: 12, left: 0 }}>
       <CartesianGrid strokeDasharray="3 4" />
       <XAxis type="number" dataKey="current_volume" name="Количество запросов" domain={[0, (maximum) => Math.max(1, maximum * 1.15)]} padding={{ left: 24, right: 28 }} tickFormatter={(v) => Intl.NumberFormat("ru-RU", { notation: "compact" }).format(v)} />
@@ -68,7 +69,7 @@ function GrowthVolume({ report, onSelect, selectedPhrase }) {
       <Tooltip content={(props) => <ChartTooltip {...props} chartRef={chartRef} period={report.period} />} />
       <Scatter data={points} shape={dot} onClick={(point) => onSelect(point.payload || point)} isAnimationActive={false} />
     </ScatterChart></ResponsiveContainer></div> : <Empty>Недостаточно данных для сравнения выбранных периодов.</Empty>}
-    <div className="wd-axis-caption wd-axis-caption--x">→ Количество запросов, шт.</div>
+    <div className="wd-axis-caption wd-axis-caption--x"><span className="wd-axis-label">→ Количество запросов, шт.</span></div>
   </article>;
 }
 
@@ -95,21 +96,22 @@ export function WordstatDemandAnalysis({ publicToken = null, revision, active = 
   const [state, setState] = useState({ report: null, loading: true, error: "" });
   const [attempt, setAttempt] = useState(0);
   const [chosen, setChosen] = useState(null);
-  const loadedKey = useRef(null);
+  const [statusSelection, setStatusSelection] = useState(null);
   useEffect(() => {
     if (!active) return;
-    const key = JSON.stringify([filters, attempt, publicToken, revision]);
-    if (loadedKey.current === key) return;
     const controller = new AbortController();
+    const timer = setTimeout(() => {
     setState((old) => ({ ...old, loading: true, error: "" }));
     const url = publicToken ? `/v1/dashboards/public-group/${publicToken}/wordstat/demand-analysis/` : "/v1/dashboards/wordstat/demand-analysis/";
     api.post(url, Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== "")), { signal: controller.signal })
-      .then(({ data }) => { if (!controller.signal.aborted) { loadedKey.current = key; setState({ report: data, loading: false, error: "" }); } })
+      .then(({ data }) => { if (!controller.signal.aborted) { setState({ report: data, loading: false, error: "" }); } })
       .catch((error) => { if (!controller.signal.aborted) setState((old) => ({ ...old, loading: false, error: typeof error.response?.data?.detail === "string" ? error.response.data.detail : "Не удалось загрузить анализ спроса. Повторите попытку." })); });
-    return () => controller.abort();
+    }, 0);
+    return () => { clearTimeout(timer); controller.abort(); };
   }, [filters, attempt, publicToken, revision, active]);
   const report = state.report, period = report?.period;
-  const update = (next) => { setChosen(null); setFilters((old) => ({ ...old, ...next })); };
+  const distribution = statusDistribution(report?.items);
+  const update = (next) => { setStatusSelection(null); setChosen(null); setFilters((old) => ({ ...old, ...next })); };
   const selectMany = (ids) => {
     const items = (report?.element_options || []).filter((p) => ids.includes(p.id));
     if (!ids.length) { update({ element_ids: [], phrase: "" }); return; }
@@ -120,7 +122,13 @@ export function WordstatDemandAnalysis({ publicToken = null, revision, active = 
   const select = (item) => { if (item) selectMany([item.id]); };
   const selectStatus = (status) => {
     const ids = (report.items || []).filter((p) => p.status === status).map((p) => p.id);
-    if (ids.length) update({ element_ids: ids, phrase: "" });
+    if (!ids.length) return;
+    const previous = statusSelection;
+    const selected = previous?.status === status;
+    setStatusSelection(selected ? null : { status, element_ids: filters.element_ids, phrase: filters.phrase });
+    setChosen(null);
+    setFilters((old) => ({ ...old, element_ids: selected ? previous.element_ids : ids,
+      phrase: selected ? previous.phrase : "" }));
   };
   const elementOptions = (report?.element_options || []).filter((p) => !isParentSummary(p, report.context));
   const optionLabels = elementOptions.map((p) => ({ ...p, label: elementOptions.some((o) => o.id !== p.id && o.name === p.name) ? `${p.name} (${p.feature})` : p.name }));
@@ -132,13 +140,13 @@ export function WordstatDemandAnalysis({ publicToken = null, revision, active = 
     <Segments label="Сравнение" className="wd-comparison-control" value={filters.comparison} options={[["year_over_year", "Год к году"], ["previous_period", "Предыдущий период"]]} onChange={(v) => update({ comparison: v })} />
     <Segments label="Уровень детализации" className="wd-level-control" options={LEVELS} value={filters.level} onChange={(v) => update({ level: v, phrase: "", element_ids: [], scope_ids: [], ...(v === "feature" ? { feature: "", category: "" } : v === "category" ? { category: "" } : {}) })} />
     <div className="wd-element-control wd-control"><DashboardMultiSelect label="Перейти к элементу" options={optionLabels.map((p) => p.label)} selected={optionLabels.filter((p) => filters.element_ids.includes(p.id)).map((p) => p.label)} onApply={(labels) => selectMany(optionLabels.filter((p) => labels.includes(p.label)).map((p) => p.id))} /></div>
-    <div className="wd-toolbar"><button type="button" onClick={() => { setChosen(null); setFilters(DEFAULTS); }}>Очистить</button></div>
+    <div className="wd-toolbar"><button type="button" onClick={() => update(DEFAULTS)}>Очистить</button></div>
   </div><nav className="wd-breadcrumbs wd-navigation" aria-label="Иерархия спроса"><button type="button" onClick={() => update({ feature: "", category: "", phrase: "", level: "feature", scope_ids: [], element_ids: [] })}>Все категории</button>{filters.feature && <><span>›</span><button type="button" onClick={() => update({ category: "", phrase: "", level: "category", scope_ids: [], element_ids: [] })}>{filters.feature}</button></>}{filters.category && <><span>›</span><button type="button" onClick={() => update({ phrase: "", element_ids: [] })}>{filters.category}</button></>}{filters.phrase && <><span>›</span><button type="button" onClick={() => update({ phrase: "", element_ids: [] })}>{filters.phrase} ×</button></>}</nav></section>
     {state.error && <div className="wd-error" role="alert">{state.error} <button className="wd-link" onClick={() => setAttempt((v) => v + 1)}>Повторить</button></div>}
     {!state.loading && !state.error && !period && <Empty>Нет опубликованных данных для выбранных категорий.</Empty>}
     {!state.error && period && <><div className="wd-overview"><div className="wd-kpis">
       <article className="wd-card wd-traffic-card"><span className="wd-traffic-card-label">Количество запросов </span><strong>{number(report.summary.current_volume)}</strong><em className={report.summary.absolute_change > 0 ? "is-positive" : report.summary.absolute_change < 0 ? "is-negative" : ""}>{growth(report.summary)} {period.comparison === "year_over_year" ? "\u043a \u043f\u0440\u043e\u0448\u043b\u043e\u043c\u0443 \u0433\u043e\u0434\u0443" : "\u043a \u043f\u0440\u043e\u0448\u043b\u043e\u043c\u0443 \u043f\u0435\u0440\u0438\u043e\u0434\u0443"}</em></article>
-      {["growth", "decline", "stable"].map((s) => <article className="wd-card wd-traffic-card" key={s}><span className="wd-traffic-card-label">{STATUS[s]}{s === "stable" && <> (изменение ±{number(report.neutral_percent)}%) <Help>Стабильные элементы: изменение в пределах ±{number(report.neutral_percent)}% включительно.</Help></>}</span><strong style={{ color: TONES[s] }}>{percent(report.summary.distribution?.[s]?.share)}</strong><em><button type="button" className="wd-link wd-count-link" disabled={!report.summary.distribution?.[s]?.count} onClick={() => selectStatus(s)}>{number(report.summary.distribution?.[s]?.count)} {objectNoun(report.summary.distribution?.[s]?.count, filters.level)}</button> · по объёму: {percent(report.summary.distribution?.[s]?.volume_share)}</em></article>)}
-    </div><div className="wd-slices"><SliceCard title="Регионы" data={report.regions} type="regions" /><SliceCard title="Устройства" data={report.devices} type="devices" /></div></div><div className="wd-report-grid"><Seasonality report={report} chosen={chosen} setChosen={setChosen} selectedPhrase={filters.phrase} selectedIds={filters.element_ids} /><GrowthVolume report={report} onSelect={select} selectedPhrase={filters.phrase} /><Ranking direction="growth" report={report} onSelect={select} selectedPhrase={filters.phrase} /><Ranking direction="decline" report={report} onSelect={select} selectedPhrase={filters.phrase} /></div></>}
+      {["growth", "decline", "stable"].map((s) => <article className="wd-card wd-traffic-card" key={s}><span className="wd-traffic-card-label">{STATUS[s]}{s === "stable" && <> (изменение ±{number(report.neutral_percent)}%) <Help>Стабильные элементы: изменение в пределах ±{number(report.neutral_percent)}% включительно.</Help></>}</span><strong style={{ color: TONES[s] }}>{percent(distribution[s]?.share)}</strong><em><button type="button" className="wd-link wd-count-link" aria-pressed={statusSelection?.status === s} disabled={!distribution[s]?.count} onClick={() => selectStatus(s)}>{number(distribution[s]?.count)} {objectNoun(distribution[s]?.count, filters.level)}</button> · по объёму: {percent(distribution[s]?.volume_share)}</em></article>)}
+    </div><div className="wd-slices"><SliceCard title="Регионы" data={report.regions} type="regions" /><SliceCard title="Устройства" data={report.devices} type="devices" /></div></div><div className="wd-report-grid"><Seasonality report={report} chosen={chosen} setChosen={setChosen} /><GrowthVolume report={report} onSelect={select} selectedPhrase={filters.phrase} /><Ranking direction="growth" report={report} onSelect={select} selectedPhrase={filters.phrase} /><Ranking direction="decline" report={report} onSelect={select} selectedPhrase={filters.phrase} /></div></>}
   </div>;
 }
