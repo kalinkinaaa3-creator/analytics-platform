@@ -18,6 +18,7 @@
 .wd-demand .wd-segments nav button { height:34px; min-height:34px; min-width:0; font-size:12px; flex:1; white-space:nowrap; padding:6px 7px; box-sizing:border-box; border:1px solid #cfd4ca; }
 .wd-demand .wd-period-control .wd-segments nav button { padding-inline:3px; }
 .wd-demand .wd-comparison-control .wd-segments nav button:last-child { flex:1.5; }
+.wd-demand .wd-level-control .wd-segments nav button { flex:1 1 auto; padding-inline:10px; }
 .wd-demand .wd-filters .seo-toolbar button { height:34px; min-height:34px; padding:6px 12px; }
 .wd-demand .wd-filters .seo-toolbar { position:static; display:flex; justify-content:flex-end; height:34px; min-height:34px; align-items:end; margin:0 0 0 auto; padding:0; }
 .wd-demand .wd-breadcrumbs { display:flex; flex-wrap:wrap; align-items:center; gap:9px; margin:12px 0 0; }
