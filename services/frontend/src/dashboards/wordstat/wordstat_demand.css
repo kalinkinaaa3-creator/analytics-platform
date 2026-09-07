@@ -19,8 +19,8 @@
 .wd-demand .wd-period-control .wd-segments nav button { padding-inline:3px; }
 .wd-demand .wd-comparison-control .wd-segments nav button:last-child { flex:1.5; }
 .wd-demand .wd-level-control .wd-segments nav button { flex:1 1 auto; padding-inline:10px; }
-.wd-demand .wd-filters .seo-toolbar button { height:34px; min-height:34px; padding:6px 12px; }
-.wd-demand .wd-filters .seo-toolbar { position:static; display:flex; justify-content:flex-end; height:34px; min-height:34px; align-items:end; margin:0 0 0 auto; padding:0; }
+.wd-demand .wd-filters .seo-toolbar button { height:44px; min-height:44px; padding:6px 12px; }
+.wd-demand .wd-filters .seo-toolbar { position:static; display:flex; justify-content:flex-end; height:44px; min-height:44px; align-items:end; margin:0 0 0 auto; padding:0; }
 .wd-demand .wd-breadcrumbs { display:flex; flex-wrap:wrap; align-items:center; gap:9px; margin:12px 0 0; }
 .wd-link,.wd-breadcrumbs button { background:none; border:0; padding:3px 0; color:#536f50; font:inherit; text-align:left; cursor:pointer; }
 .wd-navigation,.wd-navigation button { font:700 14px Helvetica,Arial,sans-serif; }
@@ -92,8 +92,8 @@
 @container (max-width:1200px) { .wd-demand .wd-filters { grid-template-columns:minmax(80px,.65fr) minmax(135px,1.1fr) minmax(120px,1fr) minmax(115px,1fr) minmax(100px,1fr) 85px; gap:5px; } .wd-demand .wd-expanded-control { display:none; } .wd-demand .wd-adaptive-control .wd-compact-control { display:flex; } }
 @container (max-width:800px) { .wd-demand .wd-control-label,.wd-demand .wd-element-control .dashboard-filter > label { min-height:36px; white-space:normal; line-height:15px; } .wd-demand .wd-filters { grid-template-columns:minmax(65px,.65fr) minmax(110px,1.1fr) minmax(95px,1fr) minmax(100px,1fr) minmax(90px,1fr) 80px; gap:4px; } }
 @container (max-width:600px) { .wd-demand .wd-filters { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; } }
-@media (max-width:1200px) { .wd-overview { height:auto; grid-template-columns:1fr; } .wd-kpis { height:452px; } .wd-demand .seo-report-grid { grid-template-columns:1fr; } }
-@media (max-width:650px) { .wd-slices { grid-template-columns:1fr; } .wd-kpis { height:452px; } .wd-demand .wd-visual header { height:70px; min-height:70px; } .wd-chart-caption { max-width:46%; font-size:11px; } .wd-dashboard.seo-dashboard { padding:12px 8px; } }
+@media (max-width:1200px) { .wd-overview { height:auto; grid-template-columns:1fr; } .wd-kpis { height:240px; } .wd-demand .seo-report-grid { grid-template-columns:1fr; } }
+@media (max-width:650px) { .wd-slices { grid-template-columns:1fr; } .wd-kpis { height:240px; } .wd-demand .wd-visual header { height:70px; min-height:70px; } .wd-chart-caption { max-width:46%; font-size:11px; } .wd-dashboard.seo-dashboard { padding:12px 8px; } }
 
 .wd-demand .wd-element-control .dashboard-filter { min-width:0; }
 .wd-axis-caption { flex:none; color:#444841; font:12px/1.4 Helvetica,Arial,sans-serif; padding:2px 0 4px 12px; }
