@@ -25,6 +25,10 @@ def send_bitrix_message(message: str, logger_name: str = "analytics") -> bool:
     try:
         response = requests.post(url, json=payload, timeout=30)
         response.raise_for_status()
+        result = response.json()
+        if not isinstance(result, dict) or result.get("error") or "result" not in result:
+            logger.error("Bitrix notification rejected: response does not contain a successful result")
+            return False
 
         logger.info("Bitrix notification sent")
         return True

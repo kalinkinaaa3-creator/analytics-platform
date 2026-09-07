@@ -108,11 +108,15 @@ export function DashboardRefreshTooltips() {
       if (!found) return;
       const { button, info } = found;
       activeButtonRef.current = button;
-      const nativeTitle = button.getAttribute("title") || "";
+      const nativeTitle = button.getAttribute("title") || button.dataset.refreshNativeTitle || "";
       if (nativeTitle) { button.dataset.refreshNativeTitle = nativeTitle; button.removeAttribute("title"); }
       const disabledReason = /^Недостаточно прав/i.test(nativeTitle) ? nativeTitle : "";
       const hasNoData = /^(Данные отсутствуют|Данные ещё не обновлялись)$/i.test(nativeTitle);
-      const lastUpdated = disabledReason || hasNoData ? "—" : nativeTitle.replace(/^Данные актуальны на:\s*/i, "").replace(/^Данные актуальны на\s*/i, "") || "—";
+      const loadedAt = button.closest("[data-last-updated]")?.dataset.lastUpdated;
+      const loadedDate = loadedAt ? new Date(loadedAt) : null;
+      const sourceUpdated = loadedDate && !Number.isNaN(loadedDate.getTime())
+        ? loadedDate.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : "";
+      const lastUpdated = disabledReason || hasNoData ? "—" : sourceUpdated || nativeTitle.replace(/^Данные актуальны на:\s*/i, "").replace(/^Данные актуальны на\s*/i, "") || "—";
       const cachedSeconds = info.endpoint ? cacheRef.current.get(info.endpoint) : null;
       setState({ anchor: button.getBoundingClientRect(), lastUpdated, disabledReason, ...info, averageSeconds: cachedSeconds });
       if (info.endpoint && cachedSeconds === undefined) {

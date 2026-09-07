@@ -33,7 +33,7 @@ SOURCE_COLUMNS = [
     ("non_target_leads", "Нецелевые лиды, шт"), ("unprocessed_leads", "Необработанные лиды, шт"),
     ("target_conversion", "CR в целевые, %"), ("target_delta", "Дельта целевых лидов, шт"),
     ("target_deviation", "Отклонение, %"), ("associated_target_leads", "Ассоциированные"),
-    ("associated_share", "Доля ассоциированных, %"), ("other_target_leads", "Целевые лиды прочих источников"),
+    ("associated_share", "Доля ассоциированных, %"), ("other_target_leads", "Прочие источники"),
     ("other_share", "Доля прочих источников, %"),
 ]
 
@@ -117,6 +117,10 @@ class PlanUploadView(AccessMixin, APIView):
             return Response({"status": "ok", **load_plan(uploaded, request.user)})
         except (ValueError, TypeError, BadZipFile, InvalidFileException) as exc:
             raise ValidationError({"file": str(exc)})
+        except Exception:
+            from analytics.services.bitrix_notify import send_bitrix_message
+            send_bitrix_message("[b]Лидогенерация: план[/b] Ошибка загрузки XLSX. Подробности в логе Django.", logger_name="lead_generation")
+            raise
 
 
 class PlanDownloadView(AccessMixin, APIView):

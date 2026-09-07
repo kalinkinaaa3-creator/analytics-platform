@@ -1,3 +1,4 @@
+from analytics.services.bitrix_notify import send_bitrix_message
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -122,6 +123,9 @@ class Command(BaseCommand):
                 )
             )
         except BaseException as exc:
+            if not getattr(exc, "_bitrix_notification_attempted", False):
+                exc._bitrix_notification_attempted = True
+                send_bitrix_message("[b]CRM: reconcile_bitrix24_recent_leads[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 logs/bitrix24_refresh.log \u0438 \u043b\u043e\u0433\u0435 \u043a\u043e\u043c\u0430\u043d\u0434\u044b.", logger_name="bitrix24")
             cache.set(
                 STATE_KEY,
                 {

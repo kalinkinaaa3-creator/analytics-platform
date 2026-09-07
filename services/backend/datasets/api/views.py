@@ -1,3 +1,5 @@
+from analytics.services.bitrix_notify import send_bitrix_message
+import logging
 
 import tempfile
 import os
@@ -569,33 +571,40 @@ class FbProjectUploadView(APIView):
 
     def post(self, request):
 
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-        uploaded_file = serializer.validated_data["file"]
+            uploaded_file = serializer.validated_data["file"]
 
-        if not uploaded_file:
-            return Response(
-                {"error": "file is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            if not uploaded_file:
+                return Response(
+                    {"error": "file is required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
-            for chunk in uploaded_file.chunks():
-                temp_file.write(chunk)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
+                for chunk in uploaded_file.chunks():
+                    temp_file.write(chunk)
 
-            temp_path = temp_file.name
+                temp_path = temp_file.name
 
-        postgres_count = load_fb_project_csv(temp_path)
-        projects_count = sync_fb_project_to_clickhouse()
+            postgres_count = load_fb_project_csv(temp_path)
+            projects_count = sync_fb_project_to_clickhouse()
 
-        invalidate_dashboard_by_name("Projects")
+            invalidate_dashboard_by_name("Projects")
 
-        return Response({
-            "status": "ok",
-            "postgres_rows": postgres_count,
-            "projects_count": projects_count,
-        })
+            return Response({
+                "status": "ok",
+                "postgres_rows": postgres_count,
+                "projects_count": projects_count,
+            })
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("FbProjectUploadView failed")
+            send_bitrix_message("[b]FbProjectUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
 
 class FBPurchasesUploadView(APIView):
@@ -607,29 +616,36 @@ class FBPurchasesUploadView(APIView):
         return self.serializer_class(*args, **kwargs)
 
     def post(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-        use_file = serializer.validated_data["use_file"]
+            use_file = serializer.validated_data["use_file"]
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_use:
-            for chunk in use_file.chunks():
-                temp_use.write(chunk)
-            use_path = temp_use.name
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_use:
+                for chunk in use_file.chunks():
+                    temp_use.write(chunk)
+                use_path = temp_use.name
 
-        postgres_use_count = load_fb_purchases_use_csv(use_path)
+            postgres_use_count = load_fb_purchases_use_csv(use_path)
 
-        clickhouse_result = sync_fb_purchases_to_clickhouse()
+            clickhouse_result = sync_fb_purchases_to_clickhouse()
 
-        invalidate_dashboard_by_name("Purchases")
+            invalidate_dashboard_by_name("Purchases")
 
-        return Response({
-            "status": "ok",
-            "postgres": {
-                "fb_purchases_use": postgres_use_count,
-            },
-            "clickhouse": clickhouse_result,
-        })
+            return Response({
+                "status": "ok",
+                "postgres": {
+                    "fb_purchases_use": postgres_use_count,
+                },
+                "clickhouse": clickhouse_result,
+            })
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("FBPurchasesUploadView failed")
+            send_bitrix_message("[b]FBPurchasesUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
 
 
@@ -643,36 +659,43 @@ class FBTurnoverUploadView(APIView):
         return self.serializer_class(*args, **kwargs)
 
     def post(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-        turnover_file = serializer.validated_data["turnover_file"]
+            turnover_file = serializer.validated_data["turnover_file"]
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_turnover:
-            for chunk in turnover_file.chunks():
-                temp_turnover.write(chunk)
-            turnover_path = temp_turnover.name
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_turnover:
+                for chunk in turnover_file.chunks():
+                    temp_turnover.write(chunk)
+                turnover_path = temp_turnover.name
 
-        postgres_turnover_count = load_fb_turnover_csv(turnover_path)
+            postgres_turnover_count = load_fb_turnover_csv(turnover_path)
 
-        clickhouse_result = sync_fb_turnover_to_clickhouse()
+            clickhouse_result = sync_fb_turnover_to_clickhouse()
 
-        invalidate_dashboard_by_name("Turnover")
+            invalidate_dashboard_by_name("Turnover")
 
-        call_command("warmup_turnover_cache")
+            call_command("warmup_turnover_cache")
 
-        return Response({
-            "status": "ok",
-            "postgres": {
-                "fb_turnover_use": postgres_turnover_count,
-            },
-            "clickhouse": clickhouse_result,
-            "cache": {
-                "invalidated": "Turnover",
-                "warmed": True,
-                "command": "warmup_turnover_cache",
-            },
-        })
+            return Response({
+                "status": "ok",
+                "postgres": {
+                    "fb_turnover_use": postgres_turnover_count,
+                },
+                "clickhouse": clickhouse_result,
+                "cache": {
+                    "invalidated": "Turnover",
+                    "warmed": True,
+                    "command": "warmup_turnover_cache",
+                },
+            })
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("FBTurnoverUploadView failed")
+            send_bitrix_message("[b]FBTurnoverUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
 
 
@@ -686,29 +709,36 @@ class FBAccreceivUploadView(APIView):
         return self.serializer_class(*args, **kwargs)
 
     def post(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-        accreceiv_file = serializer.validated_data["accreceiv_file"]
+            accreceiv_file = serializer.validated_data["accreceiv_file"]
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_accreceiv:
-            for chunk in accreceiv_file.chunks():
-                temp_accreceiv.write(chunk)
-            accreceiv_path = temp_accreceiv.name
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_accreceiv:
+                for chunk in accreceiv_file.chunks():
+                    temp_accreceiv.write(chunk)
+                accreceiv_path = temp_accreceiv.name
 
-        postgres_accreceiv_count = load_fb_accreceiv_csv(accreceiv_path)
+            postgres_accreceiv_count = load_fb_accreceiv_csv(accreceiv_path)
 
-        clickhouse_result = sync_fb_accreceiv_to_clickhouse()
+            clickhouse_result = sync_fb_accreceiv_to_clickhouse()
 
-        invalidate_dashboard_by_name("Accreceiv")
+            invalidate_dashboard_by_name("Accreceiv")
 
-        return Response({
-            "status": "ok",
-            "postgres": {
-                "fb_accreceiv_use": postgres_accreceiv_count,
-            },
-            "clickhouse": clickhouse_result,
-        })
+            return Response({
+                "status": "ok",
+                "postgres": {
+                    "fb_accreceiv_use": postgres_accreceiv_count,
+                },
+                "clickhouse": clickhouse_result,
+            })
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("FBAccreceivUploadView failed")
+            send_bitrix_message("[b]FBAccreceivUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
     
 
 
@@ -723,36 +753,43 @@ class FBAccreceivIndicatorUploadView(APIView):
         return self.serializer_class(*args, **kwargs)
 
     def post(self, request):
-        dashboard = Dashboard.objects.filter(slug="accreceiv").first()
-        if dashboard is None:
-            raise NotFound("Dashboard not found")
-        if not user_can_edit_dashboard(request.user, dashboard):
-            raise PermissionDenied("Нет права редактирования дашборда.")
-
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        uploaded_file = serializer.validated_data["file"]
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_file:
-            for chunk in uploaded_file.chunks():
-                temp_file.write(chunk)
-            temp_path = temp_file.name
-
         try:
-            postgres_result = load_fb_accreceiv_indicator_xlsx(temp_path)
-            clickhouse_result = sync_fb_accreceiv_to_clickhouse()
+            dashboard = Dashboard.objects.filter(slug="accreceiv").first()
+            if dashboard is None:
+                raise NotFound("Dashboard not found")
+            if not user_can_edit_dashboard(request.user, dashboard):
+                raise PermissionDenied("Нет права редактирования дашборда.")
 
-            invalidate_dashboard_by_name("Accreceiv")
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-            return Response({
-                "status": "ok",
-                "postgres": postgres_result,
-                "clickhouse": clickhouse_result,
-            })
-        finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+            uploaded_file = serializer.validated_data["file"]
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_file:
+                for chunk in uploaded_file.chunks():
+                    temp_file.write(chunk)
+                temp_path = temp_file.name
+
+            try:
+                postgres_result = load_fb_accreceiv_indicator_xlsx(temp_path)
+                clickhouse_result = sync_fb_accreceiv_to_clickhouse()
+
+                invalidate_dashboard_by_name("Accreceiv")
+
+                return Response({
+                    "status": "ok",
+                    "postgres": postgres_result,
+                    "clickhouse": clickhouse_result,
+                })
+            finally:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("FBAccreceivIndicatorUploadView failed")
+            send_bitrix_message("[b]FBAccreceivIndicatorUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
 
 class FBPurchasesIndicatorUploadView(APIView):
@@ -764,26 +801,33 @@ class FBPurchasesIndicatorUploadView(APIView):
         return self.serializer_class(*args, **kwargs)
 
     def post(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-        uploaded_file = serializer.validated_data["file"]
+            uploaded_file = serializer.validated_data["file"]
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_file:
-            for chunk in uploaded_file.chunks():
-                temp_file.write(chunk)
-            temp_path = temp_file.name
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_file:
+                for chunk in uploaded_file.chunks():
+                    temp_file.write(chunk)
+                temp_path = temp_file.name
 
-        postgres_result = load_fb_purchases_indicator_xlsx(temp_path)
-        clickhouse_result = sync_fb_purchases_to_clickhouse()
+            postgres_result = load_fb_purchases_indicator_xlsx(temp_path)
+            clickhouse_result = sync_fb_purchases_to_clickhouse()
 
-        invalidate_dashboard_by_name("Purchases")
+            invalidate_dashboard_by_name("Purchases")
 
-        return Response({
-            "status": "ok",
-            "postgres": postgres_result,
-            "clickhouse": clickhouse_result,
-        })
+            return Response({
+                "status": "ok",
+                "postgres": postgres_result,
+                "clickhouse": clickhouse_result,
+            })
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("FBPurchasesIndicatorUploadView failed")
+            send_bitrix_message("[b]FBPurchasesIndicatorUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
 
 class FBTurnoverIndicatorUploadView(APIView):
@@ -795,31 +839,38 @@ class FBTurnoverIndicatorUploadView(APIView):
         return self.serializer_class(*args, **kwargs)
 
     def post(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-        uploaded_file = serializer.validated_data["file"]
+            uploaded_file = serializer.validated_data["file"]
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_file:
-            for chunk in uploaded_file.chunks():
-                temp_file.write(chunk)
-            temp_path = temp_file.name
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_file:
+                for chunk in uploaded_file.chunks():
+                    temp_file.write(chunk)
+                temp_path = temp_file.name
 
-        postgres_result = load_fb_turnover_indicator_xlsx(temp_path)
-        clickhouse_result = sync_fb_turnover_to_clickhouse()
+            postgres_result = load_fb_turnover_indicator_xlsx(temp_path)
+            clickhouse_result = sync_fb_turnover_to_clickhouse()
 
-        invalidate_dashboard_by_name("Turnover")
-        call_command("warmup_turnover_cache")
+            invalidate_dashboard_by_name("Turnover")
+            call_command("warmup_turnover_cache")
 
-        return Response({
-            "status": "ok",
-            "postgres": postgres_result,
-            "clickhouse": clickhouse_result,
-            "cache": {
-                "warmed": True,
-                "command": "warmup_turnover_cache",
-            },
-        })
+            return Response({
+                "status": "ok",
+                "postgres": postgres_result,
+                "clickhouse": clickhouse_result,
+                "cache": {
+                    "warmed": True,
+                    "command": "warmup_turnover_cache",
+                },
+            })
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("FBTurnoverIndicatorUploadView failed")
+            send_bitrix_message("[b]FBTurnoverIndicatorUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
 
 
@@ -1104,74 +1155,18 @@ class PlannedSalesUploadView(APIView):
     serializer_class = PlannedSalesUploadSerializer
 
     def post(self, request):
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        uploaded_file = serializer.validated_data["file"]
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
-            for chunk in uploaded_file.chunks():
-                temp_file.write(chunk)
-            temp_path = temp_file.name
-
-        postgres_count = load_planned_sales_csv(temp_path)
-        clickhouse_result = sync_planned_sales_to_clickhouse()
-
-        invalidate_dashboard_by_name("PlannedSales")
-        notify_dashboard_updated("PlannedSales")
-
-        return Response({
-            "status": "ok",
-            "postgres": {
-                "planned_sales": postgres_count,
-            },
-            "clickhouse": clickhouse_result,
-        })
-
-
-class PlanSalesUploadView(APIView):
-    permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
-    serializer_class = PlanSalesUploadSerializer
-
-    def post(self, request):
-        dashboard = Dashboard.objects.filter(name="PlannedSales").first()
-
-        if not dashboard:
-            return Response(
-                {"error": "PlannedSales dashboard not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        can_edit = DashboardAccess.objects.filter(
-            user=request.user,
-            dashboard=dashboard,
-            can_edit=True,
-        ).exists()
-
-        if not can_edit:
-            return Response(
-                {"error": "No edit permission"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        uploaded_file = serializer.validated_data["file"]
-
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=".xlsx",
-        ) as temp_file:
-            for chunk in uploaded_file.chunks():
-                temp_file.write(chunk)
-
-            temp_path = temp_file.name
-
         try:
-            postgres_count = load_plan_sales_xlsx(temp_path)
+            serializer = self.serializer_class(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
+            uploaded_file = serializer.validated_data["file"]
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
+                for chunk in uploaded_file.chunks():
+                    temp_file.write(chunk)
+                temp_path = temp_file.name
+
+            postgres_count = load_planned_sales_csv(temp_path)
             clickhouse_result = sync_planned_sales_to_clickhouse()
 
             invalidate_dashboard_by_name("PlannedSales")
@@ -1180,14 +1175,84 @@ class PlanSalesUploadView(APIView):
             return Response({
                 "status": "ok",
                 "postgres": {
-                    "plan_sales": postgres_count,
+                    "planned_sales": postgres_count,
                 },
                 "clickhouse": clickhouse_result,
             })
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("PlannedSalesUploadView failed")
+            send_bitrix_message("[b]PlannedSalesUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
-        finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+
+class PlanSalesUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = PlanSalesUploadSerializer
+
+    def post(self, request):
+        try:
+            dashboard = Dashboard.objects.filter(name="PlannedSales").first()
+
+            if not dashboard:
+                return Response(
+                    {"error": "PlannedSales dashboard not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            can_edit = DashboardAccess.objects.filter(
+                user=request.user,
+                dashboard=dashboard,
+                can_edit=True,
+            ).exists()
+
+            if not can_edit:
+                return Response(
+                    {"error": "No edit permission"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            serializer = self.serializer_class(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            uploaded_file = serializer.validated_data["file"]
+
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=".xlsx",
+            ) as temp_file:
+                for chunk in uploaded_file.chunks():
+                    temp_file.write(chunk)
+
+                temp_path = temp_file.name
+
+            try:
+                postgres_count = load_plan_sales_xlsx(temp_path)
+
+                clickhouse_result = sync_planned_sales_to_clickhouse()
+
+                invalidate_dashboard_by_name("PlannedSales")
+                notify_dashboard_updated("PlannedSales")
+
+                return Response({
+                    "status": "ok",
+                    "postgres": {
+                        "plan_sales": postgres_count,
+                    },
+                    "clickhouse": clickhouse_result,
+                })
+
+            finally:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("PlanSalesUploadView failed")
+            send_bitrix_message("[b]PlanSalesUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
 
 class PlannedSalesDirectoryUploadView(APIView):
@@ -1196,29 +1261,36 @@ class PlannedSalesDirectoryUploadView(APIView):
     serializer_class = PlannedSalesDirectoryUploadSerializer
 
     def post(self, request):
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer = self.serializer_class(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-        uploaded_file = serializer.validated_data["file"]
+            uploaded_file = serializer.validated_data["file"]
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_file:
-            for chunk in uploaded_file.chunks():
-                temp_file.write(chunk)
-            temp_path = temp_file.name
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_file:
+                for chunk in uploaded_file.chunks():
+                    temp_file.write(chunk)
+                temp_path = temp_file.name
 
-        postgres_count = load_planned_sales_directory_xlsx(temp_path)
-        clickhouse_result = sync_planned_sales_to_clickhouse()
+            postgres_count = load_planned_sales_directory_xlsx(temp_path)
+            clickhouse_result = sync_planned_sales_to_clickhouse()
 
-        invalidate_dashboard_by_name("PlannedSales")
-        notify_dashboard_updated("PlannedSales")
+            invalidate_dashboard_by_name("PlannedSales")
+            notify_dashboard_updated("PlannedSales")
 
-        return Response({
-            "status": "ok",
-            "postgres": {
-                "planned_sales_directory": postgres_count,
-            },
-            "clickhouse": clickhouse_result,
-        })
+            return Response({
+                "status": "ok",
+                "postgres": {
+                    "planned_sales_directory": postgres_count,
+                },
+                "clickhouse": clickhouse_result,
+            })
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("PlannedSalesDirectoryUploadView failed")
+            send_bitrix_message("[b]PlannedSalesDirectoryUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
 
 
@@ -1467,38 +1539,46 @@ class ParserPrefixUploadView(APIView):
         return self.serializer_class(*args, **kwargs)
 
     def post(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        uploaded_file = serializer.validated_data["file"]
-
         try:
-            result = load_parser_prefixes_from_excel(
-                uploaded_file
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            uploaded_file = serializer.validated_data["file"]
+
+            try:
+                result = load_parser_prefixes_from_excel(
+                    uploaded_file
+                )
+
+            except ValueError as exc:
+                send_bitrix_message("[b]ParserPrefixUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0438\u043c\u043f\u043e\u0440\u0442\u0430: \u0444\u0430\u0439\u043b \u043d\u0435 \u043f\u0440\u043e\u0448\u0451\u043b \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0443. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043e\u0442\u0432\u0435\u0442\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u0447\u0438\u043a\u0430.", logger_name="datasets.upload")
+                return Response(
+                    {
+                        "status": "error",
+                        "error": str(exc),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            publish_iprice_update(
+                "source_data_updated",
+                invalidate_health=True,
+                source="regional_prefixes",
             )
 
-        except ValueError as exc:
             return Response(
                 {
-                    "status": "error",
-                    "error": str(exc),
+                    "status": "ok",
+                    **result,
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_200_OK,
             )
-
-        publish_iprice_update(
-            "source_data_updated",
-            invalidate_health=True,
-            source="regional_prefixes",
-        )
-
-        return Response(
-            {
-                "status": "ok",
-                **result,
-            },
-            status=status.HTTP_200_OK,
-        )
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("ParserPrefixUploadView failed")
+            send_bitrix_message("[b]ParserPrefixUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
 
 class ParserMasterPipelineRunView(APIView):
@@ -1767,63 +1847,71 @@ class ProductClassificationUploadView(APIView):
         return self.serializer_class(*args, **kwargs)
 
     def post(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        uploaded_file = serializer.validated_data["file"]
-
-        if not uploaded_file.name.casefold().endswith(".xlsx"):
-            return Response(
-                {"status": "error", "error": "Ожидается файл .xlsx"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        lock_key = IPRICE_PARAMETER_CHANGE_LOCK_KEY
-        if not cache.add(lock_key, True, timeout=60 * 30):
-            return Response(
-                {
-                    "status": "already_running",
-                    "message": (
-                        "Дождитесь завершения текущего изменения данных iPrice"
-                    ),
-                },
-                status=status.HTTP_409_CONFLICT,
-            )
-
         try:
-            if (
-                cache.get(IPRICE_SNAPSHOT_START_LOCK_KEY)
-                or IPriceSnapshot.objects.filter(
-                    status=IPriceSnapshot.STATUS_BUILDING,
-                ).exists()
-            ):
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            uploaded_file = serializer.validated_data["file"]
+
+            if not uploaded_file.name.casefold().endswith(".xlsx"):
+                return Response(
+                    {"status": "error", "error": "Ожидается файл .xlsx"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            lock_key = IPRICE_PARAMETER_CHANGE_LOCK_KEY
+            if not cache.add(lock_key, True, timeout=60 * 30):
                 return Response(
                     {
-                        "status": "calculation_running",
+                        "status": "already_running",
                         "message": (
-                            "Дождитесь завершения текущего расчёта iPrice"
+                            "Дождитесь завершения текущего изменения данных iPrice"
                         ),
                     },
                     status=status.HTTP_409_CONFLICT,
                 )
 
             try:
-                result = load_product_classification_matches(
-                    uploaded_file,
-                    filename=uploaded_file.name,
+                if (
+                    cache.get(IPRICE_SNAPSHOT_START_LOCK_KEY)
+                    or IPriceSnapshot.objects.filter(
+                        status=IPriceSnapshot.STATUS_BUILDING,
+                    ).exists()
+                ):
+                    return Response(
+                        {
+                            "status": "calculation_running",
+                            "message": (
+                                "Дождитесь завершения текущего расчёта iPrice"
+                            ),
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
+
+                try:
+                    result = load_product_classification_matches(
+                        uploaded_file,
+                        filename=uploaded_file.name,
+                    )
+                except ProductClassificationMatchLoadError as exc:
+                    send_bitrix_message("[b]ProductClassificationUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0438\u043c\u043f\u043e\u0440\u0442\u0430: \u0444\u0430\u0439\u043b \u043d\u0435 \u043f\u0440\u043e\u0448\u0451\u043b \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0443. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043e\u0442\u0432\u0435\u0442\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u0447\u0438\u043a\u0430.", logger_name="datasets.upload")
+                    return Response(
+                        {"status": "error", "error": str(exc)},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                publish_iprice_update(
+                    "product_classification_applied",
+                    invalidate_health=True,
                 )
-            except ProductClassificationMatchLoadError as exc:
-                return Response(
-                    {"status": "error", "error": str(exc)},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            publish_iprice_update(
-                "product_classification_applied",
-                invalidate_health=True,
-            )
-            return Response(result, status=status.HTTP_200_OK)
-        finally:
-            cache.delete(lock_key)
+                return Response(result, status=status.HTTP_200_OK)
+            finally:
+                cache.delete(lock_key)
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("ProductClassificationUploadView failed")
+            send_bitrix_message("[b]ProductClassificationUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
 
 
@@ -1838,32 +1926,39 @@ class BaseYdWordstatRefExcelUploadView(APIView):
     loader_func = None
 
     def post(self, request):
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        uploaded_file = serializer.validated_data["file"]
-
-        temp_path = None
-
         try:
-            suffix = os.path.splitext(uploaded_file.name)[1] or ".xlsx"
+            serializer = self.serializer_class(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-            with tempfile.NamedTemporaryFile(
-                delete=False,
-                suffix=suffix,
-            ) as temp_file:
-                for chunk in uploaded_file.chunks():
-                    temp_file.write(chunk)
+            uploaded_file = serializer.validated_data["file"]
 
-                temp_path = temp_file.name
+            temp_path = None
 
-            result = self.loader_func(temp_path)
+            try:
+                suffix = os.path.splitext(uploaded_file.name)[1] or ".xlsx"
 
-            return Response(result)
+                with tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=suffix,
+                ) as temp_file:
+                    for chunk in uploaded_file.chunks():
+                        temp_file.write(chunk)
 
-        finally:
-            if temp_path and os.path.exists(temp_path):
-                os.remove(temp_path)
+                    temp_path = temp_file.name
+
+                result = self.loader_func(temp_path)
+
+                return Response(result)
+
+            finally:
+                if temp_path and os.path.exists(temp_path):
+                    os.remove(temp_path)
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("BaseYdWordstatRefExcelUploadView failed")
+            send_bitrix_message("[b]BaseYdWordstatRefExcelUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
 
 
@@ -1976,43 +2071,51 @@ class TransportCostUploadView(APIView):
     serializer_class = TransportCostUploadSerializer
 
     def post(self, request):
-        serializer = self.serializer_class(
-            data=request.data,
-        )
-
-        serializer.is_valid(
-            raise_exception=True,
-        )
-
-        uploaded_file = serializer.validated_data["file"]
-
         try:
-            result = load_transport_cost_from_excel(
-                uploaded_file
+            serializer = self.serializer_class(
+                data=request.data,
             )
 
-        except ValueError as exc:
+            serializer.is_valid(
+                raise_exception=True,
+            )
+
+            uploaded_file = serializer.validated_data["file"]
+
+            try:
+                result = load_transport_cost_from_excel(
+                    uploaded_file
+                )
+
+            except ValueError as exc:
+                send_bitrix_message("[b]TransportCostUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0438\u043c\u043f\u043e\u0440\u0442\u0430: \u0444\u0430\u0439\u043b \u043d\u0435 \u043f\u0440\u043e\u0448\u0451\u043b \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0443. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043e\u0442\u0432\u0435\u0442\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u0447\u0438\u043a\u0430.", logger_name="datasets.upload")
+                return Response(
+                    {
+                        "status": "error",
+                        "error": str(exc),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            publish_iprice_update(
+                "source_data_updated",
+                invalidate_health=True,
+                source="transport_costs",
+            )
+
             return Response(
                 {
-                    "status": "error",
-                    "error": str(exc),
+                    "status": "ok",
+                    **result,
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_200_OK,
             )
-
-        publish_iprice_update(
-            "source_data_updated",
-            invalidate_health=True,
-            source="transport_costs",
-        )
-
-        return Response(
-            {
-                "status": "ok",
-                **result,
-            },
-            status=status.HTTP_200_OK,
-        )
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("TransportCostUploadView failed")
+            send_bitrix_message("[b]TransportCostUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
 
 class ProductCostUploadView(APIView):
@@ -2021,43 +2124,51 @@ class ProductCostUploadView(APIView):
     serializer_class = ProductCostUploadSerializer
 
     def post(self, request):
-        serializer = self.serializer_class(
-            data=request.data,
-        )
-
-        serializer.is_valid(
-            raise_exception=True,
-        )
-
-        uploaded_file = serializer.validated_data["file"]
-
         try:
-            result = load_product_cost_from_excel(
-                uploaded_file
+            serializer = self.serializer_class(
+                data=request.data,
             )
 
-        except ValueError as exc:
+            serializer.is_valid(
+                raise_exception=True,
+            )
+
+            uploaded_file = serializer.validated_data["file"]
+
+            try:
+                result = load_product_cost_from_excel(
+                    uploaded_file
+                )
+
+            except ValueError as exc:
+                send_bitrix_message("[b]ProductCostUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0438\u043c\u043f\u043e\u0440\u0442\u0430: \u0444\u0430\u0439\u043b \u043d\u0435 \u043f\u0440\u043e\u0448\u0451\u043b \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0443. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043e\u0442\u0432\u0435\u0442\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u0447\u0438\u043a\u0430.", logger_name="datasets.upload")
+                return Response(
+                    {
+                        "status": "error",
+                        "error": str(exc),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            publish_iprice_update(
+                "source_data_updated",
+                invalidate_health=True,
+                source="product_costs",
+            )
+
             return Response(
                 {
-                    "status": "error",
-                    "error": str(exc),
+                    "status": "ok",
+                    **result,
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_200_OK,
             )
-
-        publish_iprice_update(
-            "source_data_updated",
-            invalidate_health=True,
-            source="product_costs",
-        )
-
-        return Response(
-            {
-                "status": "ok",
-                **result,
-            },
-            status=status.HTTP_200_OK,
-        )
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("ProductCostUploadView failed")
+            send_bitrix_message("[b]ProductCostUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
 
 class IPriceAccessView(APIView):
@@ -2208,56 +2319,64 @@ class IPriceCalculationConfigUploadView(APIView):
     serializer_class = IPriceCalculationConfigUploadSerializer
 
     def post(self, request):
-        serializer = self.serializer_class(
-            data=request.data,
-        )
-
-        serializer.is_valid(
-            raise_exception=True,
-        )
-
-        uploaded_file = serializer.validated_data["file"]
-
-        if not uploaded_file.name.lower().endswith(".xlsx"):
-            return Response(
-                {
-                    "status": "error",
-                    "error": (
-                        "Поддерживается только формат XLSX"
-                    ),
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         try:
-            result = (
-                load_iprice_calculation_config_from_xlsx(
-                    uploaded_file
-                )
+            serializer = self.serializer_class(
+                data=request.data,
             )
 
-        except ValueError as exc:
+            serializer.is_valid(
+                raise_exception=True,
+            )
+
+            uploaded_file = serializer.validated_data["file"]
+
+            if not uploaded_file.name.lower().endswith(".xlsx"):
+                return Response(
+                    {
+                        "status": "error",
+                        "error": (
+                            "Поддерживается только формат XLSX"
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                result = (
+                    load_iprice_calculation_config_from_xlsx(
+                        uploaded_file
+                    )
+                )
+
+            except ValueError as exc:
+                send_bitrix_message("[b]IPriceCalculationConfigUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0438\u043c\u043f\u043e\u0440\u0442\u0430: \u0444\u0430\u0439\u043b \u043d\u0435 \u043f\u0440\u043e\u0448\u0451\u043b \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0443. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043e\u0442\u0432\u0435\u0442\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u0447\u0438\u043a\u0430.", logger_name="datasets.upload")
+                return Response(
+                    {
+                        "status": "error",
+                        "error": str(exc),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            publish_iprice_update(
+                "source_data_updated",
+                invalidate_health=True,
+                source="calculation_config",
+            )
+
             return Response(
                 {
-                    "status": "error",
-                    "error": str(exc),
+                    "status": "ok",
+                    **result,
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_200_OK,
             )
-
-        publish_iprice_update(
-            "source_data_updated",
-            invalidate_health=True,
-            source="calculation_config",
-        )
-
-        return Response(
-            {
-                "status": "ok",
-                **result,
-            },
-            status=status.HTTP_200_OK,
-        )
+        except (ValidationError, PermissionDenied, NotFound):
+            raise
+        except Exception:
+            logging.getLogger("datasets.upload").exception("IPriceCalculationConfigUploadView failed")
+            send_bitrix_message("[b]IPriceCalculationConfigUploadView[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430 \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0434\u0430\u043d\u043d\u044b\u0445. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 Django.", logger_name="datasets.upload")
+            raise
 
 
 class IPriceParameterChangeView(APIView):

@@ -1,3 +1,4 @@
+from analytics.services.bitrix_notify import send_bitrix_message
 import logging
 from decimal import Decimal, InvalidOperation
 
@@ -114,71 +115,76 @@ def normalize_nomenclature_record(record):
 
 
 def load_nomenclature_from_api() -> dict:
-    logger.info("Nomenclature API load started")
+    try:
+        logger.info("Nomenclature API load started")
 
-    rows = fetch_nomenclature_api_rows()
-
-    logger.info(
-        "Nomenclature API rows received: %s",
-        len(rows),
-    )
-
-    if not rows:
-        raise ValueError(
-            "Nomenclature API returned empty list. Existing data will not be deleted."
-        )
-
-    objects = [
-        normalize_nomenclature_record(record)
-        for record in rows
-    ]
-
-    objects = [
-        obj
-        for obj in objects
-        if obj.nom_code
-    ]
-
-    logger.info(
-        "Nomenclature normalize finished: objects=%s",
-        len(objects),
-    )
-
-    if not objects:
-        raise ValueError(
-            "Nomenclature normalize returned 0 valid objects. "
-            "Existing data will not be deleted."
-        )
-
-    with transaction.atomic():
-        logger.info("Nomenclature PostgreSQL delete started")
-
-        deleted_count, _ = Nomenclature.objects.all().delete()
+        rows = fetch_nomenclature_api_rows()
 
         logger.info(
-            "Nomenclature PostgreSQL deleted rows: %s",
-            deleted_count,
+            "Nomenclature API rows received: %s",
+            len(rows),
         )
 
-        Nomenclature.objects.bulk_create(
-            objects,
-            batch_size=5000,
-        )
+        if not rows:
+            raise ValueError(
+                "Nomenclature API returned empty list. Existing data will not be deleted."
+            )
+
+        objects = [
+            normalize_nomenclature_record(record)
+            for record in rows
+        ]
+
+        objects = [
+            obj
+            for obj in objects
+            if obj.nom_code
+        ]
 
         logger.info(
-            "Nomenclature PostgreSQL insert finished: rows=%s",
+            "Nomenclature normalize finished: objects=%s",
             len(objects),
         )
 
-    result = {
-        "received": len(rows),
-        "saved": len(objects),
-        "deleted": deleted_count,
-    }
+        if not objects:
+            raise ValueError(
+                "Nomenclature normalize returned 0 valid objects. "
+                "Existing data will not be deleted."
+            )
 
-    logger.info(
-        "Nomenclature API load finished: %s",
-        result,
-    )
+        with transaction.atomic():
+            logger.info("Nomenclature PostgreSQL delete started")
 
-    return result
+            deleted_count, _ = Nomenclature.objects.all().delete()
+
+            logger.info(
+                "Nomenclature PostgreSQL deleted rows: %s",
+                deleted_count,
+            )
+
+            Nomenclature.objects.bulk_create(
+                objects,
+                batch_size=5000,
+            )
+
+            logger.info(
+                "Nomenclature PostgreSQL insert finished: rows=%s",
+                len(objects),
+            )
+
+        result = {
+            "received": len(rows),
+            "saved": len(objects),
+            "deleted": deleted_count,
+        }
+
+        logger.info(
+            "Nomenclature API load finished: %s",
+            result,
+        )
+
+        return result
+    except Exception:
+        logger.exception("Nomenclature API load failed")
+        send_bitrix_message("[b]Nomenclature API[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 load_nomenclature_from_api.", logger_name=logger.name)
+        raise

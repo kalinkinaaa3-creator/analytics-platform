@@ -674,7 +674,7 @@ export function AccreceivDashboard({ data, dashboard, publicToken = null }) {
   }
 
   return (
-    <div className="accreceiv">
+    <div className="accreceiv" data-last-updated={data?.last_update || ""}>
       <h2>Дебиторская задолженность</h2>
 
       <form id="filterForm" onSubmit={(event) => event.preventDefault()}>

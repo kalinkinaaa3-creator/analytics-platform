@@ -611,6 +611,11 @@ def check_context_analytics_health(cursor, today, problems, ok):
     name = "Context analytics (context_analytics_daily)"
     local_problems = []
     yesterday = today - timedelta(days=1)
+    # Sunday/Monday checks may see no advertising activity on Saturday/Sunday.
+    # Still require a successful refresh through yesterday and fresh weekday facts.
+    expected_fact_date = yesterday
+    while expected_fact_date.weekday() >= 5:
+        expected_fact_date -= timedelta(days=1)
     window_start = yesterday - timedelta(days=DEFAULT_INCREMENTAL_DAYS - 1)
     run_table = "context_refresh_run"
     request_log_table = "context_api_request_log"
@@ -736,8 +741,8 @@ def check_context_analytics_health(cursor, today, problems, ok):
                 if must_have_yesterday:
                     local_problems.append(f"{name}: {table} не содержит строк за {window_start}..{yesterday}")
                 continue
-            if must_have_yesterday and max_date != yesterday:
-                local_problems.append(f"{name}: {table} содержит данные по {max_date}, нужно по {yesterday}")
+            if must_have_yesterday and (max_date is None or max_date < expected_fact_date):
+                local_problems.append(f"{name}: {table} содержит данные по {max_date}, нужно не ранее {expected_fact_date}")
             if loaded != today:
                 local_problems.append(f"{name}: {table} обновлена={loaded}, нужно={today}")
 

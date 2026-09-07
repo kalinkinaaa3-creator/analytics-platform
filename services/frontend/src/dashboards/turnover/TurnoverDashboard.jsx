@@ -825,7 +825,7 @@ export function TurnoverDashboard({ data, publicToken = null }) {
   }
 
   return (
-    <div className="turnover">
+    <div className="turnover" data-last-updated={data?.last_update || ""}>
       <h2>Остатки</h2>
 
       <form id="filterForm" onSubmit={(event) => event.preventDefault()}>

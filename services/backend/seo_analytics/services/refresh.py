@@ -1,3 +1,4 @@
+from analytics.services.bitrix_notify import send_bitrix_message
 import logging
 import json
 import os
@@ -43,11 +44,13 @@ def recover_stale_runs():
     stale = SeoRefreshRun.objects.filter(status=SeoRefreshRun.Status.RUNNING).filter(
         Q(heartbeat_at__lt=cutoff) | Q(heartbeat_at__isnull=True, started_at__lt=cutoff)
     )
-    stale.update(
+    count = stale.update(
         status=SeoRefreshRun.Status.FAILED,
         finished_at=timezone.now(),
         error="Обновление помечено как failed после превышения допустимого времени выполнения.",
     )
+    if count:
+        send_bitrix_message(f"[b]SEO-аналитика[/b] Загрузка прервана: {count} запусков без heartbeat. Подробности в журнале обновлений SEO.", logger_name=logger.name)
 
 
 def heartbeat_run(run, stats=None):
@@ -93,6 +96,7 @@ def finish_run(run, stats):
 
 
 def fail_run(run, error):
+    already_failed = run.status == SeoRefreshRun.Status.FAILED
     run.status = SeoRefreshRun.Status.FAILED
     run.error = str(error)[:10000]
     run.finished_at = timezone.now()
@@ -100,6 +104,8 @@ def fail_run(run, error):
     run.save(update_fields=("status", "error", "finished_at", "heartbeat_at"))
     cache.delete(LOCK_KEY)
     _notify_refresh(run)
+    if not already_failed:
+        send_bitrix_message(f"[b]SEO-аналитика[/b] Ошибка загрузки #{run.id} ({type(error).__name__}). Подробности в журнале обновлений SEO и logs/seo_analytics.", logger_name=logger.name)
 
 
 def launch_background_refresh(user=None, *, page="", filters=None, trigger=None, window="default"):
@@ -141,6 +147,7 @@ def launch_background_refresh(user=None, *, page="", filters=None, trigger=None,
         )
     except Exception:
         cache.delete(LAUNCH_LOCK_KEY)
+        send_bitrix_message("[b]seo_analytics[/b] \u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u0444\u043e\u043d\u043e\u0432\u0443\u044e \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0443. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0430\u0445 Django.", logger_name="seo_analytics")
         raise
     finally:
         log_file.close()

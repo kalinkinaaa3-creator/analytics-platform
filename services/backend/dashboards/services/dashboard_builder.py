@@ -1,6 +1,8 @@
 from datetime import date, timedelta
 from copy import deepcopy
 from django.core.cache import cache
+from django.db.models import Max
+from datasets.models import FBPurchasesUse, TurnoverClear, AccreceivUse
 
 from analytics.clickhouse.repository import ClickHouseRepository
 
@@ -47,7 +49,9 @@ def get_dashboard_cache_timeout(dashboard: Dashboard) -> int:
 def get_dashboard_cache_schema_version(dashboard: Dashboard) -> int:
     return {
         "Wordstat": 4,
-        "Turnover": 3,
+        "Turnover": 4,
+        "Purchases": 2,
+        "Accreceiv": 2,
     }.get(dashboard.name, 1)
 
 
@@ -551,6 +555,17 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
 
 
+
+        source_model = {
+            "fb_purchases_dashboard": FBPurchasesUse,
+            "fb_turnover_dashboard": TurnoverClear,
+            "fb_accreceiv_dashboard": AccreceivUse,
+        }.get(widget.type)
+        if source_model is not None:
+            # The warehouse tables omit date_add. Read the prepared source's
+            # actual load timestamp, independently of the selected report period.
+            loaded_at = source_model.objects.aggregate(value=Max("date_add"))["value"]
+            widget_data["data"]["last_update"] = loaded_at.isoformat() if loaded_at else None
 
         widgets_data.append(widget_data)
 

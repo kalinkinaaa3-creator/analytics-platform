@@ -15,6 +15,8 @@ class DemandParams(serializers.Serializer):
     feature = serializers.CharField(required=False, allow_blank=True, max_length=255)
     category = serializers.CharField(required=False, allow_blank=True, max_length=255)
     phrase = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    scope_ids = serializers.ListField(child=serializers.CharField(max_length=1024), required=False, max_length=5000)
+    element_ids = serializers.ListField(child=serializers.CharField(max_length=1024), required=False, max_length=5000)
     level = serializers.ChoiceField(choices=["feature", "category", "phrase"], default="feature")
     period_months = serializers.ChoiceField(choices=[1, 3, 6, 12], default=12)
     comparison = serializers.ChoiceField(choices=["year_over_year", "previous_period"], default="year_over_year")
@@ -38,9 +40,11 @@ class WordstatDemandView(APIView):
         dashboard = Dashboard.objects.filter(slug="wordstat").first()
         if not dashboard or not user_can_view_dashboard(request.user, dashboard):
             raise PermissionDenied("Нет доступа к дашборду Wordstat.")
-        params = DemandParams(data=request.query_params)
+        params = DemandParams(data=request.data if request.method == "POST" else request.query_params)
         params.is_valid(raise_exception=True)
         return Response(cached_demand(params.validated_data))
+
+    post = get
 
 
 class PublicWordstatDemandView(APIView):
@@ -51,6 +55,8 @@ class PublicWordstatDemandView(APIView):
         from dashboards.api.public_group_views import get_public_group_or_404, get_public_group_dashboard_or_403
         group = get_public_group_or_404(token)
         get_public_group_dashboard_or_403(group, "wordstat")
-        params = DemandParams(data=request.query_params)
+        params = DemandParams(data=request.data if request.method == "POST" else request.query_params)
         params.is_valid(raise_exception=True)
         return Response(cached_demand(params.validated_data))
+
+    post = get

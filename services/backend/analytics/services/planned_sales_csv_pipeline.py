@@ -1,3 +1,4 @@
+from analytics.services.bitrix_notify import send_bitrix_message
 import logging
 from datetime import date
 
@@ -22,40 +23,45 @@ def run_planned_sales_csv_pipeline(
     start_date: date | None = None,
     truncate_source: bool = True,
 ):
-    logger.info("PlannedSales CSV pipeline started")
+    try:
+        logger.info("PlannedSales CSV pipeline started")
 
-    csv_result = load_dash_sales_from_csv(
-        csv_path=csv_path,
-        start_date=start_date,
-        truncate=truncate_source,
-    )
+        csv_result = load_dash_sales_from_csv(
+            csv_path=csv_path,
+            start_date=start_date,
+            truncate=truncate_source,
+        )
 
-    logger.info("PlannedSales SQL rebuild started")
-    rebuild_result = rebuild_planned_sales_from_dash_sales_sql()
+        logger.info("PlannedSales SQL rebuild started")
+        rebuild_result = rebuild_planned_sales_from_dash_sales_sql()
 
-    logger.info("PlannedSales ClickHouse sync started")
-    clickhouse_result = sync_planned_sales_to_clickhouse()
+        logger.info("PlannedSales ClickHouse sync started")
+        clickhouse_result = sync_planned_sales_to_clickhouse()
 
-    logger.info("PlannedSales ClickHouse sync finished: %s", clickhouse_result)
+        logger.info("PlannedSales ClickHouse sync finished: %s", clickhouse_result)
 
-    invalidate_dashboard_by_name("PlannedSales")
-    logger.info("PlannedSales dashboard cache invalidated")
+        invalidate_dashboard_by_name("PlannedSales")
+        logger.info("PlannedSales dashboard cache invalidated")
 
-    notify_dashboard_updated("PlannedSales")
-    logger.info("PlannedSales websocket notification sent")
+        notify_dashboard_updated("PlannedSales")
+        logger.info("PlannedSales websocket notification sent")
 
-    result = {
-        "status": "ok",
-        "source": "csv",
-        "dashboard": "PlannedSales",
-        "dash_sales": csv_result,
-        "rebuild": rebuild_result,
-        "clickhouse": clickhouse_result,
-    }
+        result = {
+            "status": "ok",
+            "source": "csv",
+            "dashboard": "PlannedSales",
+            "dash_sales": csv_result,
+            "rebuild": rebuild_result,
+            "clickhouse": clickhouse_result,
+        }
 
-    logger.info("PlannedSales CSV pipeline finished: %s", result)
+        logger.info("PlannedSales CSV pipeline finished: %s", result)
 
-    return result
+        return result
+    except Exception:
+        logger.exception("PlannedSales CSV load failed")
+        send_bitrix_message("[b]PlannedSales CSV[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 run_planned_sales_csv_pipeline.", logger_name=logger.name)
+        raise
 
 
 

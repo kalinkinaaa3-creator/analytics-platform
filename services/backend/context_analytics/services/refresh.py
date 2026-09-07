@@ -1,3 +1,4 @@
+from analytics.services.bitrix_notify import send_bitrix_message
 import os
 import logging
 import subprocess
@@ -40,10 +41,12 @@ def _notify(run):
 
 def recover_stale():
     cutoff = timezone.now() - timedelta(seconds=settings.CONTEXT_REFRESH_LOCK_TIMEOUT)
-    ContextRefreshRun.objects.filter(status="running").filter(
+    count = ContextRefreshRun.objects.filter(status="running").filter(
         Q(heartbeat_at__lt=cutoff) | Q(heartbeat_at__isnull=True, started_at__lt=cutoff)
     ).update(
         status="failed", finished_at=timezone.now(), error="Обновление превысило допустимое время выполнения.")
+    if count:
+        send_bitrix_message(f"[b]Контекстная аналитика[/b] Загрузка прервана: {count} запусков без heartbeat. Подробности в журнале обновлений контекста.", logger_name=logger.name)
 
 
 def heartbeat(run, stats=None):
@@ -75,6 +78,7 @@ def start_run(trigger, user=None):
 
 
 def finish(run, stats=None, error=""):
+    already_failed = run.status == "failed"
     run.status = "failed" if error else "success"
     run.stats = stats or {}
     run.error = str(error)[:10000]
@@ -82,6 +86,8 @@ def finish(run, stats=None, error=""):
     run.save(update_fields=("status","stats","error","finished_at","heartbeat_at"))
     cache.delete(LOCK_KEY)
     _notify(run)
+    if error and not already_failed:
+        send_bitrix_message(f"[b]Контекстная аналитика[/b] Ошибка загрузки #{run.id} ({type(error).__name__}). Подробности в журнале обновлений контекста и logs/context_analytics.", logger_name=logger.name)
 
 
 def latest_state():
@@ -122,6 +128,7 @@ def launch(user=None, *, trigger="manual", days=None):
                          start_new_session=True, env=os.environ.copy())
     except Exception:
         cache.delete(LAUNCH_KEY)
+        send_bitrix_message("[b]context_analytics[/b] \u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u0444\u043e\u043d\u043e\u0432\u0443\u044e \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0443. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0430\u0445 Django.", logger_name="context_analytics")
         raise
     finally:
         stream.close()

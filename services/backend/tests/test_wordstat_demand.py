@@ -97,7 +97,7 @@ class DemandMathTests(unittest.TestCase):
         r = build_demand(dict(end_month=date(2026, 8, 1), period_months=1), TODAY, (refs, facts, snap))
         self.assertIsNone(r["summary"]["current_volume"])
         self.assertEqual(r["latest_month"], "2026-07")
-        self.assertNotIn("2026-08", r["available_months"])
+        self.assertIn("2026-08", r["available_months"])
         self.assertEqual(r["month_coverage"]["2026-08"], "partial")
 
     def test_other_category_gap_does_not_hide_complete_selected_month(self):
@@ -121,10 +121,57 @@ class DemandMathTests(unittest.TestCase):
         r = build_demand(dict(level="phrase", feature="B", category="same"), TODAY, data)
         self.assertEqual([i["phrase"] for i in r["items"]], ["b"])
 
-    def test_focus_does_not_change_list_summary(self):
+    def test_focus_changes_entire_report(self):
         r = build_demand(dict(level="phrase", phrase="a", period_months=1), TODAY, source())
-        self.assertEqual(r["summary"]["current_volume"], 1000)
-        self.assertEqual(r["summary"]["count"], 2)
+        self.assertEqual(r["summary"]["current_volume"], 100)
+        self.assertEqual(r["summary"]["count"], 1)
+        self.assertEqual(len(r["items"]), 1)
+        self.assertEqual(len(r["seasonality"]), 1)
+
+    def test_multiple_queries_filter_all_totals_and_keep_filter_options(self):
+        data = source([("a", "A", "AA", 100), ("b", "A", "AA", 200), ("c", "A", "AA", 900)])
+        report = build_demand(dict(level="phrase", element_ids=["A\x1fAA\x1fa", "A\x1fAA\x1fb"], period_months=1), TODAY, data)
+        self.assertEqual(report["summary"]["current_volume"], 300)
+        self.assertEqual(report["summary"]["count"], 2)
+        self.assertEqual({p["phrase"] for p in report["items"]}, {"a", "b"})
+        self.assertEqual(len(report["seasonality"]), 2)
+        self.assertEqual(len(report["element_options"]), 3)
+
+    def test_multi_category_navigation_and_same_names_do_not_mix_scopes(self):
+        data = source([("a", "A", "same", 100), ("b", "B", "same", 200), ("c", "C", "other", 900)])
+        report = build_demand(dict(level="phrase", scope_ids=["A\x1fsame", "B\x1fsame"], period_months=1), TODAY, data)
+        self.assertEqual(report["summary"]["current_volume"], 300)
+        self.assertEqual({p["phrase"] for p in report["element_options"]}, {"a", "b"})
+
+    def test_card_query_selection_recalculates_the_whole_report(self):
+        refs, facts, snap = source()
+        facts["a"][date(2026, 8, 1)] = 200
+        data = refs, facts, snap
+        report = build_demand(dict(period_months=1), TODAY, data)
+        self.assertEqual(report["summary"]["distribution"]["growth"]["count"], 1)
+        ids = [q["id"] for q in report["query_items"] if q["status"] == "growth"]
+        narrowed = build_demand(dict(level="phrase", element_ids=ids, period_months=1), TODAY, data)
+        self.assertEqual(narrowed["summary"]["current_volume"], 200)
+        self.assertEqual(narrowed["summary"]["distribution"]["growth"]["share"], 100)
+
+    def test_latest_loaded_month_remains_available_when_another_query_is_missing(self):
+        refs, facts, snap = source()
+        facts["b"][date(2026, 8, 1)] = None
+        report = build_demand({}, TODAY, (refs, facts, snap))
+        self.assertEqual(report["period"]["end_month"], "2026-08")
+        self.assertEqual(report["available_months"][-1], "2026-08")
+        self.assertEqual(report["month_coverage"]["2026-08"], "partial")
+        self.assertIsNone(report["summary"]["current_volume"])
+
+    def test_region_gaps_do_not_invalidate_complete_devices(self):
+        day, old = date(2025, 6, 1), date(2024, 6, 1)
+        names = [("phone", "phone"), ("desktop", "desktop"), ("tablet", "tablet")]
+        values = {("focus", "device", d, m): v for d, v in (("phone", 60), ("desktop", 30), ("tablet", 10)) for m in (day, old)}
+        devices = describe_slices(values, "device", names, metrics(100, 100), metrics(None, None), [day], [old], 10)
+        regions = describe_slices(values, "region", [("group", "group")], metrics(100, 100), metrics(None, None), [day], [old], 10)
+        self.assertTrue(devices["complete"])
+        self.assertTrue(devices["consistent"])
+        self.assertFalse(regions["complete"])
 
     def test_seasonality_uses_selected_year_including_current(self):
         a = build_demand(dict(period_months=1), TODAY, source())
@@ -166,12 +213,13 @@ class DemandMathTests(unittest.TestCase):
         self.assertEqual(item["difference_vs_parent_pp"], 20)
         self.assertEqual(result["other_share"], 30)
 
-    def test_inconsistent_slice_is_not_displayed_as_complete_structure(self):
+    def test_overlapping_slices_remain_visible(self):
         day = date(2026, 8, 1)
         result = describe_slices({("focus", "device", "phone", day): 101}, "device", [("phone", "Phone")], metrics(100, 100), metrics(None, None), [day], [date(2025, 8, 1)], 10)
-        self.assertFalse(result["consistent"])
-        self.assertIsNone(result["leader"])
-        self.assertEqual(result["reason"], "inconsistent")
+        self.assertTrue(result["consistent"])
+        self.assertEqual(result["leader"]["share"], 101)
+        self.assertEqual(result["other_share"], 0)
+        self.assertIsNone(result["reason"])
 
     def test_slice_diagnostics_distinguish_gaps_from_zero_totals(self):
         day = date(2026, 8, 1)

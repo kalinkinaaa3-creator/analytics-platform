@@ -31,7 +31,7 @@ const SOURCE_COLUMNS = [
   ["non_target_leads", "Нецелевые лиды, шт", "number", "source-fact"], ["unprocessed_leads", "Необработанные лиды, шт", "number", "source-fact"], ["target_conversion", "CR «в целевые», %", "percent", "source-fact", "Целевые лиды ÷ Общее количество лидов × 100%"],
   ["target_delta", "Дельта целевых лидов, шт", "number", "source-control", "Фактические целевые − Плановые целевые"], ["target_deviation", "Отклонение, %", "percent", "source-control", "(Фактические целевые − Плановые целевые) ÷ Плановые целевые × 100%"],
   ["associated_target_leads", "Ассоциированные", "number", "source-target", "Сумма целевых лидов по выбранным источникам"], ["associated_share", "Доля, %", "percent", "source-target", "Ассоциированные ÷ Все целевые лиды × 100%"],
-  ["other_target_leads", "Целевые лиды прочих источников", "number", "source-target"], ["other_share", "Доля прочих, %", "percent", "source-target", "Целевые лиды прочих источников ÷ Все целевые лиды × 100%"],
+  ["other_target_leads", "Прочие источники", "number", "source-target"], ["other_share", "Доля прочих, %", "percent", "source-target", "Целевые лиды прочих источников ÷ Все целевые лиды × 100%"],
 ];
 
 const GROUPS = {

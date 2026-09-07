@@ -121,7 +121,7 @@ def cached_demand(params):
     digest = hashlib.sha256(json.dumps(params, sort_keys=True, default=str).encode()).hexdigest()
     for _ in range(2):
         snapshot = demand_snapshot()
-        key = f"wordstat:demand:v4:{snapshot}:{today}:{digest}"
+        key = f"wordstat:demand:v6:{snapshot}:{today}:{digest}"
         result = cache.get(key) if snapshot else None
         if result is not None:
             return result
@@ -145,17 +145,40 @@ def build_demand(params, today=None, source=None):
     minimum = int(getattr(settings, "WORDSTAT_DEMAND_MIN_BASE", 100))
     selected = [p for p, r in refs.items() if (not feature or r["feature"] == feature)
                 and (not category or r["category"] == category)]
+    scope_ids = set(params.get("scope_ids") or [])
+    element_ids = set(params.get("element_ids") or [])
+    def phrase_identity(p):
+        r = refs[p]
+        return (r["feature"], r["category"], p)
+    if scope_ids:
+        selected = [p for p in selected if any(
+            "\x1f".join(phrase_identity(p)[:depth]) in scope_ids for depth in (1, 2))]
+    scope = list(selected)
+    depth = {"feature": 1, "category": 2, "phrase": 3}[level]
+    option_groups = {}
+    for p in scope:
+        parts = phrase_identity(p)[:depth]
+        option_groups.setdefault("\x1f".join(parts), dict(
+            id="\x1f".join(parts), name=parts[-1], feature=parts[0],
+            category=parts[1] if depth > 1 else "", phrase=p if depth == 3 else ""))
+    if element_ids:
+        selected = [p for p in selected if "\x1f".join(phrase_identity(p)[:depth]) in element_ids]
+    if phrase:
+        selected = [p for p in selected if p == phrase]
     monthly = aggregate_months(selected, facts)
     last = shift(today.replace(day=1), -1)
     first = min(global_months, default=last)
     available = [shift(first, n) for n in range((last.year - first.year) * 12 + last.month - first.month + 1)]
     complete = sorted(d for d, value in monthly.items() if value is not None)
     observed = sorted({d for p in selected for d, value in facts.get(p, {}).items() if value is not None})
-    end = params.get("end_month") or (complete[-1] if complete else None)
+    published = sorted({d for days in facts.values() for d, value in days.items()
+                        if value is not None and d < today.replace(day=1)})
+    end = params.get("end_month") or (published[-1] if published else None)
     options = dict(features=sorted({r["feature"] or "Без категории" for r in refs.values()}),
                    categories=sorted({refs[p]["category"] or "Без подкатегории" for p in selected}))
     response = dict(context=dict(feature=feature, category=category, phrase=phrase, level=level),
-                    available_months=[d.strftime("%Y-%m") for d in complete], options=options,
+                    available_months=[d.strftime("%Y-%m") for d in published], options=options,
+                    element_options=sorted(option_groups.values(), key=lambda i: (i["name"], i["id"])),
                     snapshot=snapshot,
                     latest_month=complete[-1].strftime("%Y-%m") if complete else None,
                     month_coverage={d.strftime("%Y-%m"): "complete" if monthly.get(d) is not None else
@@ -191,13 +214,14 @@ def build_demand(params, today=None, source=None):
         items.append(item)
         profiles.append(dict(id=item["id"], name=item["name"], **grouped_seasonality(phrases, facts, today, end.year)))
     items.sort(key=lambda item: (-(item["current_volume"] or 0), item["id"]))
-    focus = [phrase] if phrase and phrase in selected else selected
+    focus = selected
+    query_items = [dict(id="\x1f".join(phrase_identity(p)), phrase=p, name=p, **measure([p])) for p in selected]
     total = measure(selected)
-    response.update(items=items, seasonality=profiles, summary=dict(**total, count=len(items),
-                    distribution=distribution(items)),
+    response.update(items=items, query_items=query_items, seasonality=profiles, summary=dict(**total, count=len(selected),
+                    distribution=distribution(query_items)),
                     median_volume=median([i["current_volume"] for i in items if i["current_volume"] is not None])
                     if any(i["current_volume"] is not None for i in items) else None)
-    parent = (selected if phrase else [p for p in refs if refs[p]["feature"] == feature]
+    parent = (scope if element_ids or phrase else [p for p in refs if refs[p]["feature"] == feature]
               if category else list(refs) if feature else [])
     slices = read_slices(focus, parent, current, previous, snapshot) if source is None else {}
     for label, kind, names in (
@@ -252,14 +276,15 @@ def describe_slices(values, kind, names, total, parent_total, current, previous,
         items.append(item)
     complete = all(item["share"] is not None for item in items)
     share_sum = sum(item["share"] for item in items) if complete else None
-    consistent = share_sum is not None and share_sum <= 100.000001
+    # Independently requested dimensions need not form a disjoint partition.
+    consistent = complete
     ranked = sorted(items, key=lambda p: -(p["share"] or 0)) if complete and consistent else []
     reason = ("missing_total" if total["current_volume"] is None else
               "zero_total" if total["current_volume"] == 0 else
-              "missing_slices" if not complete else "inconsistent" if not consistent else None)
+              "missing_slices" if not complete else None)
     return dict(items=items, complete=complete, consistent=consistent, reason=reason,
         leader=ranked[0] if ranked else None,
         top=ranked[:3], top3_share=sum(p["share"] for p in ranked[:3]) if ranked else None,
-        other_share=max(0, 100 - share_sum) if consistent else None,
+        other_share=max(0, 100 - share_sum) if complete else None,
         fastest_growing=max((p for p in items if p["status"] == "growth" and p["previous_volume"] >= minimum),
                             key=lambda p: p["growth_percent"], default=None))

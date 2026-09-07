@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { useDropdownPosition } from "../../components/useDropdownPosition";
 import { WordstatDemandAnalysis } from "./WordstatDemandAnalysis";
+import { Help } from "./WordstatControls";
 import "../seoAnalytics/seo_analytics.css";
 import "./wordstat.css";
 import "../spinner.css";
@@ -292,6 +293,8 @@ function WordstatTableRow({ row }) {
       {isFirst ? (
         <td className={`phrase-cell ${isSummary ? "summary-phrase" : ""}`}>
           {row.phrase}
+          {row.phrase === "Усредненный коэффициент (без текущего года)" && <Help>Среднее арифметическое коэффициентов сезонности соответствующего месяца за все представленные годы, кроме текущего.</Help>}
+          {row.phrase === "Доля квартала от года, % (без текущего года)" && <Help>Сумма усреднённых коэффициентов трёх месяцев квартала ÷ 12 × 100%. Текущий год исключён из усреднения.</Help>}
         </td>
       ) : (
         <td className="phrase-cell empty-cell"></td>
@@ -386,10 +389,10 @@ function WordstatHeader() {
           Регионы
         </th>
         <th className="b-thick group-season" colSpan={12}>
-          Сезонность
+          Сезонность <Help>Коэффициент месяца = частотность месяца ÷ средняя месячная частотность этого года. Среднее рассчитывается по загруженным месяцам. В итоговых строках усредняются коэффициенты запросов.</Help>
         </th>
         <th className="b-thick group-coefficients" colSpan={4}>
-          Коэффициенты, %
+          Коэффициенты, % <Help>Доля квартала = сумма коэффициентов сезонности трёх месяцев квартала ÷ 12 × 100%.</Help>
         </th>
       </tr>
 
@@ -405,12 +408,12 @@ function WordstatHeader() {
 
         <th className="b-thick">Сумма</th>
         <th className="b-thick">Среднее</th>
-        <th className="b-thick">Годовой прирост, %</th>
+        <th className="b-thick">Годовой прирост, % <Help>(Средняя месячная частотность года ÷ средняя месячная частотность предыдущего представленного года − 1) × 100%. Сравниваются средние, а не годовые суммы. При нулевой базе: 100% для положительного среднего, иначе 0%.</Help></th>
 
         <th className="b-thick group-devices">ПК</th>
         <th className="group-devices">Телефоны</th>
         <th className="group-devices">Планшеты</th>
-        <th className="group-devices">Прочее</th>
+        <th className="group-devices">Прочее <Help>Общий спрос без разрезов минус сумма ПК, телефонов и планшетов. Разрезы запрашиваются отдельно, поэтому их сумма может превышать общий спрос; разность может быть отрицательной.</Help></th>
 
         <th className="b-thick group-regions">ЕКБ</th>
         <th className="group-regions">КРАС</th>
@@ -643,7 +646,7 @@ export function WordstatDashboard({ data, publicToken = null }) {
       <button type="button" className={tab === "demand" ? "is-active" : ""} aria-pressed={tab === "demand"} onClick={() => setTab("demand")}>Анализ спроса</button>
       <button type="button" className={tab === "statistics" ? "is-active" : ""} aria-pressed={tab === "statistics"} onClick={() => setTab("statistics")}>Статистика запросов</button>
     </nav>
-    <div hidden={tab !== "demand"}><WordstatDemandAnalysis publicToken={publicToken} revision={data?.revision} active={tab === "demand"} /></div>
-    <div hidden={tab !== "statistics"}><WordstatStatistics data={data} active={tab === "statistics"} publicToken={publicToken} /></div>
+    {tab === "demand" && <WordstatDemandAnalysis publicToken={publicToken} revision={data?.revision} />}
+    {tab === "statistics" && <WordstatStatistics data={{ ...data, filters: {} }} active publicToken={publicToken} />}
   </section>;
 }

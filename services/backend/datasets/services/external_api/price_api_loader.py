@@ -1,3 +1,4 @@
+from analytics.services.bitrix_notify import send_bitrix_message
 import logging
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
@@ -254,80 +255,85 @@ def load_prices_from_api(
     start_date=None,
     end_date=None,
 ) -> dict:
-    logger.info("NomenclaturePrice API load started")
+    try:
+        logger.info("NomenclaturePrice API load started")
 
-    if start_date is None:
-        start_date, calculated_end_date = get_price_load_period(
-            end_date=end_date,
-        )
+        if start_date is None:
+            start_date, calculated_end_date = get_price_load_period(
+                end_date=end_date,
+            )
 
-        if end_date is None:
-            end_date = calculated_end_date
+            if end_date is None:
+                end_date = calculated_end_date
 
-    elif end_date is None:
-        end_date = date.today()
+        elif end_date is None:
+            end_date = date.today()
 
-    if start_date > end_date:
-        logger.info(
-            "NomenclaturePrice API load skipped: "
-            "start_date=%s > end_date=%s",
-            start_date,
-            end_date,
-        )
+        if start_date > end_date:
+            logger.info(
+                "NomenclaturePrice API load skipped: "
+                "start_date=%s > end_date=%s",
+                start_date,
+                end_date,
+            )
 
-        return {
+            return {
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "days": 0,
+                "received": 0,
+                "saved": 0,
+                "skipped": 0,
+                "deleted": 0,
+            }
+
+        total_days = 0
+        total_received = 0
+        total_saved = 0
+        total_skipped = 0
+        total_deleted = 0
+        day_results = []
+
+        for load_date in iter_dates(start_date, end_date):
+            # Если конкретный день падает —
+            # исключение специально НЕ подавляем.
+            # Загрузка останавливается на проблемной дате.
+            day_result = load_price_day(load_date)
+
+            day_results.append(day_result)
+
+            total_days += 1
+            total_received += day_result["received"]
+            total_saved += day_result["saved"]
+            total_skipped += day_result["skipped"]
+            total_deleted += day_result["deleted"]
+
+        result = {
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
-            "days": 0,
-            "received": 0,
-            "saved": 0,
-            "skipped": 0,
-            "deleted": 0,
+            "days": total_days,
+            "received": total_received,
+            "saved": total_saved,
+            "skipped": total_skipped,
+            "deleted": total_deleted,
+            "day_results": day_results,
         }
 
-    total_days = 0
-    total_received = 0
-    total_saved = 0
-    total_skipped = 0
-    total_deleted = 0
-    day_results = []
+        logger.info(
+            "NomenclaturePrice API load finished: "
+            "start_date=%s end_date=%s days=%s "
+            "received=%s saved=%s skipped=%s deleted=%s",
+            start_date,
+            end_date,
+            total_days,
+            total_received,
+            total_saved,
+            total_skipped,
+            total_deleted,
+        )
 
-    for load_date in iter_dates(start_date, end_date):
-        # Если конкретный день падает —
-        # исключение специально НЕ подавляем.
-        # Загрузка останавливается на проблемной дате.
-        day_result = load_price_day(load_date)
-
-        day_results.append(day_result)
-
-        total_days += 1
-        total_received += day_result["received"]
-        total_saved += day_result["saved"]
-        total_skipped += day_result["skipped"]
-        total_deleted += day_result["deleted"]
-
-    result = {
-        "start_date": start_date.isoformat(),
-        "end_date": end_date.isoformat(),
-        "days": total_days,
-        "received": total_received,
-        "saved": total_saved,
-        "skipped": total_skipped,
-        "deleted": total_deleted,
-        "day_results": day_results,
-    }
-
-    logger.info(
-        "NomenclaturePrice API load finished: "
-        "start_date=%s end_date=%s days=%s "
-        "received=%s saved=%s skipped=%s deleted=%s",
-        start_date,
-        end_date,
-        total_days,
-        total_received,
-        total_saved,
-        total_skipped,
-        total_deleted,
-    )
-
-    return result
+        return result
+    except Exception:
+        logger.exception("Nomenclature prices API load failed")
+        send_bitrix_message("[b]Nomenclature prices API[/b] \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u0432 \u043b\u043e\u0433\u0435 load_prices_from_api.", logger_name=logger.name)
+        raise

@@ -666,7 +666,7 @@ export function PurchasesDashboard({
   }
 
   return (
-    <div className="purchases">
+    <div className="purchases" data-last-updated={data?.last_update || ""}>
       <h2>Сырье</h2>
 
       <form id="filterForm" onSubmit={(event) => event.preventDefault()}>

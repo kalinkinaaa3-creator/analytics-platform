@@ -32,7 +32,7 @@ export function Help({ children, label = "Пояснение" }) {
   const id = useId();
   return <><button ref={anchorRef} type="button" className="seo-floating-help wd-help" aria-label={label} aria-describedby={open ? id : undefined}
     onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}
-    onClick={(e) => { e.stopPropagation(); setOpen(true); }} onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}>i</button>
+    onClick={(e) => { e.stopPropagation(); setOpen(true); }} onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 7v5M8 4.5v.1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg></button>
     {open && <FloatingTooltip id={id} getAnchor={() => anchorRef.current?.getBoundingClientRect()}>{children}</FloatingTooltip>}</>;
 }
 

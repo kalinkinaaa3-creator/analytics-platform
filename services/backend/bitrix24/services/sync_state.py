@@ -74,6 +74,11 @@ def recover_interrupted_sync_runs(*, entities=None) -> int:
             )
         )
         recovered += 1
+    if recovered:
+        from analytics.services.bitrix_notify import send_bitrix_message
+        transaction.on_commit(lambda: send_bitrix_message(
+            f"[b]Bitrix24 CRM[/b] Обнаружено прерванных загрузок: {recovered}. Подробности в журнале синхронизаций CRM.",
+            logger_name="bitrix24"))
     return recovered
 
 
@@ -152,6 +157,12 @@ def finish_sync(
 
 @transaction.atomic
 def fail_sync(run: BitrixSyncRun, error: BaseException) -> None:
+    from analytics.services.bitrix_notify import send_bitrix_message
+    if not getattr(error, "_bitrix_notification_attempted", False):
+        error._bitrix_notification_attempted = True
+        transaction.on_commit(lambda: send_bitrix_message(
+            f"[b]Bitrix24 CRM[/b] Ошибка загрузки {run.entity}, запуск #{run.pk} ({type(error).__name__}). Подробности в журнале синхронизаций CRM.",
+            logger_name="bitrix24"))
     finished_at = timezone.now()
     error_text = f"{type(error).__name__}: {error}"[:4000]
     state = BitrixSyncState.objects.select_for_update().get(entity=run.entity)

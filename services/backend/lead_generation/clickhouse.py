@@ -57,10 +57,12 @@ def rebuild_mart():
     """Build the complete mart off-line and expose it with one atomic swap."""
     if not cache.add(LOCK_KEY, "running", timeout=LOCK_TIMEOUT):
         raise MartAlreadyRunning("Витрина лидогенерации уже обновляется.")
-    client = get_clickhouse_client()
+    from analytics.services.bitrix_notify import send_bitrix_message
+    client = None
     staging = f"default.lead_generation_weekly_mart_staging_{uuid4().hex[:12]}"
-    built_at = client.execute("SELECT now64(3, 'Europe/Moscow')")[0][0]
     try:
+        client = get_clickhouse_client()
+        built_at = client.execute("SELECT now64(3, 'Europe/Moscow')")[0][0]
         _create_table(client, MART_TABLE)
         _create_table(client, staging)
         client.execute(f"""
@@ -189,8 +191,14 @@ def rebuild_mart():
         except Exception:
             logger.exception("Lead generation mart was published, but WebSocket notification failed")
         return int(client.execute(f"SELECT count() FROM {MART_TABLE}")[0][0])
-    except BaseException:
-        client.execute(f"DROP TABLE IF EXISTS {staging}")
+    except BaseException as exc:
+        exc._bitrix_notification_attempted = True
+        send_bitrix_message("[b]Лидогенерация[/b] Ошибка обновления витрины ClickHouse. Подробности в логе lead_generation.", logger_name="lead_generation")
+        if client is not None:
+            try:
+                client.execute(f"DROP TABLE IF EXISTS {staging}")
+            except Exception:
+                logger.exception("Could not remove failed lead generation staging table")
         raise
     finally:
         cache.delete(LOCK_KEY)
