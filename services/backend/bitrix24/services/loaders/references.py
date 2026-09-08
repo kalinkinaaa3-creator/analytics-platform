@@ -316,11 +316,16 @@ def load_crm_fields(
     entity_type_id: int = 1,
     mode: str = BitrixSyncRun.Mode.FULL,
 ) -> BitrixSyncRun:
+    if entity_type_id not in (1, 2):
+        raise ValueError("CRM fields support leads and deals only")
     entity = f"crm_fields_{entity_type_id}"
     run = start_sync(entity, mode)
     try:
-        payload = client.call("crm.lead.fields")
+        payload = (client.call("crm.lead.fields") if entity_type_id == 1
+                   else client.call("crm.item.fields", {"entityTypeId": 2, "useOriginalUfNames": "Y"}))
         result = payload["result"]
+        if entity_type_id == 2 and isinstance(result, dict):
+            result = result.get("fields")
         if not isinstance(result, dict):
             raise Bitrix24ResponseError("CRM fields result must be an object.")
         seen_at = timezone.now()

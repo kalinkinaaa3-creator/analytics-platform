@@ -106,6 +106,38 @@ class BitrixDepartment(BitrixRawBase):
         return self.name
 
 
+class BitrixDealCategory(BitrixRawBase):
+    category_id = models.BigIntegerField(unique=True)
+    name = models.CharField(max_length=255)
+    sort = models.IntegerField(null=True, blank=True)
+    is_default = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "bitrix24_deal_category"
+
+
+class BitrixDeal(BitrixRawBase):
+    deal_id = models.BigIntegerField(unique=True)
+    title = models.TextField(blank=True, default="")
+    category_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    stage_id = models.CharField(max_length=128, blank=True, default="")
+    stage_semantic_id = models.CharField(max_length=32, blank=True, default="")
+    assigned_by_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    lead_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    company_id = models.BigIntegerField(null=True, blank=True)
+    contact_id = models.BigIntegerField(null=True, blank=True)
+    contact_ids = models.JSONField(default=list, blank=True)
+    opportunity = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    currency_id = models.CharField(max_length=16, blank=True, default="")
+    source_id = models.CharField(max_length=128, blank=True, default="")
+    begin_date = models.DateTimeField(null=True, blank=True)
+    close_date = models.DateTimeField(null=True, blank=True)
+    closed = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "bitrix24_deal"
+
+
 class BitrixUser(BitrixRawBase):
     user_id = models.BigIntegerField(unique=True)
     active = models.BooleanField(default=True, db_index=True)

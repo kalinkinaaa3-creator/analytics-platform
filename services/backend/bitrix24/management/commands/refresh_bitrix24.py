@@ -17,6 +17,9 @@ from bitrix24.services.loaders import (
     load_crm_dictionaries,
     load_crm_fields,
     load_departments,
+    load_deals,
+    load_deal_categories,
+    load_deal_stages,
     load_leads,
     load_stage_history,
     load_users,
@@ -63,7 +66,13 @@ class Command(BaseCommand):
                 load_crm_fields(client, mode=BitrixSyncRun.Mode.FULL)
                 load_leads(client, mode=BitrixSyncRun.Mode.INCREMENTAL)
                 load_stage_history(client, mode=BitrixSyncRun.Mode.INCREMENTAL)
+                load_deal_categories(client)
+                load_deal_stages(client)
+                load_crm_fields(client, entity_type_id=2)
+                load_deals(client)
+                load_stage_history(client, entity_type_id=2)
             rebuild_stage_intervals(entity_type_id=1)
+            rebuild_stage_intervals(entity_type_id=2)
             rebuild_lead_processing()
             rebuild_lead_analytics()
             rows = sync_lead_analytics_to_clickhouse(chunk_size=500)

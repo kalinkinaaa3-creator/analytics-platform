@@ -292,6 +292,10 @@ def check_bitrix24_health(cursor, today, problems, ok):
             "crm_fields_1",
             "leads",
             "stage_history_1",
+            "deals",
+            "deal_categories",
+            "crm_fields_2",
+            "stage_history_2",
         )
         cursor.execute(
             f'''

@@ -131,6 +131,8 @@ class Bitrix24Client:
             result = payload["result"]
             if isinstance(result, list):
                 items = result
+            elif method == "crm.category.list" and isinstance(result, dict) and isinstance(result.get("categories"), list):
+                items = result["categories"]
             elif isinstance(result, dict) and isinstance(result.get("items"), list):
                 items = result["items"]
             else:

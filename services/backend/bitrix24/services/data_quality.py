@@ -30,7 +30,7 @@ def get_bitrix24_data_quality() -> dict:
         max_source_updated_at=Max("source_updated_at"),
         max_loaded_at=Max("date_update"),
     )
-    history_freshness = BitrixStageHistory.objects.aggregate(
+    history_freshness = BitrixStageHistory.objects.filter(entity_type_id=1).aggregate(
         max_created_at=Max("created_at"),
         max_loaded_at=Max("date_update"),
     )

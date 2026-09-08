@@ -71,10 +71,11 @@ def load_stage_history(
                         category_id=as_int(
                             source_value(row, "CATEGORY_ID", "categoryId")
                         ),
-                        stage_id=text(source_value(row, "STATUS_ID", "stageId", "statusId")),
+                        stage_id=text(source_value(row, "STAGE_ID", "STATUS_ID", "stageId", "statusId")),
                         stage_semantic_id=text(
                             source_value(
                                 row,
+                                "STAGE_SEMANTIC_ID",
                                 "STATUS_SEMANTIC_ID",
                                 "stageSemanticId",
                                 "statusSemanticId",
