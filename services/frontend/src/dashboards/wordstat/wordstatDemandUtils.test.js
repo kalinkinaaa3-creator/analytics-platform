@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { defaultSeasonIds, isParentSummary, objectNoun, sortedChanges, statusDistribution } from "./wordstatDemandUtils.js";
+import { defaultSeasonIds, objectNoun, sortedChanges, statusDistribution } from "./wordstatDemandUtils.js";
 
 test("all positive and negative changes are retained, including neutral and zero-base rows", () => {
   const items = Array.from({ length: 30 }, (_, i) => ({ id: String(i), absolute_change: 1, growth_percent: 0.1, current_volume: i, status: "stable" }));
@@ -34,10 +34,8 @@ test("season defaults use growth rather than volume and retain the selected phra
   assert.deepEqual(defaultSeasonIds(items), ["4", "3", "2"]);
   assert.deepEqual(defaultSeasonIds(items, "1"), ["1", "4", "3"]);
 });
-test("Russian endings and parent-only seasonal summaries", () => {
+test("Russian endings", () => {
   assert.deepEqual([1, 2, 5, 11, 21, 22, 114].map((n) => objectNoun(n, "feature")), ["категория", "категории", "категорий", "категорий", "категория", "категории", "категорий"]);
   assert.equal(objectNoun(3, "category"), "подкатегории");
   assert.equal(objectNoun(11, "phrase"), "запросов");
-  assert.equal(isParentSummary({ name: "Наливная тара (Общие)", feature: "6. Наливная тара" }, { level: "category" }), true);
-  assert.equal(isParentSummary({ name: "Бочки", feature: "6. Наливная тара" }, { level: "category" }), false);
 });

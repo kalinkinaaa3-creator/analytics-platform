@@ -3,7 +3,7 @@ import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Sca
 import { api } from "../../api/client";
 import { DashboardMultiSelect } from "../../components/DashboardMultiSelect";
 import { FloatingTooltip, Help, LoadingBlock, SelectField } from "./WordstatControls";
-import { MONTHS, TONES, LEVELS, number, signed, percent, growth, dateLabel, monthLabel, seriesColor, objectNoun, sortedChanges, isParentSummary, defaultSeasonIds, statusDistribution } from "./wordstatDemandUtils";
+import { MONTHS, TONES, LEVELS, number, signed, percent, growth, dateLabel, monthLabel, seriesColor, objectNoun, sortedChanges, defaultSeasonIds, statusDistribution } from "./wordstatDemandUtils";
 import "./wordstat_demand.css";
 
 const DEFAULTS = { level: "feature", feature: "", category: "", phrase: "", period_months: 12, end_month: "", scope_ids: [], element_ids: [], comparison: "year_over_year" };
@@ -24,7 +24,7 @@ function ChartTooltip({ active, payload, label, coordinate, chartRef, period, se
 function Seasonality({ report, chosen, setChosen }) {
   const chartRef = useRef(null);
   const names = useMemo(() => {
-    const profiles = (report.seasonality || []).filter((p) => { const item = report.items.find((i) => i.id === p.id); return item && !isParentSummary(item, report.context); });
+    const profiles = (report.seasonality || []).filter((p) => { const item = report.items.find((i) => i.id === p.id); return Boolean(item); });
     return profiles.map((p, index) => ({ ...p, color: seriesColor(index), label: `${p.name}${profiles.filter((s) => s.name === p.name).length > 1 ? ` (${p.id.split("\u001f")[0]})` : ""}` }));
   }, [report]);
   const eligible = report.items.filter((p) => names.some((n) => n.id === p.id));
@@ -130,7 +130,7 @@ export function WordstatDemandAnalysis({ publicToken = null, revision, active = 
     setFilters((old) => ({ ...old, element_ids: selected ? previous.element_ids : ids,
       phrase: selected ? previous.phrase : "" }));
   };
-  const elementOptions = (report?.element_options || []).filter((p) => !isParentSummary(p, report.context));
+  const elementOptions = (report?.element_options || []);
   const optionLabels = elementOptions.map((p) => ({ ...p, label: elementOptions.some((o) => o.id !== p.id && o.name === p.name) ? `${p.name} (${p.feature})` : p.name }));
   const dateHelp = period ? <><p>Выбранный период: <b>{dateLabel(period.current_start)} — {dateLabel(period.current_end)}</b></p><p>{period.comparison === "previous_period" ? "Предыдущий период" : "Год к году"}: <b>{dateLabel(period.previous_start)} — {dateLabel(period.previous_end)}</b></p></> : "Выберите завершённый месяц.";
   if (!active) return null;

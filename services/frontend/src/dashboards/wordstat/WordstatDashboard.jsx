@@ -403,7 +403,7 @@ function WordstatHeader() {
 
         <th className="b-thick">Сумма</th>
         <th className="b-thick">Среднее</th>
-        <th className="b-thick wordstat-growth-heading"><span className="wordstat-heading-label">Годовой прирост, % <Help>(Средняя месячная частотность года ÷ средняя месячная частотность предыдущего представленного года − 1) × 100%. Сравниваются средние, а не годовые суммы. При нулевой базе: 100% для положительного среднего, иначе 0%.</Help></span></th>
+        <th className="b-thick wordstat-growth-heading"><span className="wordstat-heading-label">Годовой прирост, % <Help>(Средняя месячная частотность года ÷ средняя месячная частотность предыдущего представленного года − 1) × 100%. Сравниваются средние, а не годовые суммы.</Help></span></th>
 
         <th className="b-thick group-devices">ПК</th>
         <th className="group-devices">Телефоны</th>

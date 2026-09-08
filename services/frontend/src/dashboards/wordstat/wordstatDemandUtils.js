@@ -25,11 +25,6 @@ export function sortedChanges(items, direction, sort) {
     return (av - bv) * (sort.direction === "asc" ? 1 : -1) || a.id.localeCompare(b.id);
   });
 }
-export function isParentSummary(item, context) {
-  if (context.level !== "category") return false;
-  const normalize = (s) => (s || "").replace(/^\s*\d+[.\s]+/, "").replace(/\s*\(общие\)\s*$/i, "").trim().toLocaleLowerCase("ru-RU");
-  return normalize(item.name) === normalize(item.feature || context.feature);
-}
 export function defaultSeasonIds(items, selectedPhrase) {
   const sorted = [...items].sort((a, b) => (b.growth_percent ?? -Infinity) - (a.growth_percent ?? -Infinity) || (b.absolute_change ?? -Infinity) - (a.absolute_change ?? -Infinity) || a.id.localeCompare(b.id));
   const focused = sorted.find((p) => selectedPhrase && p.phrase === selectedPhrase);
