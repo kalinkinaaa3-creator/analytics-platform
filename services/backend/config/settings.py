@@ -313,6 +313,15 @@ YD_WORDSTAT_API_CONNECT_TIMEOUT = int(
 )
 YD_WORDSTAT_API_TIMEOUT = int(os.getenv("YD_WORDSTAT_API_TIMEOUT", "60"))
 
+YD_WORDSTAT_V2_LOAD_ENABLED = (
+    os.getenv("YD_WORDSTAT_V2_LOAD_ENABLED", "false").strip().lower() == "true"
+)
+
+YD_WORDSTAT_API_MAX_ATTEMPTS = int(
+    os.getenv("YD_WORDSTAT_API_MAX_ATTEMPTS", "5")
+)
+
+
 
 
 
