@@ -3,6 +3,7 @@ from django.db.models import Subquery
 
 from bitrix24.models import (
     BitrixLead,
+    BitrixDeal,
     BitrixLeadAnalytics,
     BitrixLeadProcessing,
     BitrixStageInterval,
@@ -31,3 +32,12 @@ def purge_deleted_lead_derivatives() -> dict[str, int]:
         "processing": processing,
         "intervals": intervals,
     }
+
+
+@transaction.atomic
+def purge_deleted_deal_derivatives() -> dict[str, int]:
+    deleted_ids = BitrixDeal.objects.filter(is_deleted=True).values("deal_id")
+    intervals, _ = BitrixStageInterval.objects.filter(
+        entity_type_id=2, entity_id__in=Subquery(deleted_ids),
+    ).delete()
+    return {"intervals": intervals}

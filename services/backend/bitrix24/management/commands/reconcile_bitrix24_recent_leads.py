@@ -7,7 +7,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 from django.utils import timezone
 
-from bitrix24.models import BitrixLead
+from bitrix24.models import BitrixLead, BitrixDeal, BitrixSyncRun
 from bitrix24.services.calculators import (
     rebuild_lead_analytics,
     rebuild_lead_processing,
@@ -15,8 +15,8 @@ from bitrix24.services.calculators import (
 )
 from bitrix24.services.clickhouse import sync_lead_analytics_to_clickhouse
 from bitrix24.services.client import Bitrix24Client
-from bitrix24.services.loaders import reconcile_leads_window
-from bitrix24.services.reconciliation import purge_deleted_lead_derivatives
+from bitrix24.services.loaders import reconcile_leads_window, load_deals
+from bitrix24.services.reconciliation import purge_deleted_lead_derivatives, purge_deleted_deal_derivatives
 from bitrix24.services.refresh import (
     ADVISORY_LOCK_NAME,
     LOCK_KEY,
@@ -32,7 +32,7 @@ MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
 
 class Command(BaseCommand):
-    help = "Reconcile recent Bitrix24 leads by creation date without touching older leads."
+    help = "Reconcile recent Bitrix24 leads, then deals, by creation date."
 
     def add_arguments(self, parser):
         parser.add_argument("--days", type=int, default=14)
@@ -76,7 +76,7 @@ class Command(BaseCommand):
             raise CommandError("Обновление Аналитики CRM уже выполняется.")
 
         try:
-            recover_interrupted_sync_runs(entities=("leads",))
+            recover_interrupted_sync_runs(entities=("leads", "deals"))
             run = reconcile_leads_window(
                 Bitrix24Client(),
                 created_from=created_from,
@@ -93,6 +93,16 @@ class Command(BaseCommand):
                 entity_type_id=1,
                 entity_ids=received_lead_ids,
             )
+            deal_run = load_deals(
+                Bitrix24Client(), mode=BitrixSyncRun.Mode.REPAIR,
+                created_from=created_from, created_to=created_to,
+            )
+            deal_purged = purge_deleted_deal_derivatives()
+            received_deal_ids = BitrixDeal.objects.filter(
+                is_deleted=False, source_created_at__gte=created_from,
+                source_created_at__lt=created_to, last_seen_at__gte=deal_run.started_at,
+            ).values_list("deal_id", flat=True)
+            rebuild_stage_intervals(entity_type_id=2, entity_ids=received_deal_ids)
             rebuild_lead_processing()
             rebuild_lead_analytics()
             rows = sync_lead_analytics_to_clickhouse(chunk_size=500)
@@ -108,6 +118,9 @@ class Command(BaseCommand):
                     "received": run.rows_received,
                     "deactivated": run.rows_deactivated,
                     "purged": purged,
+                    "deals_received": deal_run.rows_received,
+                    "deals_deactivated": deal_run.rows_deactivated,
+                    "deals_purged": deal_purged,
                     "rows": rows,
                 },
                 timeout=None,
@@ -119,6 +132,7 @@ class Command(BaseCommand):
                     "Recent Bitrix24 leads reconciled: "
                     f"window=[{created_from.isoformat()}, {created_to.isoformat()}), "
                     f"received={run.rows_received}, deactivated={run.rows_deactivated}, "
+                    f"deals_received={deal_run.rows_received}, deals_deactivated={deal_run.rows_deactivated}, "
                     f"analytics_rows={rows}."
                 )
             )

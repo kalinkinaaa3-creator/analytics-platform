@@ -246,38 +246,31 @@ def check_bitrix24_health(cursor, today, problems, ok):
     """Check Bitrix24 downloads, allowing an empty weekend activity window."""
     refresh_name = "Bitrix24 CRM refresh (bitrix24_crm_refresh_12h)"
     reconciliation_name = (
-        "Bitrix24 recent leads reconciliation "
+        "Bitrix24 recent leads and deals reconciliation "
         "(bitrix24_recent_leads_reconciliation_weekly)"
     )
     local_problems = []
     # The 08:04 check validates the preceding overnight activity window.
     # Saturday/Sunday inactivity is therefore visible on Sunday/Monday.
-    requires_received_leads = today.weekday() not in (0, 6)
-    lead_last_seen_date = None
-
-    for table in ("bitrix24_lead", "bitrix24_lead_analytics"):
+    requires_received_rows = today.weekday() not in (0, 6)
+    last_seen_dates = {}
+    for table in ("bitrix24_lead", "bitrix24_lead_analytics", "bitrix24_deal"):
         if not table_exists(cursor, table):
-            local_problems.append(f"{refresh_name}: таблица {table} не существует")
+            local_problems.append(f"{refresh_name}: missing table {table}")
             continue
         row_count = scalar(cursor, f'SELECT COUNT(*) FROM "{table}"')
         if not row_count:
-            local_problems.append(f"{refresh_name}: таблица {table} пуста")
-        elif table == "bitrix24_lead":
-            lead_last_seen_date = scalar(
-                cursor,
-                f'''
-                SELECT MAX(
-                    (last_seen_at AT TIME ZONE 'Europe/Moscow')::date
+            local_problems.append(f"{refresh_name}: empty table {table}")
+        if table in ("bitrix24_lead", "bitrix24_deal"):
+            entity = "leads" if table == "bitrix24_lead" else "deals"
+            last_seen = scalar(cursor, f'''SELECT MAX(
+                (last_seen_at AT TIME ZONE 'Europe/Moscow')::date
+                ) FROM "{table}"''')
+            last_seen_dates[entity] = last_seen
+            if requires_received_rows and last_seen != today:
+                local_problems.append(
+                    f"{refresh_name}: entity={entity}, max(last_seen_at)={last_seen}, expected={today}"
                 )
-                FROM "{table}"
-                ''',
-            )
-
-    if requires_received_leads and lead_last_seen_date != today:
-        local_problems.append(
-            f"{refresh_name}: не получены ожидаемые строки leads, "
-            f"max(last_seen_at)={lead_last_seen_date}, нужно={today}"
-        )
 
     state_table = "bitrix24_sync_state"
     if not table_exists(cursor, state_table):
@@ -343,9 +336,9 @@ def check_bitrix24_health(cursor, today, problems, ok):
                     f"{refresh_name}: entity={entity}, последнее успешное "
                     f"обновление={last_success_date}, нужно >= {min_success_date}"
                 )
-            if entity == "leads" and requires_received_leads and not rows_received:
+            if entity in ("leads", "deals") and requires_received_rows and not rows_received:
                 local_problems.append(
-                    f"{refresh_name}: entity=leads получил "
+                    f"{refresh_name}: entity={entity} получил "
                     f"rows_received={rows_received}, ожидалось > 0"
                 )
 
@@ -357,10 +350,10 @@ def check_bitrix24_health(cursor, today, problems, ok):
             states,
         )
         logger.info(
-            "%s: requires_received_leads=%s lead_last_seen_date=%s",
+            "%s: requires_received_rows=%s last_seen_dates=%s",
             refresh_name,
-            requires_received_leads,
-            lead_last_seen_date,
+            requires_received_rows,
+            last_seen_dates,
         )
 
     run_table = "bitrix24_sync_run"
@@ -369,46 +362,47 @@ def check_bitrix24_health(cursor, today, problems, ok):
             f"{reconciliation_name}: таблица {run_table} не существует"
         )
     else:
-        cursor.execute(
-            f'''
-            SELECT status,
-                   (finished_at AT TIME ZONE 'Europe/Moscow')::date,
-                   rows_received,
-                   rows_deactivated,
-                   COALESCE(error_text, '')
-            FROM "{run_table}"
-            WHERE entity = %s AND mode = %s
-            ORDER BY started_at DESC, id DESC
-            LIMIT 1
-            ''',
-            ["leads", "repair"],
-        )
-        latest_repair = cursor.fetchone()
-        min_repair_date = today - timedelta(days=7)
-        if latest_repair is None:
-            local_problems.append(
-                f"{reconciliation_name}: отсутствуют repair-запуски leads"
+        for repair_entity in ("leads", "deals"):
+            cursor.execute(
+                f'''
+                SELECT status,
+                       (finished_at AT TIME ZONE 'Europe/Moscow')::date,
+                       rows_received,
+                       rows_deactivated,
+                       COALESCE(error_text, '')
+                FROM "{run_table}"
+                WHERE entity = %s AND mode = %s
+                ORDER BY started_at DESC, id DESC
+                LIMIT 1
+                ''',
+                [repair_entity, "repair"],
             )
-        else:
-            status, finished_date, received, deactivated, error_text = latest_repair
-            if status != "success":
-                suffix = f", error={error_text}" if error_text else ""
+            latest_repair = cursor.fetchone()
+            min_repair_date = today - timedelta(days=7)
+            if latest_repair is None:
                 local_problems.append(
-                    f"{reconciliation_name}: последний запуск status={status}{suffix}"
+                    f"{reconciliation_name} ({repair_entity}): отсутствуют {repair_entity}: repair-запуски leads"
                 )
-            if finished_date is None or finished_date < min_repair_date:
-                local_problems.append(
-                    f"{reconciliation_name}: последнее завершение="
-                    f"{finished_date}, нужно >= {min_repair_date}"
+            else:
+                status, finished_date, received, deactivated, error_text = latest_repair
+                if status != "success":
+                    suffix = f", error={error_text}" if error_text else ""
+                    local_problems.append(
+                        f"{reconciliation_name} ({repair_entity}): последний запуск status={status}{suffix}"
+                    )
+                if finished_date is None or finished_date < min_repair_date:
+                    local_problems.append(
+                        f"{reconciliation_name} ({repair_entity}): последнее завершение="
+                        f"{finished_date}, нужно >= {min_repair_date}"
+                    )
+                logger.info(
+                    "%s: status=%s finished_date=%s received=%s deactivated=%s",
+                    reconciliation_name,
+                    status,
+                    finished_date,
+                    received,
+                    deactivated,
                 )
-            logger.info(
-                "%s: status=%s finished_date=%s received=%s deactivated=%s",
-                reconciliation_name,
-                status,
-                finished_date,
-                received,
-                deactivated,
-            )
 
     if local_problems:
         problems.extend(local_problems)
@@ -1039,17 +1033,27 @@ class Command(BaseCommand):
 
                 ok.append(name)
 
+            # Wordstat may take several days to finish its monthly load.
+            # Keep diagnostics daily, but include them in the report from day 11.
+            wordstat_ok = []
+            wordstat_problems = []
             try:
                 from analytics.services.wordstat_health import inspect_wordstat
                 wordstat = inspect_wordstat(today=today)
                 if wordstat["ok"]:
-                    ok.append("Wordstat")
+                    wordstat_ok.append("Wordstat")
                 else:
-                    problems.extend(f"Wordstat: {problem}" for problem in wordstat["problems"])
+                    wordstat_problems.extend(f"Wordstat: {problem}" for problem in wordstat["problems"])
                 logger.info("Wordstat health: %s", wordstat)
             except Exception as exc:
                 logger.exception("Wordstat health check failed")
-                problems.append(f"Wordstat: проверка не выполнена: {exc}")
+                wordstat_problems.append(f"Wordstat: проверка не выполнена: {exc}")
+
+            if today.day > 10:
+                ok.extend(wordstat_ok)
+                problems.extend(wordstat_problems)
+            else:
+                logger.info("Wordstat omitted from Bitrix health report through day 10; date=%s", today)
 
             check_base_parser_health(
                 cursor,

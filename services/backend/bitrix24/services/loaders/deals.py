@@ -34,14 +34,26 @@ def _normalize_deal(row, seen_at):
 
 
 def load_deals(client, *, mode=BitrixSyncRun.Mode.INCREMENTAL,
-               date_from=None, date_to=None, overlap=timedelta(minutes=10)):
-    if mode not in (BitrixSyncRun.Mode.FULL, BitrixSyncRun.Mode.INCREMENTAL):
-        raise ValueError("Deals support full or incremental loading")
+               date_from=None, date_to=None, created_from=None, created_to=None,
+               overlap=timedelta(minutes=10)):
+    if mode not in BitrixSyncRun.Mode.values:
+        raise ValueError("Unsupported deal loading mode")
+    repair = mode == BitrixSyncRun.Mode.REPAIR
+    if repair:
+        if created_from is None or created_to is None or created_to <= created_from:
+            raise ValueError("Repair requires a valid creation window")
+        if date_from is not None or date_to is not None:
+            raise ValueError("Repair cannot use modification boundaries")
+    elif created_from is not None or created_to is not None:
+        raise ValueError("Creation boundaries require repair mode")
     if mode == BitrixSyncRun.Mode.FULL and (date_from or date_to):
         raise ValueError("Full deal loading cannot have date limits")
     if date_from is None and mode == BitrixSyncRun.Mode.INCREMENTAL:
         date_from = get_incremental_from("deals", overlap)
     filters = {}
+    if repair:
+        filters[">=createdTime"] = created_from.isoformat()
+        filters["<createdTime"] = created_to.isoformat()
     if date_from is not None:
         filters[">=updatedTime"] = date_from.isoformat()
     if date_to is not None:
@@ -70,7 +82,15 @@ def load_deals(client, *, mode=BitrixSyncRun.Mode.INCREMENTAL,
             if received == 0 and unseen.exists():
                 raise Bitrix24ResponseError("Empty full deal response; existing deals preserved")
             deactivated = unseen.update(is_deleted=True)
-        cursor = dict(last_source_updated_at=position[0], last_source_id=position[1]) if position else {}
+        if repair:
+            window = BitrixDeal.objects.filter(is_deleted=False,
+                source_created_at__gte=created_from, source_created_at__lt=created_to)
+            if received == 0 and window.exists():
+                raise Bitrix24ResponseError("Empty deal reconciliation response; existing deals preserved")
+            deactivated = window.filter(
+                Q(last_seen_at__lt=run.started_at) | Q(last_seen_at__isnull=True)
+            ).update(is_deleted=True)
+        cursor = dict(last_source_updated_at=position[0], last_source_id=position[1]) if position and not repair else {}
         finish_sync(run, stats=BitrixSyncStats(received, created, updated, deactivated), **cursor)
         return run
     except BaseException as exc:

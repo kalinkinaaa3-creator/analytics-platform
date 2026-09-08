@@ -10,7 +10,7 @@ MOSCOW_TZ = pendulum.timezone("Europe/Moscow")
 
 with DAG(
     dag_id="bitrix24_recent_leads_reconciliation_weekly",
-    description="Reconcile the previous 14 complete Moscow calendar days of CRM leads",
+    description="Reconcile the previous 14 complete Moscow calendar days of CRM leads and deals",
     start_date=pendulum.datetime(2026, 1, 4, tz=MOSCOW_TZ),
     schedule="00 10 * * 0",
     catchup=False,

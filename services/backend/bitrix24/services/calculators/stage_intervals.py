@@ -5,7 +5,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
-from bitrix24.models import BitrixStageHistory, BitrixStageInterval
+from bitrix24.models import BitrixStageHistory, BitrixStageInterval, BitrixDeal
 
 
 SECONDS_PER_DAY = Decimal(86400)
@@ -62,6 +62,8 @@ def rebuild_stage_intervals(
 ) -> tuple[int, set[int]]:
     calculated_at = calculated_at or timezone.now()
     queryset = BitrixStageHistory.objects.filter(entity_type_id=entity_type_id)
+    if entity_type_id == 2:
+        queryset = queryset.exclude(entity_id__in=BitrixDeal.objects.filter(is_deleted=True).values("deal_id"))
     if entity_ids is not None:
         queryset = queryset.filter(entity_id__in=entity_ids)
     queryset = queryset.order_by("entity_id", "created_at", "history_id")
