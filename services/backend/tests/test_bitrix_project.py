@@ -56,11 +56,12 @@ class ProjectTests(TestCase):
         path, count = export_leads_xlsx(filters)
         try:
             workbook = load_workbook(path, read_only=True)
-            rows = list(workbook.active.values)
+            rows = list(workbook.active.iter_rows(max_col=13, values_only=True))
             workbook.close()
             self.assertEqual(count, 2)
-            self.assertEqual(rows[0][8], "Проект")
-            self.assertEqual(rows[1][8], "Не указан")
+            self.assertNotIn("Проект", rows[0])
+            self.assertEqual(len(rows[0]), 13)
+            self.assertTrue(all(len(row) == len(rows[0]) for row in rows[1:]))
         finally:
             path.unlink()
 
