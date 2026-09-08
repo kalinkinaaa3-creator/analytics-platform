@@ -14,6 +14,11 @@ class LeadDashboardRequestSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
+    project_ids = serializers.ListField(
+        child=serializers.CharField(max_length=128, allow_blank=True),
+        required=False,
+        default=list,
+    )
     source_ids = serializers.ListField(
         child=serializers.CharField(max_length=128, allow_blank=True),
         required=False,
@@ -65,7 +70,7 @@ class LeadDashboardRowsRequestSerializer(LeadDashboardRequestSerializer):
     sort_by = serializers.ChoiceField(
         choices=(
             "lead_id", "title", "company_name", "manager_name", "status_name",
-            "source_name", "source_created_at", "source_updated_at",
+            "project_name", "source_name", "source_created_at", "source_updated_at",
             "first_processing_at", "opportunity", "processing_duration_days",
         ),
         default="source_created_at",

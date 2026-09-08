@@ -51,6 +51,7 @@ def _filters(validated_data) -> LeadDashboardFilters:
         department_names=tuple(validated_data["department_names"]),
         manager_ids=tuple(validated_data["manager_ids"]),
         source_ids=tuple(validated_data["source_ids"]),
+        project_ids=tuple(validated_data["project_ids"]),
         semantic_status_ids=tuple(validated_data["semantic_status_ids"]),
         status_ids=tuple(validated_data["status_ids"]),
         exclude_untracked_department=validated_data[
@@ -92,6 +93,7 @@ class LeadDashboardFiltersView(APIView):
         department_rows = self._option_rows(filters, "department_names")
         manager_rows = self._option_rows(filters, "manager_ids")
         source_rows = self._option_rows(filters, "source_ids")
+        project_rows = self._option_rows(filters, "project_ids")
         semantic_status_rows = self._option_rows(filters, "semantic_status_ids")
         status_rows = self._option_rows(filters, "status_ids")
         sync_state = BitrixSyncState.objects.filter(entity="leads").first()
@@ -109,6 +111,11 @@ class LeadDashboardFiltersView(APIView):
                     .values("manager_id", "manager_name")
                     .distinct()
                     .order_by("manager_name", "manager_id")
+                ),
+                "projects": list(
+                    project_rows.values("project_id", "project_name")
+                    .annotate(lead_count=Count("id"))
+                    .order_by("-lead_count", "project_name", "project_id")
                 ),
                 "sources": list(
                     source_rows.values("source_id", "source_name")
@@ -221,6 +228,8 @@ class LeadDashboardRowsView(APIView):
                 "primary_department_id",
                 "department_name",
                 "activity_name",
+                "project_id",
+                "project_name",
                 "is_apm",
                 "is_low_quality",
                 "is_unmapped",

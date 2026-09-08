@@ -30,10 +30,10 @@ def _stage_group(lead):
     }.get(semantic, "unknown")
 
 
-def _activity_names():
+def _enumeration_names(field_code="UF_CRM_1680165215489"):
     row = BitrixCrmField.objects.filter(
         entity_type_id=1,
-        field_code="UF_CRM_1680165215489",
+        field_code=field_code,
         is_deleted=False,
     ).values_list("raw_payload", flat=True).first() or {}
     if isinstance(row, str):
@@ -62,7 +62,8 @@ def rebuild_lead_analytics(*, lead_ids=None, calculated_at=None) -> int:
         BitrixCrmDictionary.objects.filter(entity_id="SOURCE", is_deleted=False)
         .values_list("status_id", "name")
     )
-    activity_names = _activity_names()
+    activity_names = _enumeration_names()
+    project_names = _enumeration_names("UF_CRM_1707131669360")
     users = {
         item.user_id: item
         for item in BitrixUser.objects.filter(is_deleted=False).only(
@@ -120,6 +121,8 @@ def rebuild_lead_analytics(*, lead_ids=None, calculated_at=None) -> int:
                     ),
                     company_name=lead.company_title or lead.name or lead.title,
                     is_return_customer=lead.is_return_customer,
+                    project_id=lead.project_id,
+                    project_name=project_names.get(lead.project_id, lead.project_id),
                     activity_name=activity_names.get(lead.activity_event_id, ""),
                     last_activity_time=lead.last_activity_time,
                     is_apm=stage_group == "apm",

@@ -84,6 +84,7 @@ class LeadDashboardFilters:
     department_names: tuple[str, ...] = field(default_factory=tuple)
     manager_ids: tuple[int, ...] = field(default_factory=tuple)
     source_ids: tuple[str, ...] = field(default_factory=tuple)
+    project_ids: tuple[str, ...] = field(default_factory=tuple)
     semantic_status_ids: tuple[str, ...] = field(default_factory=tuple)
     status_ids: tuple[str, ...] = field(default_factory=tuple)
     exclude_untracked_department: bool = True
@@ -118,6 +119,7 @@ class LeadDashboardQuery:
             ("department_name", filters.department_names),
             ("manager_id", filters.manager_ids),
             ("source_id", filters.source_ids),
+            ("project_id", filters.project_ids),
             ("status_semantic_id", filters.semantic_status_ids),
             ("status_id", filters.status_ids),
         ):
@@ -186,6 +188,7 @@ class LeadDashboardQuery:
             department_names=filters.department_names,
             manager_ids=filters.manager_ids,
             source_ids=filters.source_ids,
+            project_ids=filters.project_ids,
             semantic_status_ids=filters.semantic_status_ids,
             status_ids=filters.status_ids,
             exclude_untracked_department=filters.exclude_untracked_department,
@@ -210,6 +213,7 @@ class LeadDashboardQuery:
             department_names=filters.department_names,
             manager_ids=filters.manager_ids,
             source_ids=filters.source_ids,
+            project_ids=filters.project_ids,
             semantic_status_ids=filters.semantic_status_ids,
             status_ids=filters.status_ids,
             exclude_untracked_department=filters.exclude_untracked_department,

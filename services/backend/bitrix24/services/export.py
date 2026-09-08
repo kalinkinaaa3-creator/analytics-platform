@@ -24,6 +24,7 @@ HEADERS = (
     "Стадия",
     "Источник",
     "Мероприятия",
+    "Проект",
     "Дата создания",
     "Дата изменения (по данным Bitrix24)",
     "Скорость рассчитана по",
@@ -78,6 +79,7 @@ def filtered_lead_analytics_queryset(
         ("department_name", filters.department_names),
         ("manager_id", filters.manager_ids),
         ("source_id", filters.source_ids),
+        ("project_id", filters.project_ids),
         ("status_semantic_id", filters.semantic_status_ids),
         ("status_id", filters.status_ids),
     ):
@@ -154,6 +156,7 @@ def export_leads_xlsx(filters: LeadDashboardFilters, **query_options) -> tuple[P
                 item.status_name or item.status_id,
                 item.source_name or item.source_id,
                 item.activity_name,
+                item.project_name or item.project_id or "Не указан",
                 _excel_datetime(item.source_created_at),
                 _excel_datetime(item.source_updated_at),
                 _excel_datetime(item.first_processing_at or item.calculated_at),

@@ -49,6 +49,7 @@ LEAD_SELECT = (
     "CURRENCY_ID",
     "IS_RETURN_CUSTOMER",
     "UF_CRM_1680165215489",
+    "UF_CRM_1707131669360",
     "ORIGINATOR_ID",
     "ADDRESS_CITY",
     "ADDRESS_PROVINCE",
@@ -94,6 +95,7 @@ def _normalize_lead(row, *, seen_at):
         is_return_customer=as_bool(
             source_value(row, "IS_RETURN_CUSTOMER", "isReturnCustomer")
         ),
+        project_id=text(source_value(row, "UF_CRM_1707131669360", "ufCrm1707131669360") or ""),
         activity_event_id=text(
             source_value(row, "UF_CRM_1680165215489", "ufCrm1680165215489")
         ),
@@ -199,6 +201,7 @@ def load_leads(
                     "currency_id",
                     "is_return_customer",
                     "activity_event_id",
+                    "project_id",
                     "originator_id",
                     "address_city",
                     "address_province",
