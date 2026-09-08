@@ -45,7 +45,7 @@ const SOURCE_GROUP_COLORS = ["#3e4d3c", "#5e5445", "#405464", "#6b3a35", "#433e4
 const SIGNED_METRICS = new Set(["cost_delta", "target_delta", "target_cpl_delta", "target_deviation"]);
 const POSITIVE_METRICS = new Set(["target_leads", "target_conversion", "lead_opportunity"]);
 const NEGATIVE_METRICS = new Set(["non_target_leads", "unprocessed_leads"]);
-const UNFORMATTED_METRICS = new Set(["target_lead_price", "average_revenue_per_lead", "budget_revenue_share", "target_conversion", "actual_target_cpl", "lead_opportunity", "associated_share", "other_share", "conversion"]);
+const UNFORMATTED_METRICS = new Set(["target_lead_price", "average_revenue_per_lead", "budget_revenue_share", "target_conversion", "actual_target_cpl", "associated_share", "other_share", "conversion"]);
 const BAR_COLORS = {
   plan:"rgba(92,112,86,.20)", potential:"rgba(154,119,58,.20)", direct:"rgba(74,111,137,.20)",
   fact:"rgba(103,105,91,.18)", control:"rgba(113,83,79,.18)", target:"rgba(56,123,72,.22)",
