@@ -84,6 +84,7 @@ function Ranking({ direction, report, onSelect, selectedPhrase }) {
 function SliceCard({ title, data, type }) {
   const [expanded, setExpanded] = useState(false);
   const items = data.items || [];
+  const itemColors = new Map(items.map((item, index) => [item.id, seriesColor(index)]));
   const visibleItems = type === "regions"
     ? (expanded ? [...items].sort((a, b) => (b.share ?? 0) - (a.share ?? 0)) : data.top || [])
     : items;
@@ -91,7 +92,7 @@ function SliceCard({ title, data, type }) {
   return <article className="wd-panel wd-slice"><header><h3>{title} </h3>{type === "regions" && items.length > 0 && <button type="button" className="wd-link wd-navigation" onClick={() => setExpanded(!expanded)}>{expanded ? "Свернуть" : "Все регионы"}</button>}</header><div className="wd-scroll">{!data.complete ? <>
     <Empty>{{ missing_total: "Общий спрос за выбранный период загружен не полностью: доли пока не рассчитываются.", zero_total: "Общий спрос за выбранный период равен нулю: доли не определены.", missing_slices: "Помесячные данные разреза загружены не полностью." }[data.reason] || "Нет помесячных данных для этого разреза."}</Empty>
     {items.filter((p) => p.missing_months?.length).map((p) => <p className="wd-muted" key={p.id}>{p.name}: нет полного набора запросов за {p.missing_months.slice(0, 3).map(monthLabel).join(", ")}{p.missing_months.length > 3 ? ` и ещё ${p.missing_months.length - 3} мес.` : ""}.</p>)}
-  </> : <><div className="wd-stacked">{items.map((p, i) => <i key={p.id} title={`${p.name}: ${percent(p.share)}`} style={{ width: `${p.share * 100 / barTotal}%`, background: seriesColor(i) }} />)}{data.other_share > 0 && <i title="Прочее" style={{ width: `${data.other_share * 100 / barTotal}%`, background: "#aaa" }} />}</div>{visibleItems.map((p) => <div className="wd-slice-row" key={p.id}><span>{p.name}</span><b>{percent(p.share)}</b><small style={{ color: p.change_pp > 0 ? TONES.growth : p.change_pp < 0 ? TONES.decline : undefined }}>{signed(p.change_pp)}</small></div>)}</>}</div></article>;
+  </> : <><div className="wd-stacked">{items.map((p, i) => <i key={p.id} title={`${p.name}: ${percent(p.share)}`} style={{ width: `${p.share * 100 / barTotal}%`, background: seriesColor(i) }} />)}{data.other_share > 0 && <i title="Прочее" style={{ width: `${data.other_share * 100 / barTotal}%`, background: "#aaa" }} />}</div>{visibleItems.map((p) => <div className="wd-slice-row" key={p.id}><span className="wd-slice-name"><i className="wd-slice-dot" aria-hidden="true" style={{ background: itemColors.get(p.id) }} /><span>{p.name}</span></span><b>{percent(p.share)}</b><small style={{ color: p.change_pp > 0 ? TONES.growth : p.change_pp < 0 ? TONES.decline : undefined }}>{signed(p.change_pp)}</small></div>)}</>}</div></article>;
 }
 
 export function WordstatDemandAnalysis({ publicToken = null, revision, active = true }) {

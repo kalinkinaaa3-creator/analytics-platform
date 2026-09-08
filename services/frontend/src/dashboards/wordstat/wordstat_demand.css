@@ -68,7 +68,9 @@
 .wd-season-notes > div { display:flex; flex:none; flex-direction:column; gap:5px; min-width:195px; max-width:340px; font-size:12px; }
 .wd-season-name { display:flex; align-items:center; gap:7px; color:#111; }
 .wd-season-name strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
-.wd-season-name i { flex:none; width:12px; height:12px; border-radius:50%; }
+.wd-season-name i,.wd-slice-dot { flex:none; width:12px; height:12px; border-radius:50%; }
+.wd-slice-name { display:flex; align-items:center; gap:6px; min-width:0; }
+.wd-slice-name > span { min-width:0; overflow-wrap:anywhere; }
 .wd-season-notes::-webkit-scrollbar { height:7px; }
 .wd-season-notes::-webkit-scrollbar-thumb { background:#9baa93; border-radius:5px; }
 .wd-ranking-panel .wd-scroll { flex:1; margin-top:8px; }
