@@ -31,6 +31,11 @@ def run_revenue_sales_pipeline():
         notify_dashboard_updated("Revenue")
         logger.info("Revenue websocket notification sent")
 
+        from lead_generation.cache import invalidate_lead_generation_cache
+        invalidate_lead_generation_cache()
+        invalidate_dashboard_by_name("LeadGeneration")
+        notify_dashboard_updated("LeadGeneration")
+
         result = {
             "status": "ok",
             "dashboard": "Revenue",

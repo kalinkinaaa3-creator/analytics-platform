@@ -131,7 +131,12 @@ class PlanDownloadView(AccessMixin, APIView):
 class ReportExportView(AccessMixin, APIView):
     def get(self, request, page):
         report = build_report(page, _filters(request), request.user)
-        columns = PLAN_COLUMNS if page == "plan" else SOURCE_COLUMNS
+        columns = list(PLAN_COLUMNS if page == "plan" else SOURCE_COLUMNS)
+        if page == "plan":
+            position = next(i for i, (key, _) in enumerate(columns) if key == "lead_opportunity")
+            columns[position:position] = [("revenue_1c_total", "Выручка итого, руб")] + [
+                (item["key"], item["name"]) for item in report.get("revenue_directions", [])
+            ]
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = "План" if page == "plan" else "Источники"
@@ -149,6 +154,10 @@ class ReportExportView(AccessMixin, APIView):
                     values.extend((item.get("total"), item.get("target"), item.get("conversion")))
             sheet.append(values)
         total = _report_total(page, report["rows"], dynamic)
+        if page == "plan":
+            for key, _label in columns:
+                if key.startswith("revenue_1c_"):
+                    total[key] = sum(float(row.get(key) or 0) for row in report["rows"])
         total_values = [total.get(key) for key, _label in columns]
         if page == "sources":
             for source in dynamic:

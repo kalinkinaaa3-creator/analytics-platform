@@ -201,11 +201,15 @@ def build_report(page, filters, user):
         return cached
     if page == "plan":
         rows, sources = _plan_report(filters), []
+        from .revenue import add_revenue
+        revenue_directions = add_revenue(rows, filters)
     elif page == "sources":
         rows, sources = _source_report(filters, preference=preference)
     else:
         raise ValueError("Неизвестная вкладка отчёта.")
     result = {"rows": rows, "sources": sources, "filters": {**filters, "week_from": filters["week_from"].isoformat(), "week_to": filters["week_to"].isoformat()}}
+    if page == "plan":
+        result["revenue_directions"] = revenue_directions
     cache.set(key, result, timeout=REPORT_TIMEOUT)
     return result
 

@@ -20,7 +20,7 @@ def report_cache_key(page, filters, *, user_id=None, preference_version=""):
     digest = hashlib.sha256(
         json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode()
     ).hexdigest()
-    return f"{CACHE_PREFIX}:report:v1:{page}:{digest}"
+    return f"{CACHE_PREFIX}:report:v2:{page}:{digest}"
 
 
 def invalidate_lead_generation_cache():
