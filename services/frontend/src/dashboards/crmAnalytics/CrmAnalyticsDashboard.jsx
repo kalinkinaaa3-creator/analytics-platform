@@ -316,6 +316,18 @@ export function CrmAnalyticsDashboard({ dashboard: meta }) {
   const [activeTab, setActiveTab] = useState("leads"); const [filters, setFilters] = useState(initialFilters); const [options, setOptions] = useState({ departments: [], managers: [], sources: [], projects: [], semantic_statuses: [], statuses: [] }); const [dashboard, setDashboard] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [refreshing, setRefreshing] = useState(false); const [uploading, setUploading] = useState(false); const [exporting, setExporting] = useState(false); const [modal, setModal] = useState(null); const [conversionOpen, setConversionOpen] = useState(false); const [detailRows, setDetailRows] = useState({ items: [], page: 1, pages: 0, total: 0, summary: {} }); const [detailLoading, setDetailLoading] = useState(false); const canEdit = Boolean(meta?.can_edit);
   const load = useCallback(async () => { setLoading(true); setDashboard(null); setError(""); try { setDashboard(await fetchCrmDashboard(filters)); } catch (e) { setError(e.response?.data?.detail || "Не удалось загрузить аналитику CRM."); } finally { setLoading(false); } }, [filters]);
   const loadOptions = useCallback(async () => { const result = await fetchCrmFilters(filters); setOptions(result); setRefreshing(Boolean(result.refresh?.running)); }, [filters]);
+  useEffect(() => {
+    const updated = (event) => {
+      const message = event.detail || {};
+      if (message.dashboard !== "CRMAnalytics") return;
+      setRefreshing(message.status === "running");
+      if (message.status === "running" || message.status === "failed") return;
+      load();
+      loadOptions().catch(() => setError("Не удалось обновить сведения об обновлении CRM."));
+    };
+    window.addEventListener("dashboard:updated", updated);
+    return () => window.removeEventListener("dashboard:updated", updated);
+  }, [load, loadOptions]);
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => { loadOptions().catch(() => setError("Не удалось загрузить справочники фильтров.")); }, [loadOptions]); useEffect(() => { load(); }, [load]);
   /* eslint-enable react-hooks/set-state-in-effect */

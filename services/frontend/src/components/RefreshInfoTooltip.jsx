@@ -97,6 +97,7 @@ export function DashboardRefreshTooltips() {
   }, [state]);
 
   useLayoutEffect(() => {
+    let revision = 0;
     const find = (target) => {
       const button = target.closest?.("button");
       if (!button || (!/^Обнов(ить|ление)/.test(button.textContent.trim()) && !button.classList.contains("dashboard-refresh-info")) || button.closest('[class*="iprice"]')) return null;
@@ -120,24 +121,59 @@ export function DashboardRefreshTooltips() {
       const cachedSeconds = info.endpoint ? cacheRef.current.get(info.endpoint) : null;
       setState({ anchor: button.getBoundingClientRect(), lastUpdated, disabledReason, ...info, averageSeconds: cachedSeconds });
       if (info.endpoint && cachedSeconds === undefined) {
+        const requestedRevision = revision;
+        cacheRef.current.set(info.endpoint, null);
         try {
           const payload = (await api.get(info.endpoint)).data;
+          if (requestedRevision !== revision) return;
           cacheRef.current.set(info.endpoint, payload.average_duration_seconds || null);
           if (activeButtonRef.current === button) setState((old) => old ? { ...old, averageSeconds: payload.average_duration_seconds } : old);
-        } catch { cacheRef.current.set(info.endpoint, null); }
+        } catch { if (requestedRevision === revision) cacheRef.current.delete(info.endpoint); }
       }
     };
     const hide = (event) => {
       const found = find(event.target);
       if (!found || found.button.contains(event.relatedTarget)) return;
-      if (found.button.dataset.refreshNativeTitle) { found.button.setAttribute("title", found.button.dataset.refreshNativeTitle); delete found.button.dataset.refreshNativeTitle; }
+      if (found.button.dataset.refreshNativeTitle) {
+        if (!found.button.hasAttribute("title")) found.button.setAttribute("title", found.button.dataset.refreshNativeTitle);
+        delete found.button.dataset.refreshNativeTitle;
+      }
       if (activeButtonRef.current === found.button) { activeButtonRef.current = null; setState(null); }
     };
+    // Report responses arrive after the socket event. Follow the actual rendered
+    // timestamp, including changes while the tooltip remains open.
+    const observer = new MutationObserver((records) => {
+      const button = activeButtonRef.current;
+      if (!button) return;
+      if (!button.isConnected) { activeButtonRef.current = null; setState(null); return; }
+      if (records.some((record) => record.type === "attributes" && (
+        (record.target === button && record.attributeName === "title" && button.hasAttribute("title")) ||
+        (record.attributeName === "data-last-updated" && record.target.contains(button))
+      ))) show({ target: button });
+    });
+    observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["title", "data-last-updated"] });
+    const updated = () => {
+      revision += 1;
+      cacheRef.current.clear();
+      if (activeButtonRef.current?.isConnected) show({ target: activeButtonRef.current });
+    };
+    window.addEventListener("dashboard:updated", updated);
     document.addEventListener("pointerover", show);
     document.addEventListener("pointerout", hide);
     document.addEventListener("focusin", show);
     document.addEventListener("focusout", hide);
-    return () => { document.removeEventListener("pointerover", show); document.removeEventListener("pointerout", hide); document.removeEventListener("focusin", show); document.removeEventListener("focusout", hide); };
+    return () => {
+      revision += 1;
+      observer.disconnect();
+      window.removeEventListener("dashboard:updated", updated);
+      const button = activeButtonRef.current;
+      if (button?.dataset.refreshNativeTitle) {
+        if (!button.hasAttribute("title")) button.setAttribute("title", button.dataset.refreshNativeTitle);
+        delete button.dataset.refreshNativeTitle;
+      }
+      activeButtonRef.current = null;
+      document.removeEventListener("pointerover", show); document.removeEventListener("pointerout", hide); document.removeEventListener("focusin", show); document.removeEventListener("focusout", hide);
+    };
   }, []);
 
   if (!state) return null;

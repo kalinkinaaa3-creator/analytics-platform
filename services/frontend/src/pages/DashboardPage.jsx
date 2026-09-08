@@ -13,6 +13,7 @@ const DASHBOARD_WS_NAMES = {
   revenue: "Revenue",
   "seo-analytics": "SEOAnalytics",
   "context-analytics": "ContextAnalytics",
+  "crm-analytics": "CRMAnalytics",
   "lead-generation": "LeadGeneration",
 };
 
