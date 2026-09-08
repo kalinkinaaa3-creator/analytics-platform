@@ -24,8 +24,7 @@ function weekLabel(count) { const lastTwo = count % 100; const last = count % 10
 function initialMonths(start, end) {
   const startMonth = monthStart(fromIso(start) || currentMonday());
   const endMonth = monthStart(addDays(fromIso(end) || fromIso(start) || currentMonday(), 6));
-  if (endMonth > startMonth && addMonths(startMonth, 1).getTime() === endMonth.getTime()) return { left: startMonth, right: endMonth };
-  return { left: addMonths(endMonth, -1), right: endMonth };
+  return { left: startMonth, right: endMonth > startMonth ? endMonth : addMonths(startMonth, 1) };
 }
 
 function CalendarIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v3M18 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" /></svg>; }
