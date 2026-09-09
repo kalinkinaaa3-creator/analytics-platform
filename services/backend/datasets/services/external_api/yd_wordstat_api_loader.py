@@ -75,7 +75,7 @@ def get_configuration():
 
 
 def make_jobs(config, source=None):
-    sources = [source] if source else ["all", "device", "region"]
+    sources = [source] if source else ["region", "device", "all"]
     if any(item not in ("all", "device", "region") for item in sources):
         raise ValueError("source must be all, device or region (IPLAST groups)")
     for item in sources:

@@ -5,7 +5,7 @@ import { PurchasesDashboard } from "./purchases/PurchasesDashboard";
 import { AccreceivDashboard } from "./accreceiv/AccreceivDashboard";
 import { TurnoverDashboard } from "./turnover/TurnoverDashboard";
 import { RevenueDashboard } from "./revenue/RevenueDashboard";
-import { CrmAnalyticsDashboard } from "./crmAnalytics/CrmAnalyticsDashboard";
+import { CrmWorkspace } from "./crmAnalytics/CrmWorkspace";
 import { SeoAnalyticsDashboard } from "./seoAnalytics/SeoAnalyticsDashboard";
 import { ContextAnalyticsDashboard } from "./contextAnalytics/ContextAnalyticsDashboard";
 import { LeadGenerationDashboard } from "./leadGeneration/LeadGenerationDashboard";
@@ -128,7 +128,7 @@ export function DashboardRenderer({
         }
 
         if (widget.type === "crm_analytics_dashboard") {
-          return <CrmAnalyticsDashboard key={widget.id} dashboard={data.dashboard} />;
+          return <CrmWorkspace key={widget.id} dashboard={data.dashboard} />;
         }
 
         if (widget.type === "seo_analytics_dashboard") {

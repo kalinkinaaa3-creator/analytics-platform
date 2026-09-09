@@ -1,4 +1,5 @@
-from django.urls import path
+from django.urls import path, re_path
+from .deal_views import DealReportView
 
 from .views import (
     LeadDashboardExportView,
@@ -12,6 +13,7 @@ from .views import (
 
 
 urlpatterns = [
+    re_path(r"^dashboard/(?P<section>deals|full-cycle)/(?P<part>filters|summary|stages|results|managers|loss-reasons|funnel|dynamics|rows|export)/$", DealReportView.as_view(), name="bitrix24-deal-report"),
     path("dashboard/", LeadDashboardView.as_view(), name="bitrix24-dashboard"),
     path("dashboard/filters/", LeadDashboardFiltersView.as_view(), name="bitrix24-filters"),
     path("dashboard/export/", LeadDashboardExportView.as_view(), name="bitrix24-export"),
