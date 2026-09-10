@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CrmAnalyticsDashboard } from "./CrmAnalyticsDashboard";
 import { CrmDealSection } from "./CrmDealSection";
@@ -15,7 +15,12 @@ function SectionIcon({ section }) {
 export function CrmWorkspace({ dashboard }) {
   const [params, setParams] = useSearchParams();
   const requested = params.get("section");
-  const section = SECTIONS.some(([key]) => key === requested) ? requested : "leads";
+  const urlSection = SECTIONS.some(([key]) => key === requested) ? requested : "leads";
+  const [pendingSection, setPendingSection] = useState(null);
+  const section = pendingSection || urlSection;
+  useEffect(() => {
+    if (pendingSection === urlSection) setPendingSection(null);
+  }, [pendingSection, urlSection]);
   const [toolbarTarget, setToolbarTarget] = useState(null);
   const [tabs, setTabs] = useState({ leads: "leads", deals: "funnel", "full-cycle": "funnel" });
   const validTabs = section === "leads" ? ["leads", "analytics"] : ["funnel", "managers"];
@@ -26,7 +31,7 @@ export function CrmWorkspace({ dashboard }) {
   };
   return <section className="crm-workspace crm-dashboard" data-heading-tooltip="disabled">
     <header className="crm-workspace-heading"><h1>Аналитика CRM</h1><div className="crm-filter-actions" ref={setToolbarTarget} /></header>
-    <nav className="crm-section-tabs" aria-label="Раздел CRM">{SECTIONS.map(([key, label]) => <button key={key} type="button" aria-pressed={section === key} className={section === key ? "active" : ""} onClick={() => { if (key === section) return; setTabs((old) => ({ ...old, [section]: currentTab })); setParams((old) => { const next = new URLSearchParams(old); next.set("section", key); next.set("tab", tabs[key]); return next; }, { replace: true }); }}><SectionIcon section={key} /><span>{label}</span></button>)}</nav>
+    <nav className="crm-section-tabs" aria-label="Раздел CRM">{SECTIONS.map(([key, label]) => <button key={key} type="button" aria-pressed={section === key} className={section === key ? "active" : ""} onClick={() => { if (key === section) return; setTabs((old) => ({ ...old, [section]: currentTab })); setPendingSection(key); setParams((old) => { const next = new URLSearchParams(old); next.set("section", key); next.set("tab", tabs[key]); return next; }, { replace: true }); }}><SectionIcon section={key} /><span>{label}</span></button>)}</nav>
     <div hidden={section !== "leads"}><CrmAnalyticsDashboard dashboard={dashboard} toolbarTarget={toolbarTarget} embedded tab={section === "leads" ? currentTab : tabs.leads} onTabChange={changeTab} /></div>
     <div hidden={section !== "deals"}><CrmDealSection section="deals" active={section === "deals"} tab={section === "deals" ? currentTab : tabs.deals} onTabChange={changeTab} /></div>
     <div hidden={section !== "full-cycle"}><CrmDealSection section="full-cycle" active={section === "full-cycle"} /></div>

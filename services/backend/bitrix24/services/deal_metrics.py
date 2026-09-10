@@ -87,6 +87,7 @@ def metrics(rows):
         "unknown": sum(row["result"] == "?" for row in rows),
         "amount": sum(row["amount"] for row in rows),
         "success_amount": sum(row["amount"] for row in successful),
+        "return_customers": sum(row.get("is_return_customer") is True for row in rows),
         "conversion": ratio(len(successful), len(successful) + lost),
         "average_check": average([row["amount"] for row in successful]),
         "cycle_days": average([row["cycle_days"] for row in rows]),
@@ -112,9 +113,6 @@ def panel(current, previous, prior, kind, group_by, stages):
 
     def grouped(rows):
         result = defaultdict(list)
-        if kind == "results":
-            for key in ("S", "F", "P"):
-                result[(key, RESULT_NAMES[key])] = []
         for row in rows:
             key, name = dimension(row, kind)
             result[(key, name)].append(row)
@@ -129,7 +127,7 @@ def panel(current, previous, prior, kind, group_by, stages):
             for (key, name), group in grouped(period_rows).items():
                 values = metrics(group)
                 result.append({"period": period, "dimension_key": key, "dimension_name": name,
-                               "value": len(group), "total": len(period_rows), "return_customer_value": 0,
+                               "value": len(group), "total": len(period_rows), "return_customer_value": values["return_customers"],
                                "dimension_target": values["success"], "dimension_low_quality": values["lost"],
                                "share": ratio(len(group), len(period_rows)), "conversion": values["conversion"]})
         return result
@@ -142,6 +140,8 @@ def panel(current, previous, prior, kind, group_by, stages):
         share, old_share = ratio(len(rows), len(current)), ratio(len(old_rows), len(previous))
         summary.append({**item, "key": key, "name": name, "share": share,
                         "category_id": rows[0]["category_id"] if rows else old_rows[0]["category_id"] if old_rows else None,
+                        "previous_success": old["success"],
+                        "previous_conversion": old["conversion"],
                         "delta_count": len(rows) - len(old_rows), "delta_amount": item["amount"] - old["amount"],
                         "delta_share": share - old_share if share is not None and old_share is not None else None})
     if kind == "stages":
@@ -154,5 +154,7 @@ def panel(current, previous, prior, kind, group_by, stages):
     total, old = metrics(current), metrics(previous)
     return {"rows": LeadDashboardQuery._enrich_dynamics(dynamics(current), dynamics(previous), group_by, dynamics(prior)),
             "summary": summary, "total": {**total, "key": "", "name": "Итого", "share": 100 if current else None,
+            "previous_success": old["success"],
+            "previous_conversion": old["conversion"],
             "delta_count": len(current) - len(previous), "delta_amount": total["amount"] - old["amount"],
             "delta_share": 0 if current and previous else None}}

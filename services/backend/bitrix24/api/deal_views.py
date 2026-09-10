@@ -3,6 +3,7 @@ from io import BytesIO
 
 from django.http import FileResponse
 from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied, APIException
 from rest_framework.permissions import IsAuthenticated
@@ -74,7 +75,7 @@ def bundle(section, filters):
         scope.pop("results", None)
         scope.pop("group_by", None)
     mart = reader()
-    key = {"crm_section": section, "schema": 3, "snapshot": mart.snapshot, **scope}
+    key = {"crm_section": section, "schema": 4, "snapshot": mart.snapshot, **scope}
     cached = get_dashboard_cache(key)
     if cached is not None:
         return cached
@@ -149,7 +150,7 @@ DEAL_EXPORT_COLUMNS = [
 def export_response(rows, section, filters):
     book = Workbook(write_only=True)
     sheet = book.create_sheet("Сделки" if section == "deals" else "Полный цикл")
-    sheet.freeze_panes = "C2"
+    sheet.freeze_panes = "A2"
     from openpyxl.cell import WriteOnlyCell
     def cell(value):
         result = WriteOnlyCell(sheet)
@@ -161,7 +162,16 @@ def export_response(rows, section, filters):
             result.data_type = "s"
         return result
     columns = DEAL_EXPORT_COLUMNS if section == "deals" else EXPORT_COLUMNS
-    sheet.append([cell(label) for _, label in columns])
+    header_fill = PatternFill("solid", fgColor="1F4E78")
+    header_font = Font(color="FFFFFF", bold=True)
+    header_cells = []
+    for _, label in columns:
+        header_cell = cell(label)
+        header_cell.fill = header_fill
+        header_cell.font = header_font
+        header_cell.alignment = Alignment(horizontal="center", vertical="center")
+        header_cells.append(header_cell)
+    sheet.append(header_cells)
     for row in rows:
         row = dict(row)
         sheet.append([cell(row.get(key)) for key, _ in columns])
@@ -173,7 +183,11 @@ def export_response(rows, section, filters):
     stream = BytesIO()
     book.save(stream)
     stream.seek(0)
-    return FileResponse(stream, as_attachment=True, filename=f"crm_{section}.xlsx")
+    if section == "deals":
+        filename = "bitrix24_deals_detail.xlsx" if filters.get("segment_type") else "bitrix24_deals_generation.xlsx"
+    else:
+        filename = f"crm_{section}.xlsx"
+    return FileResponse(stream, as_attachment=True, filename=filename)
 
 
 class DealReportView(APIView):
