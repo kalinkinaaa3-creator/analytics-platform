@@ -2,7 +2,6 @@
 from collections import defaultdict
 
 from .deal_metrics import average, ratio
-from .dashboard_query import group_period_start
 
 
 def visited_stage(row, key):
@@ -78,22 +77,6 @@ def funnel(leads, deals, refs):
     return {"lead_stages": transitions(stages), "branches": branches}
 
 
-def dynamics(leads, deals, group_by):
-    periods = defaultdict(list)
-    linked = defaultdict(list)
-    for row in deals:
-        linked[row["lead_id"]].append(row)
-    for row in leads:
-        periods[group_period_start(row["source_created_at"].date(), group_by)].append(row)
-    result = []
-    for period, rows in sorted(periods.items()):
-        period_deals = [deal for row in rows for deal in linked[row["lead_id"]]]
-        values = summary(rows, period_deals)
-        values["target"] = sum(row["dashboard_status"] == "target" for row in rows)
-        result.append({"period": period.isoformat(), **values})
-    return result
-
-
 def managers(leads, deals):
     groups = defaultdict(list)
     linked = defaultdict(list)
@@ -108,11 +91,6 @@ def managers(leads, deals):
 def detail_rows(leads, deals, standalone, filters):
     kind, key = filters.get("segment_type"), filters.get("segment_key", "")
     category = filters.get("detail_category_id")
-    period = filters.get("period")
-    if period:
-        ids = {row["lead_id"] for row in leads if group_period_start(row["source_created_at"].date(), filters["group_by"]) == period}
-        leads = [row for row in leads if row["lead_id"] in ids]
-        deals = [row for row in deals if row["lead_id"] in ids]
     if kind == "standalone":
         return [{**row, "lead_created_at": None, "link_state": "Лид не найден или удалён" if row.get("lead_id") else "Сделка без лида"} for row in standalone]
     if kind == "lead-stage":

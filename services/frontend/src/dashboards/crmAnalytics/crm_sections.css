@@ -2,9 +2,22 @@
 .crm-workspace-heading h1 { margin:0; font-size:24px; }
 .crm-workspace .crm-dashboard { padding-top:0; }
 .crm-workspace > [hidden] { display:none; }
-.crm-section-tabs { display:flex; gap:8px; margin:0 0 20px; padding:6px; border:1px solid #cbd2c6; border-radius:10px; background:#e8ece4; width:fit-content; }
-.crm-section-tabs button { padding:10px 28px; border:0; border-radius:7px; background:transparent; color:#4d5947; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; }
-.crm-section-tabs button.active { color:#fff; background:#4d6048; box-shadow:0 3px 9px #34452b20; }
+.crm-workspace .crm-filters { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px; }
+.crm-workspace .crm-filter-grid { display:contents; }
+.crm-workspace .crm-filter-grid > .crm-filter { flex:1 1 110px; max-width:140px; }
+.crm-workspace .crm-filter-grid > .date-range-picker { flex:0 0 210px; min-width:210px; max-width:210px; }
+.crm-workspace .date-range-picker__control { grid-template-columns:minmax(80px,1fr) auto minmax(80px,1fr) 26px; }
+.crm-workspace .date-range-picker__control input { padding-right:4px; padding-left:4px; font-size:12px; }
+.crm-workspace .date-range-picker__control > button { width:26px; }
+.crm-workspace .crm-filter-grid > .crm-group-filter { flex:0 1 220px; min-width:210px; max-width:220px; }
+.crm-workspace .crm-filters > .crm-filter-actions { order:1; flex:0 0 auto; flex-wrap:nowrap; gap:8px; margin:0 0 0 auto; }
+.crm-workspace .crm-filters > .crm-filter-actions .crm-action { padding-right:10px; padding-left:10px; }
+.crm-section-tabs { display:flex; align-items:stretch; gap:4px; margin:0 0 20px; border-bottom:1px solid #cbd2c6; }
+.crm-section-tabs button { display:flex; align-items:center; justify-content:center; gap:12px; min-width:140px; min-height:46px; margin-bottom:-1px; padding:10px 24px; border:1px solid #dce1d8; border-radius:7px 7px 0 0; background:#f0f2ee; color:#687261; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; transition:background .15s,color .15s; }
+.crm-section-tabs button:hover { background:#e8ece4; color:#4d6048; }
+.crm-section-tabs button.active { border-color:#cbd2c6; border-bottom-color:#fff; background:#fff; color:#374b32; box-shadow:inset 0 2px 0 #8b9e84; font-weight:700; }
+.crm-section-tabs button:focus-visible { outline:2px solid #506f4e; outline-offset:2px; }
+.crm-section-icon { width:20px; height:20px; flex-shrink:0; }
 .crm-text-link { border:0; padding:0; background:none; color:inherit; text-decoration:underline; cursor:pointer; font:inherit; text-align:inherit; }
 .crm-category-row th { background:#e8ece4!important; font-weight:700; }
 .crm-detail-pagination { display:flex; justify-content:flex-end; align-items:center; gap:14px; padding-top:12px; }
@@ -36,5 +49,5 @@
 .crm-funnel-tooltip { position:fixed; z-index:1200; display:flex; flex-direction:column; gap:8px; width:280px; box-sizing:border-box; padding:16px; border:1px solid #cbd2c6; border-radius:10px; background:#fff; box-shadow:0 10px 30px #24351c26; color:#374331; font-size:12px; pointer-events:none; }
 .crm-funnel-tooltip small { line-height:1.4; color:#72796b; }
 @keyframes crm-funnel-enter { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
-@media (max-width:760px) { .crm-section-tabs { width:100%; box-sizing:border-box; } .crm-section-tabs button { flex:1; padding:10px 8px; } .crm-workspace-heading .crm-filter-actions { justify-content:flex-start; } .crm-funnel-side { display:none; } .crm-funnel-branches { grid-template-columns:1fr; } }
+@media (max-width:760px) { .crm-section-tabs { width:100%; box-sizing:border-box; } .crm-section-tabs button { flex:1; min-width:0; gap:6px; padding:10px 8px; font-size:12px; } .crm-section-icon { width:18px; height:18px; } .crm-workspace-heading .crm-filter-actions { justify-content:flex-start; } .crm-funnel-side { display:none; } .crm-funnel-branches { grid-template-columns:1fr; } }
 @media (prefers-reduced-motion:reduce) { .crm-funnel-stage { animation:none; } .crm-funnel-stage,.crm-funnel-stage path,.crm-funnel-stages,.crm-funnel-branches > section { transition:none; } .crm-funnel-branches > section:hover { transform:none; } }

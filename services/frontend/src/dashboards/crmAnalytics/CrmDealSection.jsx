@@ -10,7 +10,7 @@ const RESULTS = [{ id: "S", name: "Успешные" }, { id: "F", name: "Про
 const UNTRACKED = "Неотслеживаемые";
 const format = (value, digits = 0) => value == null ? "—" : new Intl.NumberFormat("ru-RU", { maximumFractionDigits: digits }).format(value);
 const dateTime = (value) => value ? new Date(value).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : "—";
-function defaults() { const now = new Date(); const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10); return { date_start: `${now.getFullYear()}-01-01`, date_end: local, department_names: [], manager_ids: [], source_ids: [], category_ids: [0, 2, 5], stage_keys: [], results: [], exclude_untracked_department: true, group_by: "month" }; }
+function defaults(full = false) { const now = new Date(); const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10); return { date_start: `${now.getFullYear()}-01-01`, date_end: local, department_names: [], manager_ids: [], source_ids: [], category_ids: [0, 2, 5], stage_keys: [], results: [], exclude_untracked_department: true, ...(full ? {} : { group_by: "month" }) }; }
 
 function Cards({ items }) {
   return <section className="crm-kpi-cards">{items.map((item) => <article key={item.label}><div className="crm-kpi-card__label"><span>{item.label}</span>{item.help && <span className="crm-kpi-help" tabIndex={0}><i>i</i><span role="tooltip">{item.help}</span></span>}</div><div className="crm-kpi-card__value"><strong>{format(item.value, item.digits || 0)}{item.value != null && item.suffix}</strong>{item.share != null && <small className="crm-kpi-share">{format(item.share, 1)}%</small>}{item.action && <button type="button" className="crm-action" onClick={item.action} aria-label="Динамика конверсии">↗</button>}</div>{item.delta != null && <small>{item.delta > 0 ? "+" : ""}{format(item.delta, 1)} {item.suffix === "%" ? "п.п." : "дн."} к прошлому году</small>}</article>)}</section>;
@@ -56,12 +56,12 @@ function DealConversion({ report, close }) {
 
 export function CrmDealSection({ section, active, tab = "funnel", onTabChange = () => {} }) {
   const full = section === "full-cycle";
-  const [filters, setFilters] = useState(defaults);
+  const [filters, setFilters] = useState(() => defaults(full));
   const setTab = onTabChange;
   const [options, setOptions] = useState({ categories: [], stages: [], managers: [], departments: [], sources: [] });
   const [report, setReport] = useState(null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [settledKey, setSettledKey] = useState(null);
   const [version, setVersion] = useState(0);
   const [modal, setModal] = useState(null);
   const [details, setDetails] = useState({ items: [] });
@@ -69,16 +69,18 @@ export function CrmDealSection({ section, active, tab = "funnel", onTabChange = 
   const [conversion, setConversion] = useState(false);
   const [exporting, setExporting] = useState(false);
   const generation = useRef(0);
+  const requestKey = JSON.stringify([section, filters, version]);
+  const loading = settledKey !== requestKey;
   useEffect(() => { const receive = (event) => { if (event.detail?.dashboard === "CRMAnalytics" && !["running", "failed"].includes(event.detail.status)) setVersion((old) => old + 1); }; window.addEventListener("dashboard:updated", receive); return () => window.removeEventListener("dashboard:updated", receive); }, []);
   useEffect(() => {
-    if (!active) return undefined;
+    if (!active || settledKey === requestKey) return undefined;
     const controller = new AbortController(); const request = ++generation.current;
     const load = async () => {
-      setLoading(true); setError("");
+      setError("");
       try {
         for (let attempt = 0; attempt < 2; attempt += 1) {
           const [summary, opts] = await Promise.all([crmSectionRequest(section, "summary", filters, controller.signal), crmSectionRequest(section, "filters", filters, controller.signal)]);
-          const parts = full ? ["funnel", "dynamics", "managers"] : ["stages", "results", "managers", "loss-reasons"];
+          const parts = full ? ["funnel", "managers"] : ["stages", "results", "managers", "loss-reasons"];
           const values = await Promise.all(parts.map((part) => crmSectionRequest(section, part, filters, controller.signal)));
           if (summary.snapshot && [opts, ...values].some((value) => value.snapshot !== summary.snapshot)) {
             if (attempt === 0) continue;
@@ -88,11 +90,11 @@ export function CrmDealSection({ section, active, tab = "funnel", onTabChange = 
           break;
         }
       } catch (e) { if (!controller.signal.aborted) { setReport(null); setError(e.response?.data?.detail || "Не удалось загрузить отчёт CRM."); } }
-      finally { if (!controller.signal.aborted) setLoading(false); }
+      finally { if (!controller.signal.aborted) setSettledKey(requestKey); }
     };
     const timer = setTimeout(load, 0);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [section, active, filters, full, version]);
+  }, [section, active, filters, full, version, requestKey, settledKey]);
   useEffect(() => {
     if (!modal || !active) return undefined;
     const controller = new AbortController();
@@ -112,14 +114,16 @@ export function CrmDealSection({ section, active, tab = "funnel", onTabChange = 
   ] : [{ label: "Итого", value: cards.total }, { label: "Успешные", value: cards.success, share: percent(cards.success) }, { label: "Проигранные", value: cards.lost, share: percent(cards.lost) }, { label: "Конверсия", value: cards.conversion, suffix: "%", digits: 1, help: "Успешные / (Успешные + Проигранные) × 100%.", action: () => setConversion(true) }, { label: "В работе", value: cards.in_progress, share: percent(cards.in_progress) }, { label: "Сумма сделок", value: cards.amount, suffix: " ₽" }, { label: "Успешные сделки", value: cards.success_amount, suffix: " ₽" }, { label: "Средний чек", value: cards.average_check, suffix: " ₽", help: "Сумма успешных сделок / количество успешных сделок." }];
   const selectedDepartments = filters.department_names.length ? filters.department_names : filters.exclude_untracked_department ? options.departments.map((d) => d.department_name).filter((d) => d !== UNTRACKED) : [];
   const kinds = tab === "funnel" ? [["stages", "Динамика по стадиям"], ["results", "Динамика результатов"]] : [["managers", "Динамика по менеджерам"], ["loss-reasons", "Динамика проигранных сделок"]];
-  return <main className="crm-dashboard crm-deal-section"><section className="crm-filters"><div className="crm-filter-actions"><button className="crm-action" disabled={exporting || loading} onClick={() => exportRows()}>Экспорт</button><button className="crm-action" onClick={() => change(defaults())}>Очистить</button></div><div className="crm-filter-grid">
+  if (!active) return null;
+  if (loading) return <GlobalSpinner />;
+  return <main className="crm-dashboard crm-deal-section"><section className="crm-filters"><div className="crm-filter-actions"><button className="crm-action" disabled={exporting || loading} onClick={() => exportRows()}>Экспорт</button><button className="crm-action" onClick={() => change(defaults(full))}>Очистить</button></div><div className="crm-filter-grid">
     <MultiSelect label="Подразделение" options={options.departments} selected={selectedDepartments} valueKey="department_name" labelKey="department_name" onChange={(value) => change({ department_names: value, manager_ids: [], exclude_untracked_department: !value.includes(UNTRACKED) })} />
     <MultiSelect label="Менеджер" options={options.managers} selected={filters.manager_ids} valueKey="manager_id" labelKey="manager_name" onChange={(value) => change({ manager_ids: value })} />
     {full && <MultiSelect label="Источник" options={options.sources} selected={filters.source_ids} valueKey="source_id" labelKey="source_name" onChange={(value) => change({ source_ids: value })} />}
     <MultiSelect label="Воронка" options={options.categories} selected={filters.category_ids} valueKey="category_id" labelKey="name" onChange={(value) => change({ category_ids: value, stage_keys: [] })} />
     {!full && <><MultiSelect label="Статус" options={RESULTS} selected={filters.results} valueKey="id" labelKey="name" onChange={(value) => change({ results: value })} /><MultiSelect label="Стадия" options={options.stages.map((s) => ({ ...s, label: `${s.category_name} · ${s.name}` }))} selected={filters.stage_keys} valueKey="key" labelKey="label" onChange={(value) => change({ stage_keys: value })} /></>}
     <DateRangePicker start={filters.date_start} end={filters.date_end} onChange={({ start, end }) => change({ date_start: start, date_end: end })} />
-    <div className="crm-filter crm-group-filter"><span>Группировка</span><div>{GROUPS.map(([key, label]) => <button key={key} className={filters.group_by === key ? "active" : ""} onClick={() => change({ group_by: key })}>{label}</button>)}</div></div>
+    {!full && <div className="crm-filter crm-group-filter"><span>Группировка</span><div>{GROUPS.map(([key, label]) => <button key={key} className={filters.group_by === key ? "active" : ""} onClick={() => change({ group_by: key })}>{label}</button>)}</div></div>}
   </div></section>{full && <p className="crm-cohort-note"><FormulaHeader formulas={["Период определяется датой создания лида. Последующие события учитываются независимо от даты наступления.", "При выборе воронок остаются лиды с их сделками и лиды без сделок. Менеджер и подразделение относятся к лиду."]}>Когорта по дате создания лида</FormulaHeader></p>}
     {error && <div className="crm-alert">{error}</div>}{report && <><Cards items={cardItems} />{!full && cards.without_lead > 0 && <p className="crm-cohort-note"><button className="crm-text-link" onClick={() => open("standalone", "", null, "Сделки без лида")}>Сделки без лида: {format(cards.without_lead)}</button></p>}{cards.missing_history > 0 && <p className="crm-cohort-note">Есть записи без истории стадий: {format(cards.missing_history)}. Неизвестные даты и длительности показаны прочерком.</p>}{full ? <><FullCycleFunnel report={report} onOpen={open} dateEnd={filters.date_end} />{report.standalone > 0 && <p className="crm-cohort-note"><button className="crm-text-link" onClick={() => open("standalone", "", null, "Сделки без лида")}>Сделки без лида: {format(report.standalone)}</button> (включая удалённые и ненайденные лиды) — отдельно по дате создания сделки, вне лидовой когорты.</p>}</> : <><nav className="crm-tabs"><button className={tab === "funnel" ? "active" : ""} onClick={() => setTab("funnel")}>Стадии и результаты сделок</button><button className={tab === "managers" ? "active" : ""} onClick={() => setTab("managers")}>Менеджеры и эффективность сделок</button></nav>{cards.total ? <section className="crm-chart-grid">{kinds.map(([kind, title]) => <DynamicsChart key={kind} title={title} rows={report[kind]?.rows || []} groupBy={filters.group_by} segmentType={kind} dimensionOrder={kind === "stages" || kind === "results" ? (report[kind]?.summary || []).map((row) => row.key) : undefined} onOpen={open} summaryContent={<DealSummaryTable kind={kind} report={report[kind] || {}} categories={options.categories} onSelect={(key) => open(kind, key, null, title)} />} />)}</section> : <p className="crm-empty">По выбранным условиям сделки не найдены</p>}</> }</>}
     {(loading || exporting) && <GlobalSpinner />}{conversion && <DealConversion report={report?.results} close={() => setConversion(false)} />}<Details section={section} state={modal} data={details} busy={detailLoading} onClose={() => setModal(null)} onChange={setModal} onExport={() => exportRows(true)} />

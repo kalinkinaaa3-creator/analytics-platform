@@ -15,7 +15,7 @@ from bitrix24.services.deal_metrics import metrics, panel, dimension
 from bitrix24.services.deal_repository import (
     DEFAULT_CATEGORIES, MOSCOW,
 )
-from bitrix24.services.dashboard_query import previous_comparison_date, group_period_start, previous_group_period
+from bitrix24.services.dashboard_query import previous_comparison_date, previous_year, group_period_start, previous_group_period
 from bitrix24.services.refresh import refresh_state
 from bitrix24.services.crm_marts import MartReader, MartUnavailable, SnapshotChanged
 from .views import _can_view_crm
@@ -72,6 +72,7 @@ def bundle(section, filters):
     if section == "full-cycle":
         scope.pop("stage_keys", None)
         scope.pop("results", None)
+        scope.pop("group_by", None)
     mart = reader()
     key = {"crm_section": section, "schema": 2, "snapshot": mart.snapshot, **scope}
     cached = get_dashboard_cache(key)
@@ -80,8 +81,8 @@ def bundle(section, filters):
     if refresh_state().get("running"):
         raise Updating()
     refs = mart.refs
-    previous = {**scope, "date_start": previous_comparison_date(scope["date_start"], scope["group_by"]),
-                "date_end": previous_comparison_date(scope["date_end"], scope["group_by"])}
+    previous = {**scope, "date_start": previous_comparison_date(scope["date_start"], scope["group_by"]) if section == "deals" else previous_year(scope["date_start"]),
+                "date_end": previous_comparison_date(scope["date_end"], scope["group_by"]) if section == "deals" else previous_year(scope["date_end"])}
     if section == "deals":
         start = group_period_start(scope["date_start"], scope["group_by"])
         prior = {**scope, "date_start": previous_group_period(start, scope["group_by"]), "date_end": start - timedelta(days=1)}
@@ -172,6 +173,9 @@ class DealReportView(APIView):
         serializer = DealRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         filters = serializer.validated_data
+        if section == "full-cycle":
+            filters.pop("group_by", None)
+            filters.pop("period", None)
         if part == "filters":
             mart = reader()
             return Response({**mart.options(filters), "snapshot": mart.snapshot})
@@ -200,8 +204,6 @@ class DealReportView(APIView):
                                  "standalone": len(data["standalone"]), "comparison_period": comparison})
             if part == "funnel":
                 return respond(full_cycle.funnel(leads, deals, data["refs"]))
-            if part == "dynamics":
-                return respond({"rows": full_cycle.dynamics(leads, deals, filters["group_by"])})
             if part == "managers":
                 return respond({"rows": full_cycle.managers(leads, deals)})
         raise serializers.ValidationError("Неизвестный раздел отчёта.")
