@@ -13,7 +13,7 @@ import "../spinner.css";
 import "./crm_analytics.css";
 
 const GROUPS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"], ["year", "Год"]];
-const PREVIOUS_PERIOD_LABELS = { day: "предыдущему (полному)дню", week: "предыдущей (полной) неделе", month: "предыдущему (полному) месяцу", year: "предыдущему (полному) году" };
+const PREVIOUS_PERIOD_LABELS = { day: "предыдущему (полному) дню", week: "предыдущей (полной) неделе", month: "предыдущему (полному) месяцу", year: "предыдущему (полному) году" };
 const STAGE_LABELS = { target: "Целевой", apm: "Передано в Селект Маркет", in_progress: "В работе", low_quality: "Некачественный", unknown: "Не определено" };
 const SEMANTIC_STATUS_LABELS = { P: "В работе", S: "Целевой", F: "Некачественный" };
 const COLORS = ["#4d6b4a", "#c99845", "#647a8b", "#a85349", "#6f5f87", "#397f83", "#8a704c", "#59645a"];
