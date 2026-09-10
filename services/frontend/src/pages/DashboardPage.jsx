@@ -36,7 +36,14 @@ export function DashboardPage() {
   const [errorStatus, setErrorStatus] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const filtersKey = searchParams.toString();
+  // CRM tabs are local navigation, not filters for the dashboard builder.
+  // Keeping them out of this key preserves the loaded shell on tab changes.
+  const builderParams = new URLSearchParams(searchParams);
+  if (dashboardSlug === "crm-analytics") {
+    builderParams.delete("section");
+    builderParams.delete("tab");
+  }
+  const filtersKey = builderParams.toString();
 
   const loadDashboardRef = useRef(null);
   const dashboardSlugRef = useRef(null);
