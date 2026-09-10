@@ -1,4 +1,4 @@
-.crm-workspace-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+.crm-workspace-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:8px; }
 .crm-workspace-heading h1 { margin:0; font-size:24px; }
 .crm-workspace .crm-dashboard { padding-top:0; padding-right: 0px; padding-left: 0px; }
 .crm-workspace > [hidden] { display:none; }

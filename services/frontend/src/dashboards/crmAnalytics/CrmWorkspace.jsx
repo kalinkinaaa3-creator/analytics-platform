@@ -4,7 +4,7 @@ import { CrmAnalyticsDashboard } from "./CrmAnalyticsDashboard";
 import { CrmDealSection } from "./CrmDealSection";
 import "./crm_sections.css";
 
-const SECTIONS = [["leads", "Лиды"], ["deals", "Сделки"], ["full-cycle", "Полный цикл"]];
+const SECTIONS = [["leads", "Лиды"], ["deals", "Сделки"], ["full-cycle", "Воронка"]];
 
 function SectionIcon({ section }) {
   return <svg className="crm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
