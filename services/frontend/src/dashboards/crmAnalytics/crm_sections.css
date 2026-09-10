@@ -1,6 +1,6 @@
 .crm-workspace-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
 .crm-workspace-heading h1 { margin:0; font-size:24px; }
-.crm-workspace .crm-dashboard { padding-top:0; }
+.crm-workspace .crm-dashboard { padding-top:0; padding-right: 0px; padding-left: 0px; }
 .crm-workspace > [hidden] { display:none; }
 .crm-workspace .crm-filters { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px; }
 .crm-workspace .crm-filter-grid { display:contents; }
@@ -12,7 +12,7 @@
 .crm-workspace .crm-filter-grid > .crm-group-filter { flex:0 1 220px; min-width:210px; max-width:220px; }
 .crm-workspace .crm-filters > .crm-filter-actions { order:1; flex:0 0 auto; flex-wrap:nowrap; gap:8px; margin:0 0 0 auto; }
 .crm-workspace .crm-filters > .crm-filter-actions .crm-action { padding-right:10px; padding-left:10px; }
-.crm-section-tabs { display:flex; align-items:stretch; gap:4px; margin:0 0 20px; border-bottom:1px solid #cbd2c6; }
+.crm-section-tabs { display:flex; align-items:stretch; gap:4px; margin:0 0 12px; border-bottom:1px solid #cbd2c6; }
 .crm-section-tabs button { display:flex; align-items:center; justify-content:center; gap:12px; min-width:140px; min-height:46px; margin-bottom:-1px; padding:10px 24px; border:1px solid #dce1d8; border-radius:7px 7px 0 0; background:#f0f2ee; color:#687261; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; transition:background .15s,color .15s; }
 .crm-section-tabs button:hover { background:#e8ece4; color:#4d6048; }
 .crm-section-tabs button.active { border-color:#cbd2c6; border-bottom-color:#fff; background:#fff; color:#374b32; box-shadow:inset 0 2px 0 #8b9e84; font-weight:700; }
