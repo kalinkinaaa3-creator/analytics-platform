@@ -19,12 +19,12 @@ function DealSummaryTable({ report, kind, onSelect, categories, comparisonPeriod
   const [collapsed, setCollapsed] = useState(() => new Set());
   const rows = [...(report.summary || [])];
   const quality = ["sources", "managers"].includes(kind);
-  const shareFormula = "Доля = количество сделок по строке / общее количество сделок в таблице × 100%.";
-  const quantityDeltaFormulas = ["Δ количества = количество сделок текущего периода − количество сделок аналогичного периода прошлого года.", "Изменение, % = Δ количества / количество сделок аналогичного периода прошлого года × 100%."];
-  const shareDeltaFormula = "Δ доли, п.п. = доля текущего периода − доля аналогичного периода прошлого года.";
-  const successFormulas = ["Успешные = количество успешных сделок по строке.", "Изменение, % = (успешные текущего периода − успешные прошлого периода) / успешные прошлого периода × 100%."];
-  const conversionFormulas = ["Конверсия = успешные / (успешные + проигранные) × 100%.", "Изменение, п.п. = конверсия текущего периода − конверсия аналогичного периода прошлого года."];
-  const repeatFormula = "Доля повторных сделок рассчитывается от общего количества сделок соответствующей строки.";
+  const shareFormula = "Доля = Количество по строке / Итого по таблице × 100%.";
+  const quantityDeltaFormulas = ["Δ количества = Количество текущего периода − Количество аналогичного периода прошлого года.", "Изменение, % = Δ количества / Количество прошлого года × 100%."];
+  const shareDeltaFormula = "Δ доли, п.п. = Доля текущего периода − Доля аналогичного периода прошлого года.";
+  const successFormulas = ["Успешные = количество успешных сделок по строке.", "Изменение, % = (Успешные текущего периода − Успешные прошлого периода) / Успешные прошлого периода × 100%."];
+  const conversionFormulas = ["Конверсия = Успешные / (Успешные + Проигранные) × 100%.", "Изменение, п.п. = Конверсия текущего периода − Конверсия прошлого года."];
+  const repeatFormula = "Доля повторных сделок рассчитывается от общего количества сделок.";
   let lastCategory = null;
   const renderRow = (row, total = false) => { const previousCount = Number(row.total || 0) - Number(row.delta_count || 0); const previousShare = row.delta_share == null || row.share == null ? null : Number(row.share) - Number(row.delta_share); const repeatShare = row.total ? Number(row.return_customers || 0) * 100 / Number(row.total) : null; return <tr key={total ? "total" : row.key} className={total ? "crm-summary-total" : ""}><th><button type="button" className="crm-text-link" onClick={() => onSelect(row.key)}>{row.name}</button></th><td><strong>{format(row.total)}</strong></td><td>{row.share == null ? "—" : `${format(row.share, 1)}%`}</td>{quality && <><td><span className="crm-summary-value"><strong>{format(row.success)}</strong><InlineDelta current={row.success} previous={row.previous_success} /></span></td><td><span className="crm-summary-value"><strong>{row.conversion == null ? "—" : `${format(row.conversion, 1)}%`}</strong><InlineDelta current={row.conversion} previous={row.previous_conversion} points /></span></td></>}<td><DeltaMetric current={row.total} previous={previousCount} favorableDecrease={kind === "loss-reasons"} /></td>{!quality && <td><DeltaMetric current={row.share} previous={previousShare} share favorableDecrease={kind === "loss-reasons"} /></td>}<td><span className="crm-summary-value crm-return-customer-value"><strong>{format(row.return_customers)}</strong><small>{repeatShare == null ? "—" : `${format(repeatShare, 1)}%`}</small></span></td></tr>; };
   const firstHeader = kind === "stages" ? "Стадия" : kind === "managers" ? "Менеджер" : kind === "results" ? "Статус" : kind === "sources" ? "Источник" : "Причина";
