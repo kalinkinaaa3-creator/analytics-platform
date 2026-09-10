@@ -69,7 +69,7 @@ class LeadDashboardRowsRequestSerializer(LeadDashboardRequestSerializer):
     period = serializers.DateField(required=False, allow_null=True, default=None)
     sort_by = serializers.ChoiceField(
         choices=(
-            "lead_id", "title", "company_name", "manager_name", "department_name", "status_name",
+            "lead_id", "title", "manager_name", "department_name", "status_name",
             "project_name", "source_name", "source_created_at", "source_updated_at",
             "first_processing_at", "opportunity", "processing_duration_days",
         ),

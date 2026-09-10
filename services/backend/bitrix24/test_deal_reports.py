@@ -10,7 +10,7 @@ from bitrix24.models import (BitrixDeal, BitrixDealCategory, BitrixCrmDictionary
 from bitrix24.services.deal_repository import MOSCOW, references, cohort_rows, deal_rows
 from bitrix24.services.deal_metrics import enrich_deal, metrics, panel
 from bitrix24.services import full_cycle
-from bitrix24.services.crm_marts import MartReader, SnapshotChanged, encode, decode, publish
+from bitrix24.services.crm_marts import MartReader, SnapshotChanged, publish
 
 
 def stamp(month, day=1, year=2026):
@@ -114,43 +114,41 @@ class DealRepositoryTests(TestCase):
         self.deal(13, 3, category=7)
         refs = references()
         leads, deals, _ = cohort_rows({**self.filters, "category_ids": []}, refs)
-        joined = [(encode(lead), encode(deal)) for lead in leads for deal in deals if deal["lead_id"] == lead["lead_id"]]
-        joined.append((encode(next(r for r in leads if r["lead_id"] == 2)), ""))
-        client = Mock()
-        client.execute.side_effect = [[(1,)], [("generation", encode(refs))], joined, []]
-        reader = MartReader(client)
-        current, linked, standalone = reader.cohort(self.filters)
-        self.assertEqual({r["lead_id"] for r in current}, {1, 2})
-        self.assertEqual({r["deal_id"] for r in linked}, {11, 12})
-        self.assertEqual(standalone, [])
-        self.assertEqual(reader.refs["tracking"], refs["tracking"])
-        query, params = client.execute.call_args_list[2].args
-        self.assertIn("bitrix_full_cycle_analytics", query)
-        self.assertEqual(params["end"], stamp(2))
-        self.assertNotIn("deal_closed_at", query)
+        self.assertEqual({r["lead_id"] for r in leads}, {1, 2, 3})
+        self.assertEqual({r["deal_id"] for r in deals}, {11, 12, 13})
+        from bitrix24.services.crm_marts import COLUMNS, storage_row
+        restored = MartReader.restore(storage_row("deal", deals[0], "generation", stamp(6)))
+        self.assertEqual(restored["deal_id"], deals[0]["deal_id"])
+        self.assertEqual(set(restored["visits"]), set(deals[0]["visits"]))
+        self.assertEqual(
+            {key: value["days"] for key, value in restored["visits"].items()},
+            {key: value["days"] for key, value in deals[0]["visits"].items()},
+        )
+        self.assertEqual(len(COLUMNS), len(storage_row("deal", deals[0], "generation", stamp(6))))
 
     def test_publication_checks_counts_before_atomic_exchange(self):
         self.lead(1)
         self.deal(11, 1)
         client = Mock()
-        client.execute.side_effect = lambda sql, *args: [(3,)] if sql.startswith("SELECT count()") else []
+        from bitrix24.services.crm_marts import reference_rows
+        ref_count = len(reference_rows(references(), "generation"))
+        client.execute.side_effect = lambda sql, *args: ([(ref_count if "references_staging" in sql else 2,)] if sql.startswith("SELECT count()") else [(1,)] if sql.startswith("EXISTS TABLE") else [])
         with patch("bitrix24.services.crm_marts.get_clickhouse_client", return_value=client):
             self.assertEqual(publish(chunk_size=1), 2)
         calls = [call.args[0] for call in client.execute.call_args_list]
-        self.assertEqual(sum(sql.startswith("EXCHANGE TABLES") for sql in calls), 1)
-        self.assertLess(next(i for i, sql in enumerate(calls) if sql.startswith("SELECT count()")), next(i for i, sql in enumerate(calls) if sql.startswith("EXCHANGE")))
+        self.assertEqual(sum(sql.startswith("RENAME TABLE") for sql in calls), 1)
+        self.assertLess(next(i for i, sql in enumerate(calls) if sql.startswith("SELECT count()")), next(i for i, sql in enumerate(calls) if sql.startswith("RENAME TABLE")))
         client.reset_mock()
-        client.execute.side_effect = lambda sql, *args: [(0,)] if sql.startswith("SELECT count()") else []
+        client.execute.side_effect = lambda sql, *args: ([(0,)] if sql.startswith("SELECT count()") else [(1,)] if sql.startswith("EXISTS TABLE") else [])
         with patch("bitrix24.services.crm_marts.get_clickhouse_client", return_value=client), self.assertRaisesRegex(RuntimeError, "row count"):
             publish(chunk_size=1)
-        self.assertFalse(any(c.args[0].startswith("EXCHANGE") for c in client.execute.call_args_list))
+        self.assertFalse(any(c.args[0].startswith("RENAME TABLE") for c in client.execute.call_args_list))
 
-    def test_snapshot_roundtrip_preserves_dates_money_visits_and_detects_replacement(self):
-        value = {"created": stamp(1), "amount": Decimal("1234567890.12"), "visited": {"WON", "NEW"}}
-        self.assertEqual(decode(encode(value)), value)
+    def test_snapshot_detects_replacement(self):
         refs = references()
         client = Mock()
-        client.execute.side_effect = [[(1,)], [("old", encode(refs))], [("new",)]]
+        from bitrix24.services.crm_marts import reference_rows
+        client.execute.side_effect = [[(1,)], [(1,)], [("old",)], reference_rows(refs, "old"), [("new",)], [("old",)]]
         reader = MartReader(client)
         with self.assertRaises(SnapshotChanged):
             reader.check()

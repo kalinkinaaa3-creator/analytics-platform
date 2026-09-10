@@ -7,7 +7,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from bitrix24.models import (
-    BitrixCrmDictionary, BitrixDeal, BitrixDealCategory, BitrixLead,
+    BitrixCrmDictionary, BitrixCrmField, BitrixDeal, BitrixDealCategory, BitrixLead,
     BitrixLeadAnalytics, BitrixManagerTracking, BitrixStageHistory, BitrixUser,
 )
 from bitrix24.services.dashboard_query import UNTRACKED_DEPARTMENT_NAME
@@ -50,9 +50,22 @@ def references():
             }
     tracking = {row["user_id"]: row for row in BitrixManagerTracking.objects.values("user_id", "manager_name", "department_name")}
     users = {row["user_id"]: row for row in BitrixUser.objects.filter(is_deleted=False).values("user_id", "full_name")}
+    enum_fields = {}
+    for field in BitrixCrmField.objects.filter(
+        is_deleted=False,
+        entity_type_id=2,
+        field_code__in=("UF_CRM_69B904B3E0AD1", "UF_CRM_64254B7D4853D"),
+    ).values("field_code", "raw_payload"):
+        enum_fields[field["field_code"]] = {
+            str(item.get("ID")): item.get("VALUE") or str(item.get("ID"))
+            for item in (field["raw_payload"] or {}).get("items", [])
+            if item.get("ID") is not None
+        }
     return {"categories": categories, "category_map": category_map, "stages": stages,
             "lead_stages": sorted(lead_stages, key=lambda r: r["sort"] or 0),
-            "sources": sources, "tracking": tracking, "users": users}
+            "sources": sources, "tracking": tracking, "users": users,
+            "deal_types": enum_fields.get("UF_CRM_69B904B3E0AD1", {}),
+            "activities": enum_fields.get("UF_CRM_64254B7D4853D", {})}
 
 
 def manager_scope(query, filters, refs, manager_field):
@@ -102,7 +115,7 @@ def enrich_leads(rows):
 
 def enrich_rows(query, refs):
     rows = list(query.values("deal_id", "title", "category_id", "stage_id", "stage_semantic_id", "assigned_by_id",
-                             "lead_id", "company_id", "source_created_at", "source_updated_at", "opportunity", "currency_id", "source_id"))
+                             "lead_id", "company_id", "source_created_at", "source_updated_at", "opportunity", "currency_id", "source_id", "raw_payload"))
     events = histories(2, [row["deal_id"] for row in rows])
     now = timezone.now()
     result = []
@@ -112,6 +125,14 @@ def enrich_rows(query, refs):
         row["manager_name"] = refs["users"].get(user_id, {}).get("full_name") or tracking.get("manager_name") or "Менеджер не назначен"
         row["department_name"] = tracking.get("department_name", UNTRACKED_DEPARTMENT_NAME)
         row["category_name"] = refs["category_map"].get(row["category_id"], {}).get("name", str(row["category_id"]))
+        raw = row.pop("raw_payload") or {}
+        return_value = raw.get("isReturnCustomer", raw.get("IS_RETURN_CUSTOMER"))
+        row["is_return_customer"] = return_value is True or str(return_value).upper() in ("Y", "TRUE", "1")
+        row["deal_type_id"] = str(raw.get("UF_CRM_69B904B3E0AD1") or "")
+        row["deal_type_name"] = refs["deal_types"].get(row["deal_type_id"], row["deal_type_id"])
+        row["activity_id"] = str(raw.get("UF_CRM_64254B7D4853D") or "")
+        row["activity_name"] = refs["activities"].get(row["activity_id"], row["activity_id"])
+        row["source_name"] = next((item["source_name"] for item in refs["sources"] if item["source_id"] == row.get("source_id")), "")
         # Calendar grouping follows Moscow business dates, including UTC boundaries.
         if row["source_created_at"]:
             row["source_created_at"] = row["source_created_at"].astimezone(MOSCOW)
@@ -176,4 +197,4 @@ def filter_options(filters, refs):
             "stages": sorted(stages, key=lambda r: (r["category_sort"], r["category_id"], r["sort"] or 0)),
             "departments": [{"department_name": name} for name in sorted({r["department_name"] for r in refs["tracking"].values()} | {UNTRACKED_DEPARTMENT_NAME})],
             "managers": [{"manager_id": r["user_id"], "manager_name": r["full_name"]} for r in users.values("user_id", "full_name")],
-            "sources": refs["sources"]}
+            "sources": sorted([*refs["sources"], {"source_id": "", "source_name": "Источник не указан"}], key=lambda row: row["source_name"])}

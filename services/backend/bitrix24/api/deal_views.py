@@ -33,14 +33,14 @@ class DealRequest(serializers.Serializer):
     exclude_untracked_department = serializers.BooleanField(default=True)
     group_by = serializers.ChoiceField(choices=("day", "week", "month", "year"), default="month")
     tab = serializers.ChoiceField(choices=("funnel", "managers"), default="funnel")
-    segment_type = serializers.ChoiceField(choices=("stages", "results", "managers", "loss-reasons", "lead-stage", "deal-stage", "standalone"), allow_null=True, default=None)
+    segment_type = serializers.ChoiceField(choices=("stages", "results", "sources", "managers", "loss-reasons", "lead-stage", "deal-stage", "standalone"), allow_null=True, default=None)
     segment_key = serializers.CharField(max_length=200, allow_blank=True, default="")
     segment_keys = serializers.ListField(child=serializers.CharField(max_length=200), default=list)
     detail_category_id = serializers.IntegerField(min_value=0, allow_null=True, default=None)
     period = serializers.DateField(allow_null=True, default=None)
     page = serializers.IntegerField(min_value=1, default=1)
     page_size = serializers.IntegerField(min_value=1, max_value=200, default=50)
-    sort_by = serializers.ChoiceField(choices=("deal_id", "lead_id", "title", "lead_title", "link_state", "manager_name", "department_name", "category_name", "stage_name", "amount", "source_created_at", "closed_at", "stage_days", "cycle_days", "full_cycle_days", "selected_stage_days", "lead_created_at"), default="source_created_at")
+    sort_by = serializers.ChoiceField(choices=("deal_id", "lead_id", "title", "lead_title", "link_state", "is_return_customer", "deal_type_name", "manager_name", "department_name", "category_name", "stage_name", "source_name", "activity_name", "amount", "source_created_at", "closed_at", "calculated_at", "speed_calculated_at", "processing_duration_days", "stage_days", "cycle_days", "full_cycle_days", "selected_stage_days", "lead_created_at"), default="source_created_at")
     sort_direction = serializers.ChoiceField(choices=("asc", "desc"), default="desc")
 
     def validate(self, attrs):
@@ -74,7 +74,7 @@ def bundle(section, filters):
         scope.pop("results", None)
         scope.pop("group_by", None)
     mart = reader()
-    key = {"crm_section": section, "schema": 2, "snapshot": mart.snapshot, **scope}
+    key = {"crm_section": section, "schema": 3, "snapshot": mart.snapshot, **scope}
     cached = get_dashboard_cache(key)
     if cached is not None:
         return cached
@@ -115,7 +115,7 @@ def rows_for(section, data, filters):
         if kind == "standalone":
             rows = [row for row in rows if not row.get("lead_id")]
         keys = filters["segment_keys"] or ([filters["segment_key"]] if filters["segment_key"] else [])
-        if kind in ("stages", "results", "managers", "loss-reasons"):
+        if kind in ("stages", "results", "sources", "managers", "loss-reasons"):
             rows = [row for row in rows if (kind != "loss-reasons" or row["result"] == "F") and (not keys or dimension(row, kind)[0] in keys)]
         if filters["period"]:
             rows = [row for row in rows if group_period_start(row["source_created_at"].date(), filters["group_by"]) == filters["period"]]
@@ -135,6 +135,16 @@ EXPORT_COLUMNS = [("lead_id", "ID лида"), ("deal_id", "ID сделки"), ("
                   ("full_cycle_days", "Полный цикл, дней"), ("selected_stage_days", "Дней на выбранном этапе"), ("amount", "Сумма сделки, руб"), ("currency_id", "Валюта"),
                   ("link_state", "Связь лид → сделка")]
 
+DEAL_EXPORT_COLUMNS = [
+    ("deal_id", "ID сделки"), ("lead_id", "ID лида"), ("title", "Наименование сделки"),
+    ("is_return_customer", "Повторная сделка"), ("deal_type_name", "Тип"),
+    ("manager_name", "Менеджер"), ("department_name", "Подразделение"),
+    ("category_name", "Воронка"), ("stage_name", "Стадия"), ("source_name", "Источник"),
+    ("activity_name", "Мероприятие"), ("source_created_at", "Дата создания"),
+    ("speed_calculated_at", "Скорость рассчитана по"), ("amount", "Сумма, руб"),
+    ("processing_duration_days", "Скорость обработки, дней"),
+]
+
 
 def export_response(rows, section, filters):
     book = Workbook(write_only=True)
@@ -150,9 +160,11 @@ def export_response(rows, section, filters):
         if isinstance(value, str):
             result.data_type = "s"
         return result
-    sheet.append([cell(label) for _, label in EXPORT_COLUMNS])
+    columns = DEAL_EXPORT_COLUMNS if section == "deals" else EXPORT_COLUMNS
+    sheet.append([cell(label) for _, label in columns])
     for row in rows:
-        sheet.append([cell(row.get(key)) for key, _ in EXPORT_COLUMNS])
+        row = dict(row)
+        sheet.append([cell(row.get(key)) for key, _ in columns])
     info = book.create_sheet("Условия")
     info.append(["Раздел", section])
     for key, value in filters.items():
@@ -188,13 +200,17 @@ class DealReportView(APIView):
                 return export_response(rows, section, filters)
             start = (filters["page"] - 1) * filters["page_size"]
             public_rows = [{k: v for k, v in row.items() if k not in ("visits", "visited")} for row in rows[start:start + filters["page_size"]]]
+            durations = [row.get("processing_duration_days") for row in rows if row.get("processing_duration_days") is not None]
             return respond({"items": public_rows, "total": len(rows), "page": filters["page"],
-                             "pages": (len(rows) + filters["page_size"] - 1) // filters["page_size"]})
+                             "pages": (len(rows) + filters["page_size"] - 1) // filters["page_size"],
+                             "summary": {"total": len(rows), "amount": sum(row.get("amount") or 0 for row in rows),
+                                         "return_customers": sum(row.get("is_return_customer") is True for row in rows),
+                                         "processing_duration_days": sum(durations) / len(durations) if durations else None}})
         comparison = data["comparison_period"]
         if section == "deals":
             if part == "summary":
                 return respond({"cards": metrics(data["current"]), "comparison_period": comparison})
-            if part in ("stages", "results", "managers", "loss-reasons"):
+            if part in ("results", "sources", "managers", "loss-reasons"):
                 return respond({**panel(data["current"], data["previous"], data["prior"], part, filters["group_by"], data["refs"]["stages"]), "comparison_period": comparison})
         else:
             leads, deals = data["current"], data["deals"]

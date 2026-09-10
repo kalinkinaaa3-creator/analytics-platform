@@ -18,7 +18,6 @@ from bitrix24.services.dashboard_query import UNTRACKED_DEPARTMENT_NAME
 HEADERS = (
     "ID",
     "Название лида",
-    "Наименование контрагента",
     "Повторное обращение",
     "Менеджер",
     "Стадия",
@@ -146,7 +145,6 @@ def export_leads_xlsx(filters: LeadDashboardFilters, **query_options) -> tuple[P
             (
                 item.lead_id,
                 item.title,
-                item.company_name,
                 (
                     "Повторный" if item.is_return_customer is True
                     else ("Новый" if item.is_return_customer is False else "Не определён")

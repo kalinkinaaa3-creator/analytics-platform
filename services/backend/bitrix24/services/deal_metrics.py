@@ -68,6 +68,11 @@ def enrich_deal(row, histories, stages, now):
     created = row.get("source_created_at")
     row["closed_at"] = closed_at if created and closed_at and closed_at >= created else None
     row["cycle_days"] = ((row["closed_at"] - created).total_seconds() / 86400) if row["closed_at"] else None
+    row["calculated_at"] = now
+    row["speed_calculated_at"] = row["closed_at"] if row["result"] in ("S", "F") else now
+    row["processing_duration_days"] = row["cycle_days"] if row["result"] in ("S", "F") else (
+        max(0, (now - created).total_seconds() / 86400) if created else None
+    )
     row["amount"] = float(row.get("opportunity") or 0)
     row["history_missing"] = not histories
     return row
@@ -87,7 +92,6 @@ def metrics(rows):
         "cycle_days": average([row["cycle_days"] for row in rows]),
         "stage_days": average([row["stage_days"] for row in rows]),
         "missing_history": sum(row["history_missing"] for row in rows),
-        "without_lead": sum(not row.get("lead_id") for row in rows),
     }
 
 
@@ -96,6 +100,8 @@ def dimension(row, kind):
         return row["stage_key"], f"{row['category_name']} · {row['stage_name']}"
     if kind == "managers":
         return str(row.get("assigned_by_id") or "__unassigned__"), row["manager_name"]
+    if kind == "sources":
+        return row.get("source_id") or "", row.get("source_name") or "Источник не указан"
     return row["result"], row["result_name"]
 
 

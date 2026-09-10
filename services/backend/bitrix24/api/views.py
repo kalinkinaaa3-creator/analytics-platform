@@ -212,7 +212,6 @@ class LeadDashboardRowsView(APIView):
             queryset.values(
                 "lead_id",
                 "title",
-                "company_name",
                 "is_return_customer",
                 "source_created_at",
                 "source_updated_at",

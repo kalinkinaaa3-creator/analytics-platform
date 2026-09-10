@@ -60,7 +60,7 @@ export function DashboardHeadingRefreshIcons() {
     const icons = [];
     DASHBOARD_INFO.forEach(([selector]) => {
       const root = document.querySelector(selector);
-      if (!root || root.querySelector(".dashboard-refresh-info") || [...root.querySelectorAll("button")].some((button) => /^Обнов(ить|ление)/.test(button.textContent.trim()))) return;
+      if (!root || root.dataset.headingTooltip === "disabled" || root.querySelector(".dashboard-refresh-info") || [...root.querySelectorAll("button")].some((button) => /^Обнов(ить|ление)/.test(button.textContent.trim()))) return;
       const heading = root.querySelector("h1, h2");
       if (!heading) return;
       const icon = document.createElement("button");
