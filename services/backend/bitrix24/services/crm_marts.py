@@ -319,15 +319,36 @@ class MartReader:
 
     def options(self, filters):
         refs, tracking = self.refs, self.refs["tracking"]
-        users = []
-        for key, user in refs["users"].items():
-            department = tracking.get(key, {}).get("department_name", source.UNTRACKED_DEPARTMENT_NAME)
-            if filters.get("exclude_untracked_department", True) and key not in tracking: continue
-            if filters.get("department_names") and department not in filters["department_names"]: continue
-            users.append({"manager_id": key, "manager_name": user["full_name"]})
-        stages = [row for row in refs["stages"].values() if not filters.get("category_ids") or row["category_id"] in filters["category_ids"]]
-        return {"categories": refs["categories"], "default_category_ids": source.DEFAULT_CATEGORIES,
+        def available(ignore, column):
+            scoped = {**filters, ignore: []}
+            parts, args = self.conditions(scoped)
+            for field, deal_column in (("category_ids", "category_id"), ("stage_keys", "stage_key"), ("results", "result")):
+                if field != ignore and scoped.get(field):
+                    parts.append(f"{deal_column} IN %({field})s")
+                    args[field] = tuple(scoped[field])
+            args["entity_type"] = "deal"
+            sql = f"SELECT DISTINCT {column} FROM {TABLE} WHERE entity_type = %(entity_type)s"
+            if parts:
+                sql += " AND " + " AND ".join(parts)
+            return {row[0] for row in self.client.execute(sql, args)}
+
+        manager_ids = available("manager_ids", "manager_id") | set(filters.get("manager_ids", []))
+        category_ids = available("category_ids", "category_id") | set(filters.get("category_ids", []))
+        stage_keys = available("stage_keys", "stage_key") | set(filters.get("stage_keys", []))
+        source_ids = available("source_ids", "source_id") | set(filters.get("source_ids", []))
+        results = available("results", "result") | set(filters.get("results", []))
+        department_manager_ids = available("department_names", "manager_id")
+        department_names = {tracking[key]["department_name"] if key in tracking else source.UNTRACKED_DEPARTMENT_NAME for key in department_manager_ids}
+        department_names.update(filters.get("department_names", []))
+        users = [{"manager_id": key, "manager_name": refs["users"].get(key, {}).get("full_name") or str(key)} for key in manager_ids if key]
+        stages = [row for key, row in refs["stages"].items() if key in stage_keys]
+        categories = [row for row in refs["categories"] if row["category_id"] in category_ids]
+        sources = [row for row in refs["sources"] if row["source_id"] in source_ids]
+        if "" in source_ids:
+            sources.append({"source_id": "", "source_name": "Источник не указан"})
+        return {"categories": categories, "default_category_ids": source.DEFAULT_CATEGORIES,
                 "stages": sorted(stages, key=lambda row: (row["category_sort"], row["category_id"], row["sort"] or 0)),
-                "departments": [{"department_name": name} for name in sorted({row["department_name"] for row in tracking.values()} | {source.UNTRACKED_DEPARTMENT_NAME})],
-                "managers": users,
-                "sources": sorted([*refs["sources"], {"source_id": "", "source_name": "Источник не указан"}], key=lambda row: row["source_name"])}
+                "departments": [{"department_name": name} for name in sorted(department_names)],
+                "managers": sorted(users, key=lambda row: row["manager_name"]),
+                "sources": sorted(sources, key=lambda row: row["source_name"]),
+                "results": [{"id": key, "name": name} for key, name in (("S", "Успешные"), ("F", "Проигранные"), ("P", "В работе"), ("?", "Статус не определён")) if key in results]}

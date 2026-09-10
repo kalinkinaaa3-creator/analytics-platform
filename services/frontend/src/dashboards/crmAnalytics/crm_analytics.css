@@ -215,7 +215,9 @@
 .crm-conversion-tooltip > div span { color: #6a7267; font-size: 12px; }
 .crm-conversion-tooltip > div b { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .crm-table-wrap { position: relative; min-height: 180px; max-height: none; flex: 1 1 auto; }
-.crm-modal .crm-table-wrap table { width: max-content; min-width: 100%; }
+.crm-modal .crm-table-wrap table { width: 100%; min-width: 1700px; }
+.crm-modal--lead-details .crm-table-wrap th:nth-child(2),.crm-modal--lead-details .crm-table-wrap td:nth-child(2),.crm-modal--deal-details .crm-table-wrap th:nth-child(3),.crm-modal--deal-details .crm-table-wrap td:nth-child(3) { width: 220px; min-width: 220px; max-width: 220px; box-sizing: border-box; overflow: hidden; white-space: nowrap; }
+.crm-detail-title { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crm-table-wrap > .crm-loading { position: absolute; inset: 52px 0 0; z-index: 5; display: flex; align-items: center; justify-content: center; min-height: 0; box-sizing: border-box; background: #fff; border: 0; border-radius: 0 0 6px 6px; }
 .crm-table-wrap > .crm-loading::before { width: 24px; height: 24px; margin-right: 10px; border: 3px solid #d8ddd4; border-top-color: #53604d; border-radius: 50%; content: ""; animation: crm-spin .75s linear infinite; }
 .crm-table-wrap thead tr { height: 52px; }
