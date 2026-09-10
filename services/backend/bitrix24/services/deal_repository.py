@@ -26,6 +26,11 @@ def date_bounds(filters):
 def references():
     categories = list(BitrixDealCategory.objects.filter(is_deleted=False).order_by("sort", "category_id").values("category_id", "name", "sort"))
     category_map = {row["category_id"]: row for row in categories}
+    for category_id in BitrixDeal.objects.filter(is_deleted=False).order_by().values_list("category_id", flat=True).distinct():
+        if category_id not in category_map:
+            item = {"category_id": category_id, "name": f"Воронка #{category_id} (нет в справочнике)", "sort": 999999}
+            category_map[category_id] = item
+            categories.append(item)
     stages, lead_stages, sources = {}, [], []
     for row in BitrixCrmDictionary.objects.filter(is_deleted=False).values("entity_id", "status_id", "name", "sort", "semantics"):
         entity = row["entity_id"]
@@ -74,6 +79,25 @@ def histories(entity_type, ids):
         ).iterator(chunk_size=2000):
             result[row["entity_id"]].append(row)
     return result
+
+
+def enrich_leads(rows):
+    events = histories(1, [row["lead_id"] for row in rows])
+    now = timezone.now()
+    for row in rows:
+        history = sorted(events.get(row["lead_id"], []), key=lambda e: (e["created_at"], e["history_id"]))
+        visits = {}
+        for index, event in enumerate(history):
+            end = history[index + 1]["created_at"] if index + 1 < len(history) else now
+            key = event["stage_id"]
+            visits[key] = visits.get(key, 0) + max(0, (end - event["created_at"]).total_seconds() / 86400)
+        visits.setdefault(row["status_id"], None)
+        row["visited"] = set(visits)
+        row["visit_days"] = visits
+        row["history_missing"] = not history
+        if row["source_created_at"]:
+            row["source_created_at"] = row["source_created_at"].astimezone(MOSCOW)
+    return rows
 
 
 def enrich_rows(query, refs):
@@ -134,11 +158,7 @@ def cohort_rows(filters, refs):
     rows = list(leads.values("lead_id", "title", "source_created_at", "source_id", "source_name", "status_id",
                             "status_name", "dashboard_status", "manager_id", "manager_name", "department_name", "opportunity"))
     ids = [row["lead_id"] for row in rows]
-    events = histories(1, ids)
-    for row in rows:
-        row["source_created_at"] = row["source_created_at"].astimezone(MOSCOW)
-        row["visited"] = {event["stage_id"] for event in events.get(row["lead_id"], [])} | {row["status_id"]}
-        row["history_missing"] = not events.get(row["lead_id"])
+    enrich_leads(rows)
     linked = enrich_rows(deals.filter(lead_id__in=ids), refs) if ids else []
     # Without a lead there is no lead cohort: list these separately by deal creation.
     standalone = enrich_rows(manager_scope(deals.exclude(lead_id__in=BitrixLead.objects.filter(

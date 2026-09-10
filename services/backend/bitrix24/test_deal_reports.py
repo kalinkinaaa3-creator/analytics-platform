@@ -1,6 +1,8 @@
 """Regression cases for cohort membership, 1:N and actual closure history."""
 from datetime import datetime, date, timedelta
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from unittest.mock import Mock, patch
+from decimal import Decimal
 
 
 from bitrix24.models import (BitrixDeal, BitrixDealCategory, BitrixCrmDictionary, BitrixLead,
@@ -8,6 +10,7 @@ from bitrix24.models import (BitrixDeal, BitrixDealCategory, BitrixCrmDictionary
 from bitrix24.services.deal_repository import MOSCOW, references, cohort_rows, deal_rows
 from bitrix24.services.deal_metrics import enrich_deal, metrics, panel
 from bitrix24.services import full_cycle
+from bitrix24.services.crm_marts import MartReader, SnapshotChanged, encode, decode, publish
 
 
 def stamp(month, day=1, year=2026):
@@ -15,6 +18,15 @@ def stamp(month, day=1, year=2026):
 
 
 class DealMetricsTests(TestCase):
+    def test_funnel_transitions_follow_entity_intersection_not_total_difference(self):
+        leads = [dict(lead_id=1, visited={"A"}, opportunity=0),
+                 dict(lead_id=2, visited={"B"}, opportunity=0)]
+        refs = {"lead_stages": [dict(status_id="A", name="A", semantics=""), dict(status_id="B", name="B", semantics="")], "categories": []}
+        stages = full_cycle.funnel(leads, [], refs)["lead_stages"]
+        self.assertEqual(stages[1]["loss_to_next"], 1)
+        self.assertEqual(stages[2]["transition_share"], 0)
+        self.assertNotIn("_ids", stages[1])
+
     def test_closure_requires_final_matching_history_and_reopening_resets_it(self):
         stages = {"0:WON": {"name": "Отгрузка", "semantics": "S"}, "0:NEW": {"name": "Новая", "semantics": ""}}
         row = {"category_id": 0, "stage_id": "WON", "stage_semantic_id": "S", "source_created_at": stamp(1), "opportunity": 100}
@@ -25,6 +37,7 @@ class DealMetricsTests(TestCase):
         result = enrich_deal(row, history, stages, stamp(6))
         self.assertEqual(result["closed_at"], stamp(4))
         self.assertEqual(result["cycle_days"], 90)
+        self.assertEqual(result["stage_days"], 61)
         self.assertIsNone(enrich_deal({**row, "stage_id": "NEW", "stage_semantic_id": "P"}, history[:3], stages, stamp(6))["closed_at"])
 
 
@@ -92,3 +105,93 @@ class DealRepositoryTests(TestCase):
         result = panel(rows, [], [], "stages", "month", refs["stages"])
         self.assertEqual([r["key"] for r in result["summary"]], ["0:NEW", "0:WON", "0:LOSE", "2:WON"])
         self.assertEqual(result["total"]["total"], 4)
+
+    def test_clickhouse_cohort_matches_source_rule_and_keeps_all_linked_deals(self):
+        for id in (1, 2, 3):
+            self.lead(id)
+        self.deal(11, 1)
+        self.deal(12, 1, category=2)
+        self.deal(13, 3, category=7)
+        refs = references()
+        leads, deals, _ = cohort_rows({**self.filters, "category_ids": []}, refs)
+        joined = [(encode(lead), encode(deal)) for lead in leads for deal in deals if deal["lead_id"] == lead["lead_id"]]
+        joined.append((encode(next(r for r in leads if r["lead_id"] == 2)), ""))
+        client = Mock()
+        client.execute.side_effect = [[(1,)], [("generation", encode(refs))], joined, []]
+        reader = MartReader(client)
+        current, linked, standalone = reader.cohort(self.filters)
+        self.assertEqual({r["lead_id"] for r in current}, {1, 2})
+        self.assertEqual({r["deal_id"] for r in linked}, {11, 12})
+        self.assertEqual(standalone, [])
+        self.assertEqual(reader.refs["tracking"], refs["tracking"])
+        query, params = client.execute.call_args_list[2].args
+        self.assertIn("bitrix_full_cycle_analytics", query)
+        self.assertEqual(params["end"], stamp(2))
+        self.assertNotIn("deal_closed_at", query)
+
+    def test_publication_checks_counts_before_atomic_exchange(self):
+        self.lead(1)
+        self.deal(11, 1)
+        client = Mock()
+        client.execute.side_effect = lambda sql, *args: [(3,)] if sql.startswith("SELECT count()") else []
+        with patch("bitrix24.services.crm_marts.get_clickhouse_client", return_value=client):
+            self.assertEqual(publish(chunk_size=1), 2)
+        calls = [call.args[0] for call in client.execute.call_args_list]
+        self.assertEqual(sum(sql.startswith("EXCHANGE TABLES") for sql in calls), 1)
+        self.assertLess(next(i for i, sql in enumerate(calls) if sql.startswith("SELECT count()")), next(i for i, sql in enumerate(calls) if sql.startswith("EXCHANGE")))
+        client.reset_mock()
+        client.execute.side_effect = lambda sql, *args: [(0,)] if sql.startswith("SELECT count()") else []
+        with patch("bitrix24.services.crm_marts.get_clickhouse_client", return_value=client), self.assertRaisesRegex(RuntimeError, "row count"):
+            publish(chunk_size=1)
+        self.assertFalse(any(c.args[0].startswith("EXCHANGE") for c in client.execute.call_args_list))
+
+    def test_snapshot_roundtrip_preserves_dates_money_visits_and_detects_replacement(self):
+        value = {"created": stamp(1), "amount": Decimal("1234567890.12"), "visited": {"WON", "NEW"}}
+        self.assertEqual(decode(encode(value)), value)
+        refs = references()
+        client = Mock()
+        client.execute.side_effect = [[(1,)], [("old", encode(refs))], [("new",)]]
+        reader = MartReader(client)
+        with self.assertRaises(SnapshotChanged):
+            reader.check()
+
+
+@override_settings(LEAD_GENERATION_REPORT_CACHE_TIMEOUT=900)
+class PublicationLockTests(TestCase):
+    def test_second_launch_does_not_publish_or_release_another_lock(self):
+        from bitrix24.management.commands import sync_bitrix24_clickhouse as command
+        from django.core.management.base import CommandError
+        with patch.object(command, "acquire_refresh_cache_lock", return_value=False), patch.object(command, "sync_lead_analytics_to_clickhouse") as publish_mock, patch.object(command, "cache") as cache_mock:
+            with self.assertRaises(CommandError):
+                command.Command().handle(chunk_size=500)
+            publish_mock.assert_not_called()
+            cache_mock.delete.assert_not_called()
+
+    def test_publication_failure_releases_lock_and_does_not_notify_success(self):
+        from bitrix24.management.commands import sync_bitrix24_clickhouse as command
+        cursor = Mock()
+        cursor.fetchone.return_value = (True,)
+        connection = Mock()
+        connection.cursor.return_value.__enter__ = Mock(return_value=cursor)
+        connection.cursor.return_value.__exit__ = Mock(return_value=False)
+        with patch.object(command, "acquire_refresh_cache_lock", return_value=True), patch.object(command, "connection", connection), patch.object(command, "cache") as cache_mock, patch.object(command, "notify_dashboard_updated") as notify, patch.object(command, "sync_lead_analytics_to_clickhouse", side_effect=RuntimeError("test failure")):
+            with self.assertRaisesRegex(RuntimeError, "test failure"):
+                command.Command().handle(chunk_size=500)
+            cache_mock.delete.assert_called_once_with(command.LOCK_KEY)
+            self.assertIn("pg_advisory_unlock", cursor.execute.call_args.args[0])
+            notify.assert_not_called()
+
+    def test_success_event_is_sent_after_both_locks_are_released(self):
+        from bitrix24.management.commands import sync_bitrix24_clickhouse as command
+        events = []
+        cursor = Mock()
+        cursor.fetchone.return_value = (True,)
+        cursor.execute.side_effect = lambda sql, params: events.append("unlock" if "pg_advisory_unlock" in sql else "lock")
+        connection = Mock()
+        connection.cursor.return_value.__enter__ = Mock(return_value=cursor)
+        connection.cursor.return_value.__exit__ = Mock(return_value=False)
+        with patch.object(command, "acquire_refresh_cache_lock", return_value=True), patch.object(command, "connection", connection), patch.object(command, "cache") as cache_mock, patch.object(command, "notify_dashboard_updated", side_effect=lambda *a, **k: events.append("socket")), patch.object(command, "sync_lead_analytics_to_clickhouse", return_value=2), patch.object(command, "rebuild_mart_safely"):
+            cache_mock.delete.side_effect = lambda key: events.append("cache-unlock")
+            command.Command().handle(chunk_size=500)
+        self.assertLess(events.index("cache-unlock"), events.index("socket"))
+        self.assertLess(events.index("unlock"), events.index("socket"))

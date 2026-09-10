@@ -1,7 +1,7 @@
 """Lead-created cohorts with all subsequent linked deals (including 1:N)."""
 from collections import defaultdict
 
-from .deal_metrics import average, metrics, ratio, stage_key
+from .deal_metrics import average, ratio
 from .dashboard_query import group_period_start
 
 
@@ -31,10 +31,22 @@ def summary(leads, deals):
 
 
 def funnel(leads, deals, refs):
+    def transitions(stages):
+        for index, stage in enumerate(stages):
+            if index:
+                previous = stages[index - 1]
+                stage["transition_share"] = ratio(len(stage["_ids"] & previous["_ids"]), previous["count"])
+            if index + 1 < len(stages):
+                stage["loss_to_next"] = len(stage["_ids"] - stages[index + 1]["_ids"])
+        for stage in stages:
+            stage.pop("_ids")
+        return stages
+
     def lead_stage(key, name, rows):
         return {"key": key, "name": name, "count": len(rows), "unit": "leads",
                 "share": ratio(len(rows), len(leads)), "amount": sum(float(row.get("opportunity") or 0) for row in rows),
-                "days": None}
+                "days": average([row.get("visit_days", {}).get(key) for row in rows]),
+                "_ids": {row["lead_id"] for row in rows}}
     stages = [lead_stage("all", "Все лиды", leads)]
     # Real lead stages only; no invented "qualified" stage or synthetic timestamps.
     for stage in refs["lead_stages"]:
@@ -50,18 +62,20 @@ def funnel(leads, deals, refs):
         if not rows:
             continue
         branch_stages = [{"key": "all", "name": "Созданные сделки", "count": len(rows), "unit": "deals",
-                          "share": ratio(len(rows), len(leads)), "amount": sum(row["amount"] for row in rows), "days": None}]
+                          "share": ratio(len(rows), len(leads)), "amount": sum(row["amount"] for row in rows), "days": None,
+                          "_ids": {row["deal_id"] for row in rows}}]
         category_stages = sorted([s for s in refs["stages"].values() if s["category_id"] == category["category_id"] and s["semantics"] != "F"], key=lambda s: s["sort"] or 0)
         for stage in category_stages:
             visited = [row for row in rows if visited_stage(row, stage["key"])]
             branch_stages.append({"key": stage["key"], "name": stage["name"], "count": len(visited), "unit": "deals",
                                   "share": ratio(len(visited), len(leads)), "amount": sum(row["amount"] for row in visited),
+                                  "_ids": {row["deal_id"] for row in visited},
                                   "days": average([row["visits"][stage["key"]]["days"] for row in visited])})
         branches.append({**category, "count": len(rows), "leads": len({row["lead_id"] for row in rows}),
                          "success": sum(row["result"] == "S" for row in rows), "share": ratio(len(rows), len(deals)),
-                         "stages": branch_stages})
+                         "stages": transitions(branch_stages)})
     branches.sort(key=lambda row: (-row["count"], row["category_id"]))
-    return {"lead_stages": stages, "branches": branches}
+    return {"lead_stages": transitions(stages), "branches": branches}
 
 
 def dynamics(leads, deals, group_by):

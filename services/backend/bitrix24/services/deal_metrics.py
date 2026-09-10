@@ -3,7 +3,7 @@ from collections import defaultdict
 from statistics import mean
 
 from bitrix24.services.dashboard_query import (
-    LeadDashboardQuery, group_period_start, percent_change,
+    LeadDashboardQuery, group_period_start,
 )
 
 
@@ -29,7 +29,7 @@ def enrich_deal(row, histories, stages, now):
     category = row["category_id"]
     current_key = stage_key(category, row["stage_id"])
     stage = stages.get(current_key, {})
-    semantic = row.get("stage_semantic_id") or stage.get("semantics") or "P"
+    semantic = row.get("stage_semantic_id") or stage.get("semantics") or ("P" if stage else "?")
     row["result"] = semantic if semantic in RESULT_NAMES else "?"
     row["stage_key"] = current_key
     row["stage_name"] = stage.get("name") or row["stage_id"] or "Стадия не указана"
@@ -46,11 +46,18 @@ def enrich_deal(row, histories, stages, now):
     for key, visit in visits.items():
         visit["semantics"] = stages.get(key, {}).get("semantics", "")
     row["visits"] = visits
-    row["stage_days"] = visits[current_key]["days"]
+    row["stage_days"] = None
     # Reopening a deal invalidates its previous closure. Only the final run of
     # terminal history events matching the current outcome can close it now.
     closed_at = None
     latest_matches = bool(histories and stage_key(histories[-1]["category_id"], histories[-1]["stage_id"]) == current_key)
+    if latest_matches:
+        entered_at = histories[-1]["created_at"]
+        for event in reversed(histories):
+            if stage_key(event["category_id"], event["stage_id"]) != current_key:
+                break
+            entered_at = event["created_at"]
+        row["stage_days"] = max(0, (now - entered_at).total_seconds() / 86400)
     if row["result"] in ("S", "F") and latest_matches:
         for event in reversed(histories):
             event_stage = stages.get(stage_key(event["category_id"], event["stage_id"]), {})
@@ -99,6 +106,9 @@ def panel(current, previous, prior, kind, group_by, stages):
 
     def grouped(rows):
         result = defaultdict(list)
+        if kind == "results":
+            for key in ("S", "F", "P"):
+                result[(key, RESULT_NAMES[key])] = []
         for row in rows:
             key, name = dimension(row, kind)
             result[(key, name)].append(row)
@@ -125,7 +135,7 @@ def panel(current, previous, prior, kind, group_by, stages):
         item, old = metrics(rows), metrics(old_rows)
         share, old_share = ratio(len(rows), len(current)), ratio(len(old_rows), len(previous))
         summary.append({**item, "key": key, "name": name, "share": share,
-                        "category_id": rows[0]["category_id"] if rows else old_rows[0]["category_id"],
+                        "category_id": rows[0]["category_id"] if rows else old_rows[0]["category_id"] if old_rows else None,
                         "delta_count": len(rows) - len(old_rows), "delta_amount": item["amount"] - old["amount"],
                         "delta_share": share - old_share if share is not None and old_share is not None else None})
     if kind == "stages":

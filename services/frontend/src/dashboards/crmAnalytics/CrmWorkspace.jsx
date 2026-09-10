@@ -20,7 +20,7 @@ export function CrmWorkspace({ dashboard }) {
   };
   return <section className="crm-workspace crm-dashboard">
     <header className="crm-workspace-heading"><h1>Аналитика CRM</h1><div className="crm-filter-actions" ref={setToolbarTarget} /></header>
-    <nav className="crm-section-tabs" aria-label="Раздел CRM">{SECTIONS.map(([key, label]) => <button key={key} type="button" aria-pressed={section === key} className={section === key ? "active" : ""} onClick={() => { setTabs((old) => ({ ...old, [section]: currentTab })); setParams((old) => { const next = new URLSearchParams(old); next.set("section", key); next.set("tab", tabs[key]); return next; }, { replace: true }); }}>{label}</button>)}</nav>
+    <nav className="crm-section-tabs" aria-label="Раздел CRM">{SECTIONS.map(([key, label]) => <button key={key} type="button" aria-pressed={section === key} className={section === key ? "active" : ""} onClick={() => { if (key === section) return; setTabs((old) => ({ ...old, [section]: currentTab })); setParams((old) => { const next = new URLSearchParams(old); next.set("section", key); next.set("tab", tabs[key]); return next; }, { replace: true }); }}>{label}</button>)}</nav>
     <div hidden={section !== "leads"}><CrmAnalyticsDashboard dashboard={dashboard} toolbarTarget={toolbarTarget} embedded tab={section === "leads" ? currentTab : tabs.leads} onTabChange={changeTab} /></div>
     <div hidden={section !== "deals"}><CrmDealSection section="deals" active={section === "deals"} tab={section === "deals" ? currentTab : tabs.deals} onTabChange={changeTab} /></div>
     <div hidden={section !== "full-cycle"}><CrmDealSection section="full-cycle" active={section === "full-cycle"} /></div>

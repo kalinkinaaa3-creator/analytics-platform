@@ -159,6 +159,11 @@ def sync_lead_analytics_to_clickhouse(*, chunk_size: int = 1000) -> int:
             client.execute(insert_sql, batch)
             inserted += len(batch)
 
+        # New sections are published from the same completed PostgreSQL load.
+        # Their lead/deal pair is exchanged atomically inside publish().
+        from bitrix24.services.crm_marts import publish
+
+        publish(chunk_size=chunk_size)
         client.execute(f"EXCHANGE TABLES {TABLE_NAME} AND {staging_name}")
         client.execute(f"DROP TABLE {staging_name}")
         from bitrix24.cache import invalidate_bitrix24_cache

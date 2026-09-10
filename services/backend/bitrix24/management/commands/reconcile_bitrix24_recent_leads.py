@@ -126,7 +126,6 @@ class Command(BaseCommand):
                 timeout=None,
             )
             rebuild_mart_safely()
-            notify_dashboard_updated("CRMAnalytics", updated_at=finished_at)
             self.stdout.write(
                 self.style.SUCCESS(
                     "Recent Bitrix24 leads reconciled: "
@@ -160,3 +159,4 @@ class Command(BaseCommand):
                     "SELECT pg_advisory_unlock(hashtext(%s))",
                     [ADVISORY_LOCK_NAME],
                 )
+        notify_dashboard_updated("CRMAnalytics", updated_at=finished_at)

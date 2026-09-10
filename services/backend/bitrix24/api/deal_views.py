@@ -13,10 +13,11 @@ from bitrix24.cache import get_dashboard_cache, set_dashboard_cache
 from bitrix24.services import full_cycle
 from bitrix24.services.deal_metrics import metrics, panel, dimension
 from bitrix24.services.deal_repository import (
-    DEFAULT_CATEGORIES, MOSCOW, references, deal_rows, cohort_rows, filter_options,
+    DEFAULT_CATEGORIES, MOSCOW,
 )
 from bitrix24.services.dashboard_query import previous_comparison_date, group_period_start, previous_group_period
 from bitrix24.services.refresh import refresh_state
+from bitrix24.services.crm_marts import MartReader, MartUnavailable, SnapshotChanged
 from .views import _can_view_crm
 
 
@@ -53,35 +54,53 @@ class Updating(APIException):
     default_detail = "Идёт обновление CRM. Отчёт будет загружен после его завершения."
 
 
+class NotPublished(APIException):
+    status_code = 503
+    default_detail = "Витрины CRM ещё не опубликованы. Выполните refresh_bitrix24 --skip-bitrix."
+
+
+def reader():
+    try:
+        return MartReader()
+    except MartUnavailable as exc:
+        raise NotPublished() from exc
+
+
 def bundle(section, filters):
     scope = {key: value for key, value in filters.items() if key not in (
         "tab", "segment_type", "segment_key", "segment_keys", "detail_category_id", "period", "page", "page_size", "sort_by", "sort_direction")}
     if section == "full-cycle":
         scope.pop("stage_keys", None)
         scope.pop("results", None)
-    key = {"crm_section": section, "schema": 1, **scope}
+    mart = reader()
+    key = {"crm_section": section, "schema": 2, "snapshot": mart.snapshot, **scope}
     cached = get_dashboard_cache(key)
     if cached is not None:
         return cached
     if refresh_state().get("running"):
         raise Updating()
-    refs = references()
+    refs = mart.refs
     previous = {**scope, "date_start": previous_comparison_date(scope["date_start"], scope["group_by"]),
                 "date_end": previous_comparison_date(scope["date_end"], scope["group_by"])}
     if section == "deals":
         start = group_period_start(scope["date_start"], scope["group_by"])
         prior = {**scope, "date_start": previous_group_period(start, scope["group_by"]), "date_end": start - timedelta(days=1)}
-        current, old, prior_rows = deal_rows(scope, refs), deal_rows(previous, refs), deal_rows(prior, refs)
+        current, old, prior_rows = mart.deals(scope), mart.deals(previous), mart.deals(prior)
         result = {"current": current, "previous": old, "prior": prior_rows, "refs": refs}
     else:
-        current, deals, standalone = cohort_rows(scope, refs)
-        old, old_deals, _ = cohort_rows(previous, refs)
+        current, deals, standalone = mart.cohort(scope)
+        old, old_deals, _ = mart.cohort(previous, include_standalone=False)
         result = {"current": current, "deals": deals, "standalone": standalone,
                   "previous": old, "previous_deals": old_deals, "refs": refs}
     result["comparison_period"] = {"date_start": previous["date_start"], "date_end": previous["date_end"]}
+    result["snapshot"] = mart.snapshot
     # Do not cache a result when a load started while its queries were running.
     if refresh_state().get("running"):
         raise Updating()
+    try:
+        mart.check()
+    except SnapshotChanged as exc:
+        raise Updating() from exc
     set_dashboard_cache(key, result)
     return result
 
@@ -154,32 +173,35 @@ class DealReportView(APIView):
         serializer.is_valid(raise_exception=True)
         filters = serializer.validated_data
         if part == "filters":
-            return Response(filter_options(filters, references()))
+            mart = reader()
+            return Response({**mart.options(filters), "snapshot": mart.snapshot})
         data = bundle(section, filters)
+        def respond(value):
+            return Response({**value, "snapshot": data["snapshot"]})
         if part in ("rows", "export"):
             rows = rows_for(section, data, filters)
             if part == "export":
                 return export_response(rows, section, filters)
             start = (filters["page"] - 1) * filters["page_size"]
             public_rows = [{k: v for k, v in row.items() if k not in ("visits", "visited")} for row in rows[start:start + filters["page_size"]]]
-            return Response({"items": public_rows, "total": len(rows), "page": filters["page"],
+            return respond({"items": public_rows, "total": len(rows), "page": filters["page"],
                              "pages": (len(rows) + filters["page_size"] - 1) // filters["page_size"]})
         comparison = data["comparison_period"]
         if section == "deals":
             if part == "summary":
-                return Response({"cards": metrics(data["current"]), "comparison_period": comparison})
+                return respond({"cards": metrics(data["current"]), "comparison_period": comparison})
             if part in ("stages", "results", "managers", "loss-reasons"):
-                return Response({**panel(data["current"], data["previous"], data["prior"], part, filters["group_by"], data["refs"]["stages"]), "comparison_period": comparison})
+                return respond({**panel(data["current"], data["previous"], data["prior"], part, filters["group_by"], data["refs"]["stages"]), "comparison_period": comparison})
         else:
             leads, deals = data["current"], data["deals"]
             if part == "summary":
-                return Response({"cards": full_cycle.summary(leads, deals),
+                return respond({"cards": full_cycle.summary(leads, deals),
                                  "previous": full_cycle.summary(data["previous"], data["previous_deals"]),
                                  "standalone": len(data["standalone"]), "comparison_period": comparison})
             if part == "funnel":
-                return Response(full_cycle.funnel(leads, deals, data["refs"]))
+                return respond(full_cycle.funnel(leads, deals, data["refs"]))
             if part == "dynamics":
-                return Response({"rows": full_cycle.dynamics(leads, deals, filters["group_by"])})
+                return respond({"rows": full_cycle.dynamics(leads, deals, filters["group_by"])})
             if part == "managers":
-                return Response({"rows": full_cycle.managers(leads, deals)})
+                return respond({"rows": full_cycle.managers(leads, deals)})
         raise serializers.ValidationError("Неизвестный раздел отчёта.")
