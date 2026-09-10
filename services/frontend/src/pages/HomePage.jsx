@@ -7,12 +7,12 @@ export function HomePage() {
 
       <div className="container">
         <div className="box-card">
-          <div className="face front">iplast</div>
-          <div className="face back">iplast</div>
-          <div className="face right">iplast</div>
-          <div className="face left">iplast</div>
-          <div className="face top">iplast</div>
-          <div className="face bottom">iplast</div>
+          <div className="face front">iPlast</div>
+          <div className="face back">iPlast</div>
+          <div className="face right">iPlast</div>
+          <div className="face left">iPlast</div>
+          <div className="face top">iPlast</div>
+          <div className="face bottom">iPlast</div>
         </div>
       </div>
     </>
