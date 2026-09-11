@@ -220,6 +220,7 @@
 .crm-detail-title { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crm-modal--lead-details .crm-table-wrap td:nth-child(9),.crm-modal--lead-details .crm-table-wrap td:nth-child(10) { white-space: nowrap; }
 .crm-lead-link-filter { min-width: 250px; }
+.crm-filter.crm-lead-link-filter > span { overflow: visible; }
 .crm-filter-help { position: relative; display: inline-grid; width: 15px; height: 15px; margin-left: 4px; place-items: center; outline: none; vertical-align: middle; cursor: help; }
 .crm-filter-help > i { display: grid; width: 13px; height: 13px; place-items: center; border: 1px solid #aeb6aa; border-radius: 50%; color: #64705f; font: 700 9px Georgia,serif; }
 .crm-filter-help > span { position: absolute; right: -8px; bottom: calc(100% + 7px); z-index: 80; width: 240px; padding: 10px 12px; visibility: hidden; background: #fff; border: 1px solid #c7cdc3; border-radius: 7px; box-shadow: 0 8px 22px rgba(42,50,39,.2); color: #3d463a; font-size: 12px; font-weight: 500; line-height: 1.4; white-space: normal; opacity: 0; pointer-events: none; }
