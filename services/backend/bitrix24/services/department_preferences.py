@@ -1,8 +1,24 @@
-from bitrix24.models import BitrixUserDepartmentPreference
+from bitrix24.models import BitrixDeal, BitrixLead, BitrixUserDepartmentPreference
 from bitrix24.services.manager_departments import automatic_manager_directory
 
 
-def manager_options(user):
+def departments_with_data():
+    """Use all loaded history, independently of dashboard dates and filters."""
+    manager_ids = set()
+    for model in (BitrixLead, BitrixDeal):
+        manager_ids.update(
+            model.objects.filter(is_deleted=False, assigned_by_id__isnull=False)
+            .order_by().values_list("assigned_by_id", flat=True).distinct()
+        )
+    # Include inactive managers when identifying departments with historical data.
+    return {
+        row["department_name"]
+        for manager_id, row in automatic_manager_directory().items()
+        if manager_id in manager_ids
+    }
+
+
+def manager_options(user, *, with_data_only=False):
     tracking = sorted(
         automatic_manager_directory(active_only=True).values(),
         key=lambda row: (row["manager_name"], row["user_id"]),
@@ -20,6 +36,9 @@ def manager_options(user):
             "display_name": stored.get("display_name") or row["department_name"],
             "selected": bool(stored.get("selected", True)) if preference else True,
         })
+    if with_data_only:
+        departments = departments_with_data()
+        options = [row for row in options if row["crm_department_name"] in departments]
     return options
 
 
@@ -40,9 +59,10 @@ def save_manager_options(user, rows):
         })
     for manager_id, original in available.items():
         if manager_id not in seen:
-            normalized.append({"manager_id": manager_id, "selected": False, "display_name": original["crm_department_name"]})
+            # Departments without data are absent from the form, not deselected.
+            normalized.append({"manager_id": manager_id, "selected": original["selected"], "display_name": original["display_name"]})
     BitrixUserDepartmentPreference.objects.update_or_create(user=user, defaults={"manager_settings": normalized})
-    return manager_options(user)
+    return manager_options(user, with_data_only=True)
 
 
 def selected_manager_ids(user):

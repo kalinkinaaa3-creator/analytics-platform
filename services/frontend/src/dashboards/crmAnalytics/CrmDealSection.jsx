@@ -85,7 +85,7 @@ export function CrmDealSection({ section, active, tab = "funnel", onTabChange = 
   const generation = useRef(0);
   const previousResetToken = useRef(resetToken);
   useEffect(() => { if (previousResetToken.current === resetToken) return; previousResetToken.current = resetToken; setFilters(defaults()); setModal(null); setConversion(false); }, [resetToken]);
-  const requestKey = JSON.stringify([section, filters, version]);
+  const requestKey = JSON.stringify([section, filters, version, resetToken]);
   const loading = settledKey !== requestKey;
   useEffect(() => { const receive = (event) => { if (event.detail?.dashboard === "CRMAnalytics" && !["running", "failed"].includes(event.detail.status)) setVersion((old) => old + 1); }; window.addEventListener("dashboard:updated", receive); return () => window.removeEventListener("dashboard:updated", receive); }, []);
   useEffect(() => {
@@ -123,14 +123,14 @@ export function CrmDealSection({ section, active, tab = "funnel", onTabChange = 
   const cards = report?.cards || {};
   const percent = (value) => cards.total ? value * 100 / cards.total : null;
   const cardItems = [{ label: "Итого", value: cards.total }, { label: "Успешные", value: cards.success, share: percent(cards.success), shareHelp: "Доля = Успешные сделки / Общее количество сделок × 100%." }, { label: "Проигранные", value: cards.lost, share: percent(cards.lost), shareHelp: "Доля = Проигранные сделки / Общее количество сделок × 100%." }, { label: "Конверсия", value: cards.conversion, suffix: "%", digits: 1, help: "Успешные / (Успешные + Проигранные) × 100%.", action: () => setConversion(true) }, { label: "В работе", value: cards.in_progress, share: percent(cards.in_progress), shareHelp: "Доля = Сделки в работе / Общее количество сделок × 100%." }, { label: "Сумма сделок", value: cards.amount, suffix: " ₽" }, { label: "Успешные сделки", value: cards.success_amount, suffix: " ₽" }, { label: "Повторные", value: cards.return_customers, share: percent(cards.return_customers), help: "Доля повторных сделок рассчитывается от общего количества сделок" }];
-  const selectedDepartments = filters.department_names.length ? filters.department_names : filters.use_personal_departments && options.default_department_names?.length ? options.default_department_names : filters.exclude_untracked_department ? options.departments.map((d) => d.department_name).filter((d) => d !== UNTRACKED) : [];
+  const selectedDepartments = filters.department_names.length ? filters.department_names : filters.use_personal_departments ? (options.default_department_names || []) : filters.exclude_untracked_department ? options.departments.map((d) => d.department_name).filter((d) => d !== UNTRACKED) : [];
   const departmentLabels = new Map((options.department_preferences || []).map((item) => [item.filter_department_name, item.display_name]));
   const departmentOptions = options.departments.map((item) => ({ ...item, display_name: departmentLabels.get(item.department_name) || item.department_name }));
   const kinds = tab === "funnel" ? [["results", "Динамика по статусам"], ["sources", "Динамика по источникам"]] : [["managers", "Динамика по менеджерам"], ["loss-reasons", "Динамика проигранных сделок"]];
   if (!active) return null;
   if (loading && !report) return <GlobalSpinner />;
   return <main className="crm-dashboard crm-deal-section"><section className="crm-filters"><div className="crm-filter-actions"><button className="crm-action" disabled={exporting || loading} onClick={() => exportRows()}>Экспорт</button><button className="crm-action" onClick={() => change(defaults())}>Очистить</button></div><div className="crm-filter-grid">
-    <MultiSelect label="Подразделение" options={departmentOptions} selected={selectedDepartments} valueKey="department_name" labelKey="display_name" onChange={(value) => change({ department_names: value, manager_ids: [], use_personal_departments: false, exclude_untracked_department: !value.includes(UNTRACKED) })} />
+    <MultiSelect label="Подразделение" options={departmentOptions} selected={selectedDepartments} emptyLabel={filters.use_personal_departments ? "Не выбрано" : "Все"} valueKey="department_name" labelKey="display_name" onChange={(value) => change({ department_names: value, manager_ids: [], use_personal_departments: false, exclude_untracked_department: !value.includes(UNTRACKED) })} />
     <MultiSelect label="Менеджер" options={options.managers} selected={filters.manager_ids} valueKey="manager_id" labelKey="manager_name" onChange={(value) => change({ manager_ids: value, use_personal_departments: false })} />
     <MultiSelect label="Источник" options={options.sources} selected={filters.source_ids} valueKey="source_id" labelKey="source_name" onChange={(value) => change({ source_ids: value })} />
     <MultiSelect label="Воронка" options={options.categories} selected={filters.category_ids} valueKey="category_id" labelKey="name" onChange={(value) => change({ category_ids: value, stage_keys: [] })} />

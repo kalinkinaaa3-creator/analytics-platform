@@ -281,7 +281,7 @@ class DepartmentPreferenceView(APIView):
     def get(self, request):
         if not _can_view_crm(request.user):
             raise PermissionDenied("Нет доступа к Аналитике CRM.")
-        return Response({"options": manager_options(request.user)})
+        return Response({"options": manager_options(request.user, with_data_only=True)})
 
     def post(self, request):
         if not _can_view_crm(request.user):
