@@ -225,22 +225,24 @@
 .crm-filter-help > i { display: grid; width: 13px; height: 13px; place-items: center; border: 1px solid #aeb6aa; border-radius: 50%; color: #64705f; font: 700 9px Georgia,serif; }
 .crm-filter-help > span { position: absolute; top: calc(100% + 7px); right: -8px; z-index: 1400; width: 240px; padding: 10px 12px; visibility: hidden; background: #fff; border: 1px solid #c7cdc3; border-radius: 7px; box-shadow: 0 8px 22px rgba(42,50,39,.2); color: #3d463a; font-size: 12px; font-weight: 500; line-height: 1.4; white-space: normal; opacity: 0; pointer-events: none; }
 .crm-filter-help:hover > span,.crm-filter-help:focus > span { visibility: visible; opacity: 1; }
-.crm-preference-modal { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(25,31,24,.38); }
-.crm-preference-modal > section { display: flex; width: min(920px,96vw); max-height: 86vh; padding: 20px; box-sizing: border-box; flex-direction: column; background: #fff; border: 1px solid #aab4a5; border-radius: 10px; box-shadow: 0 18px 50px rgba(30,38,28,.28); }
+.crm-preference-modal { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(25,31,24,.38); color: #222; font-family: Helvetica,sans-serif; }
+.crm-preference-modal > section { display: flex; width: min(920px,96vw); height: min(760px,calc(100vh - 40px)); padding: 20px; box-sizing: border-box; flex-direction: column; background: #fff; border: 1px solid #aab4a5; border-radius: 10px; box-shadow: 0 18px 50px rgba(30,38,28,.28); }
 .crm-preference-modal header,.crm-preference-modal footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.crm-preference-modal header h3 { margin: 3px 0 0; }
-.crm-preference-modal header small,.crm-preference-modal > section > p { color: #687066; }
+.crm-preference-modal header h3 { margin: 3px 0 0; font-size: 18px; }
+.crm-preference-modal header small,.crm-preference-modal > section > p { color: #687066; font-size: 12px; line-height: 1.4; }
 .crm-preference-modal header button { width: 34px; height: 34px; border: 0; border-radius: 4px; font-size: 24px; cursor: pointer; }
-.crm-preference-table { overflow: auto; margin: 10px 0 16px; border: 1px solid #d2d8ce; border-radius: 6px; }
+.crm-preference-table { min-height: 0; overflow: auto; margin: 10px 0 16px; flex: 1 1 auto; border: 1px solid #d2d8ce; border-radius: 6px; }
 .crm-preference-head,.crm-preference-table > label { display: grid; grid-template-columns: minmax(180px,1.2fr) minmax(160px,1fr) minmax(190px,1.2fr); gap: 12px; align-items: center; padding: 9px 12px; border-bottom: 1px solid #e3e7e0; }
 .crm-preference-head { position: sticky; top: 0; z-index: 1; background: #e7e9e3; font-weight: 700; }
 .crm-preference-head > div { display: grid; min-width: 0; gap: 5px; }
 .crm-preference-head .crm-filter { min-width: 0; }
 .crm-preference-head .crm-filter > label { overflow: hidden; height: 0; margin: 0; visibility: hidden; }
-.crm-preference-head .crm-multiselect__control { min-height: 34px; background: #fff; border-color: #a5ada0; border-radius: 5px; box-shadow: inset 0 1px 0 rgba(255,255,255,.8); font-weight: 400; }
-.crm-preference-head .crm-multiselect__control:hover,.crm-preference-head .crm-multiselect__control:focus { border-color: #667260; box-shadow: 0 0 0 2px rgba(101,112,94,.12); }
+.crm-preference-head .crm-multiselect__control { min-height: 34px; background: #fff; border-color: #aeb3aa; border-radius: 5px; font: 13px Helvetica,sans-serif; }
+.crm-preference-head .crm-multiselect__control:hover { border-color: #71796b; }
+.crm-preference-head .crm-multiselect__control:focus { border-color: #65705e; outline: 0; box-shadow: 0 0 0 2px rgba(101,112,94,.12); }
 .crm-preference-table > label > span:first-child { display: flex; align-items: center; gap: 8px; }
-.crm-preference-table input[type="text"] { min-width: 0; height: 34px; padding: 0 9px; border: 1px solid #b7c0b2; border-radius: 4px; }
+.crm-preference-table input[type="text"] { min-width: 0; height: 34px; padding: 0 9px; border: 1px solid #aeb3aa; border-radius: 5px; color: #252925; font: 13px Helvetica,sans-serif; }
+.crm-preference-table input[type="text"]:focus { border-color: #65705e; outline: 0; box-shadow: 0 0 0 2px rgba(101,112,94,.12); }
 .crm-preference-modal footer { justify-content: flex-end; }
 .crm-preference-modal footer > span { margin-right: auto; color: #687066; font-size: 12px; }
 .crm-preference-modal footer button { min-height: 36px; padding: 0 18px; border: 1px solid #596552; border-radius: 4px; cursor: pointer; }
