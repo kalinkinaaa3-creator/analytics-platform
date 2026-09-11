@@ -228,7 +228,7 @@
 .crm-preference-modal header small,.crm-preference-modal > section > p { color: #687066; font-size: 12px; line-height: 1.4; }
 .crm-preference-modal header button { width: 34px; height: 34px; border: 0; border-radius: 4px; font-size: 24px; cursor: pointer; }
 .crm-preference-table { font-size: 13px; min-height: 0; overflow: auto; margin: 10px 0 16px; flex: 1 1 auto; border: 1px solid #d2d8ce; border-radius: 6px; }
-.crm-preference-head,.crm-preference-table > .crm-preference-row { display: grid; grid-template-columns: minmax(180px,1.2fr) minmax(160px,1fr) minmax(190px,1.2fr); gap: 12px; align-items: center; padding: 9px 12px; border-bottom: 1px solid #e3e7e0; }
+.crm-preference-head,.crm-preference-table > .crm-preference-row { display: grid; grid-template-columns: minmax(180px,1.2fr) minmax(160px,1fr) minmax(190px,1.2fr); gap: 12px; align-items: center; padding: 2px 4px; border-bottom: 1px solid #e3e7e0; }
 .crm-preference-head { position: sticky; top: 0; z-index: 1; background: #e7e9e3; font-size: 12px; font-weight: 400; }
 .crm-preference-head > div { display: grid; min-width: 0; gap: 5px; }
 .crm-preference-head .crm-filter { min-width: 0; }
