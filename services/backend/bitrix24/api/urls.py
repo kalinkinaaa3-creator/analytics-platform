@@ -7,8 +7,6 @@ from .views import (
     LeadDashboardRowsView,
     LeadDashboardView,
     LeadDashboardRefreshView,
-    ManagerTrackingTemplateView,
-    ManagerTrackingUploadView,
     DepartmentPreferenceView,
 )
 
@@ -20,7 +18,5 @@ urlpatterns = [
     path("dashboard/export/", LeadDashboardExportView.as_view(), name="bitrix24-export"),
     path("dashboard/rows/", LeadDashboardRowsView.as_view(), name="bitrix24-rows"),
     path("dashboard/refresh/", LeadDashboardRefreshView.as_view(), name="bitrix24-refresh"),
-    path("dashboard/managers/template/", ManagerTrackingTemplateView.as_view(), name="bitrix24-manager-template"),
-    path("dashboard/managers/upload/", ManagerTrackingUploadView.as_view(), name="bitrix24-manager-upload"),
     path("dashboard/department-preferences/", DepartmentPreferenceView.as_view(), name="bitrix24-department-preferences"),
 ]

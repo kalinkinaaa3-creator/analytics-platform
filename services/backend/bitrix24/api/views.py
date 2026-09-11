@@ -6,7 +6,6 @@ from dataclasses import replace
 from django.db.models import Avg, Count, Q, Sum
 from django.http import FileResponse
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
@@ -20,25 +19,14 @@ from bitrix24.services.export import (
     export_leads_xlsx,
     filtered_lead_analytics_queryset,
 )
-from bitrix24.services.manager_tracking import (
-    ManagerTrackingValidationError,
-    build_manager_tracking_template,
-    load_manager_tracking,
-)
 from bitrix24.services.refresh import launch_refresh, refresh_state
 from dashboards.models import Dashboard
-from dashboards.services.access import user_can_edit_dashboard, user_can_view_dashboard
+from dashboards.services.access import user_can_view_dashboard
 
 from .serializers import (
     LeadDashboardRequestSerializer,
     LeadDashboardRowsRequestSerializer,
-    ManagerTrackingUploadSerializer,
 )
-
-
-def _can_edit_crm(user) -> bool:
-    dashboard = Dashboard.objects.filter(slug="crm-analytics").first()
-    return bool(dashboard and user_can_edit_dashboard(user, dashboard))
 
 
 def _can_view_crm(user) -> bool:
@@ -285,57 +273,6 @@ class LeadDashboardRefreshView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
         return Response({"status": "running", "pid": pid}, status=status.HTTP_202_ACCEPTED)
-
-
-class ManagerTrackingTemplateView(APIView):
-    permission_classes = (IsAuthenticated,)
-
-    def get(self, request):
-        if not _can_edit_crm(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        path = build_manager_tracking_template()
-        response = FileResponse(
-            path.open("rb"),
-            as_attachment=True,
-            filename="bitrix24_manager_tracking.xlsx",
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-        response._resource_closers.append(lambda: os.unlink(path) if path.exists() else None)
-        return response
-
-
-class ManagerTrackingUploadView(APIView):
-    permission_classes = (IsAuthenticated,)
-    parser_classes = (MultiPartParser, FormParser)
-
-    def post(self, request):
-        if not _can_edit_crm(request.user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        if refresh_state().get("running"):
-            return Response(
-                {"detail": "Сначала дождитесь завершения текущего обновления."},
-                status=status.HTTP_409_CONFLICT,
-            )
-        serializer = ManagerTrackingUploadSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        try:
-            result = load_manager_tracking(serializer.validated_data["file"])
-            pid = launch_refresh(skip_bitrix=True)
-        except ManagerTrackingValidationError as exc:
-            return Response(
-                {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
-            )
-        except RuntimeError as exc:
-            return Response(
-                {"detail": str(exc), **result}, status=status.HTTP_409_CONFLICT
-            )
-        return Response(
-            {**result, "status": "running", "pid": pid},
-            status=status.HTTP_202_ACCEPTED,
-        )
-        names = display_names(request.user)
-        for item in items:
-            item["department_name"] = names.get(item.get("manager_id"), item.get("department_name"))
 
 
 class DepartmentPreferenceView(APIView):

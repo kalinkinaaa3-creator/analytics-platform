@@ -77,7 +77,3 @@ class LeadDashboardRowsRequestSerializer(LeadDashboardRequestSerializer):
         default="source_created_at",
     )
     sort_direction = serializers.ChoiceField(choices=("asc", "desc"), default="desc")
-
-
-class ManagerTrackingUploadSerializer(serializers.Serializer):
-    file = serializers.FileField()

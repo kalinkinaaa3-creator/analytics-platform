@@ -1,0 +1,23 @@
+from bitrix24.models import BitrixDepartment, BitrixUser
+from bitrix24.services.dashboard_query import UNTRACKED_DEPARTMENT_NAME
+
+
+def automatic_manager_directory(*, active_only=False):
+    """Return the current Bitrix manager-to-primary-department mapping."""
+    departments = dict(
+        BitrixDepartment.objects.filter(is_deleted=False).values_list(
+            "department_id", "name"
+        )
+    )
+    users = BitrixUser.objects.filter(is_deleted=False)
+    if active_only:
+        users = users.filter(active=True)
+    return {
+        row["user_id"]: {
+            "user_id": row["user_id"],
+            "manager_name": row["full_name"] or str(row["user_id"]),
+            "department_name": departments.get(row["primary_department_id"])
+            or UNTRACKED_DEPARTMENT_NAME,
+        }
+        for row in users.values("user_id", "full_name", "primary_department_id")
+    }

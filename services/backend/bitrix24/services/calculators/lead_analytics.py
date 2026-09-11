@@ -7,10 +7,10 @@ import json
 from bitrix24.models import (
     BitrixCrmDictionary,
     BitrixCrmField,
+    BitrixDepartment,
     BitrixLead,
     BitrixLeadAnalytics,
     BitrixLeadProcessing,
-    BitrixManagerTracking,
     BitrixUser,
 )
 from bitrix24.services.dashboard_query import UNTRACKED_DEPARTMENT_NAME
@@ -72,8 +72,11 @@ def rebuild_lead_analytics(*, lead_ids=None, calculated_at=None) -> int:
             "primary_department_id",
         )
     }
-    tracking_rows = list(BitrixManagerTracking.objects.all())
-    tracking_by_user = {item.user_id: item for item in tracking_rows}
+    departments = dict(
+        BitrixDepartment.objects.filter(is_deleted=False).values_list(
+            "department_id", "name"
+        )
+    )
     update_fields = tuple(
         field.name
         for field in BitrixLeadAnalytics._meta.fields
@@ -92,7 +95,6 @@ def rebuild_lead_analytics(*, lead_ids=None, calculated_at=None) -> int:
         objects = []
         for lead in batch:
             user = users.get(lead.assigned_by_id)
-            tracking = tracking_by_user.get(lead.assigned_by_id)
             primary_department_id = (
                 user.primary_department_id if user else None
             )
@@ -115,9 +117,8 @@ def rebuild_lead_analytics(*, lead_ids=None, calculated_at=None) -> int:
                     manager_name=user.full_name if user else "",
                     primary_department_id=primary_department_id,
                     department_name=(
-                        tracking.department_name
-                        if tracking is not None
-                        else UNTRACKED_DEPARTMENT_NAME
+                        departments.get(primary_department_id)
+                        or UNTRACKED_DEPARTMENT_NAME
                     ),
                     company_name=lead.company_title or lead.name or lead.title,
                     is_return_customer=lead.is_return_customer,

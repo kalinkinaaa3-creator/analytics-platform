@@ -196,21 +196,6 @@ class BitrixUserDepartment(models.Model):
         ]
 
 
-class BitrixManagerTracking(models.Model):
-    user_id = models.BigIntegerField(unique=True)
-    manager_name = models.CharField(max_length=767)
-    department_name = models.CharField(max_length=255)
-    date_add = models.DateTimeField(auto_now_add=True)
-    date_update = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "bitrix24_manager_tracking"
-        ordering = ("manager_name", "user_id")
-
-    def __str__(self):
-        return self.manager_name
-
-
 class BitrixUserDepartmentPreference(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="bitrix_department_preference"

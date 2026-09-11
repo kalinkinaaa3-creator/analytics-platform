@@ -8,9 +8,10 @@ from django.utils import timezone
 
 from bitrix24.models import (
     BitrixCrmDictionary, BitrixCrmField, BitrixDeal, BitrixDealCategory,
-    BitrixManagerTracking, BitrixStageHistory, BitrixUser,
+    BitrixStageHistory, BitrixUser,
 )
 from bitrix24.services.dashboard_query import UNTRACKED_DEPARTMENT_NAME
+from bitrix24.services.manager_departments import automatic_manager_directory
 from .deal_metrics import enrich_deal, stage_key
 
 
@@ -46,7 +47,7 @@ def references():
                 "category_name": category_map.get(category, {}).get("name", str(category)),
                 "category_sort": category_map.get(category, {}).get("sort") or 0,
             }
-    tracking = {row["user_id"]: row for row in BitrixManagerTracking.objects.values("user_id", "manager_name", "department_name")}
+    tracking = automatic_manager_directory()
     users = {row["user_id"]: row for row in BitrixUser.objects.filter(is_deleted=False).values("user_id", "full_name")}
     enum_fields = {}
     for field in BitrixCrmField.objects.filter(

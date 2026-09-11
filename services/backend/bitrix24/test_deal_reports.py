@@ -6,7 +6,7 @@ from decimal import Decimal
 
 
 from bitrix24.models import (BitrixDeal, BitrixDealCategory, BitrixCrmDictionary,
-                            BitrixManagerTracking, BitrixUser, BitrixStageHistory)
+                            BitrixDepartment, BitrixUser, BitrixStageHistory)
 from bitrix24.services.deal_repository import MOSCOW, references, deal_rows
 from bitrix24.services.deal_metrics import enrich_deal, metrics, panel
 from bitrix24.services.crm_marts import MartReader, SnapshotChanged, publish
@@ -33,11 +33,11 @@ class DealMetricsTests(TestCase):
 
 class DealRepositoryTests(TestCase):
     models = [BitrixDeal, BitrixDealCategory, BitrixCrmDictionary,
-              BitrixManagerTracking, BitrixUser, BitrixStageHistory]
+              BitrixDepartment, BitrixUser, BitrixStageHistory]
 
     def setUp(self):
-        BitrixUser.objects.create(user_id=10, full_name="Менеджер")
-        BitrixManagerTracking.objects.create(user_id=10, manager_name="Менеджер", department_name="Отдел")
+        BitrixDepartment.objects.create(department_id=100, name="Отдел")
+        BitrixUser.objects.create(user_id=10, full_name="Менеджер", primary_department_id=100)
         for cid in (0, 2, 7):
             BitrixDealCategory.objects.create(category_id=cid, name=f"Воронка {cid}", sort=cid)
             entity = "DEAL_STAGE" if cid == 0 else f"DEAL_STAGE_{cid}"
