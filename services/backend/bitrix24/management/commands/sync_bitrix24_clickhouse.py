@@ -10,7 +10,7 @@ from dashboards.realtime import notify_dashboard_updated
 
 
 class Command(BaseCommand):
-    help = "Publish CRM lead, deal and full-cycle marts from PostgreSQL without Bitrix API calls."
+    help = "Publish CRM deal marts from PostgreSQL without Bitrix API calls."
 
     def add_arguments(self, parser):
         parser.add_argument("--chunk-size", type=int, default=1000)

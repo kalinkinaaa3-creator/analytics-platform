@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -208,6 +209,18 @@ class BitrixManagerTracking(models.Model):
 
     def __str__(self):
         return self.manager_name
+
+
+class BitrixUserDepartmentPreference(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="bitrix_department_preference"
+    )
+    manager_settings = models.JSONField(default=list, blank=True)
+    date_add = models.DateTimeField(auto_now_add=True)
+    date_update = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "bitrix24_user_department_preference"
 
 
 class BitrixCrmDictionary(BitrixRawBase):

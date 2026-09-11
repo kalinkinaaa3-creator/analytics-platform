@@ -1,15 +1,14 @@
-"""Regression cases for cohort membership, 1:N and actual closure history."""
+"""Regression cases for deal metrics, publication and actual closure history."""
 from datetime import datetime, date, timedelta
 from django.test import TestCase, override_settings
 from unittest.mock import Mock, patch
 from decimal import Decimal
 
 
-from bitrix24.models import (BitrixDeal, BitrixDealCategory, BitrixCrmDictionary, BitrixLead,
-                            BitrixLeadAnalytics, BitrixManagerTracking, BitrixUser, BitrixStageHistory)
-from bitrix24.services.deal_repository import MOSCOW, references, cohort_rows, deal_rows
+from bitrix24.models import (BitrixDeal, BitrixDealCategory, BitrixCrmDictionary,
+                            BitrixManagerTracking, BitrixUser, BitrixStageHistory)
+from bitrix24.services.deal_repository import MOSCOW, references, deal_rows
 from bitrix24.services.deal_metrics import enrich_deal, metrics, panel
-from bitrix24.services import full_cycle
 from bitrix24.services.crm_marts import MartReader, SnapshotChanged, publish
 
 
@@ -18,15 +17,6 @@ def stamp(month, day=1, year=2026):
 
 
 class DealMetricsTests(TestCase):
-    def test_funnel_transitions_follow_entity_intersection_not_total_difference(self):
-        leads = [dict(lead_id=1, visited={"A"}, opportunity=0),
-                 dict(lead_id=2, visited={"B"}, opportunity=0)]
-        refs = {"lead_stages": [dict(status_id="A", name="A", semantics=""), dict(status_id="B", name="B", semantics="")], "categories": []}
-        stages = full_cycle.funnel(leads, [], refs)["lead_stages"]
-        self.assertEqual(stages[1]["loss_to_next"], 1)
-        self.assertEqual(stages[2]["transition_share"], 0)
-        self.assertNotIn("_ids", stages[1])
-
     def test_closure_requires_final_matching_history_and_reopening_resets_it(self):
         stages = {"0:WON": {"name": "Отгрузка", "semantics": "S"}, "0:NEW": {"name": "Новая", "semantics": ""}}
         row = {"category_id": 0, "stage_id": "WON", "stage_semantic_id": "S", "source_created_at": stamp(1), "opportunity": 100}
@@ -42,7 +32,7 @@ class DealMetricsTests(TestCase):
 
 
 class DealRepositoryTests(TestCase):
-    models = [BitrixDeal, BitrixDealCategory, BitrixCrmDictionary, BitrixLead, BitrixLeadAnalytics,
+    models = [BitrixDeal, BitrixDealCategory, BitrixCrmDictionary,
               BitrixManagerTracking, BitrixUser, BitrixStageHistory]
 
     def setUp(self):
@@ -57,39 +47,10 @@ class DealRepositoryTests(TestCase):
                         "department_names": [], "manager_ids": [], "source_ids": [], "stage_keys": [], "results": [],
                         "exclude_untracked_department": True, "group_by": "month"}
 
-    def lead(self, id):
-        BitrixLead.objects.create(lead_id=id, source_created_at=stamp(1), assigned_by_id=10)
-        BitrixLeadAnalytics.objects.create(lead_id=id, source_created_at=stamp(1), manager_id=10,
-                                         manager_name="Менеджер", department_name="Отдел", calculated_at=stamp(6))
-
     def deal(self, id, lead_id, category=0, month=2, stage="NEW", semantic="P", deleted=False):
         BitrixDeal.objects.create(deal_id=id, lead_id=lead_id, category_id=category, source_created_at=stamp(month),
                                   assigned_by_id=10, stage_id=stage, stage_semantic_id=semantic, opportunity=100,
                                   currency_id="RUB", is_deleted=deleted)
-
-    def test_cohort_keeps_unconverted_leads_all_linked_deals_and_later_events(self):
-        for id in (1, 2, 3, 4):
-            self.lead(id)
-        self.deal(11, 1, stage="WON", semantic="S")
-        self.deal(12, 1, category=2)
-        self.deal(13, 3, category=7)
-        self.deal(14, 4, deleted=True)
-        self.deal(15, None, month=1)
-        BitrixStageHistory.objects.create(entity_type_id=2, history_id=1, entity_id=11, category_id=0,
-                                         stage_id="WON", stage_semantic_id="S", created_at=stamp(3))
-        refs = references()
-        leads, deals, standalone = cohort_rows(self.filters, refs)
-        self.assertEqual({r["lead_id"] for r in leads}, {1, 2, 4})
-        self.assertEqual({r["deal_id"] for r in deals}, {11, 12})
-        self.assertEqual([r["deal_id"] for r in standalone], [15])
-        result = full_cycle.summary(leads, deals)
-        self.assertEqual(result["converted_leads"], 1)
-        self.assertEqual(result["deals"], 2)
-        self.assertAlmostEqual(result["lead_to_deal"], 100 / 3)
-        self.assertEqual(result["full_cycle_days"], 59)
-        rows = full_cycle.detail_rows(leads, deals, standalone, self.filters)
-        self.assertEqual(len(rows), 4)
-        self.assertEqual({r.get("deal_id") for r in rows if r["lead_id"] == 1}, {11, 12})
 
     def test_deal_date_filters_stage_composite_keys_and_closed_conversion(self):
         self.deal(1, None, month=1, stage="WON", semantic="S")
@@ -106,35 +67,14 @@ class DealRepositoryTests(TestCase):
         self.assertEqual([r["key"] for r in result["summary"]], ["0:NEW", "0:WON", "0:LOSE", "2:WON"])
         self.assertEqual(result["total"]["total"], 4)
 
-    def test_clickhouse_cohort_matches_source_rule_and_keeps_all_linked_deals(self):
-        for id in (1, 2, 3):
-            self.lead(id)
-        self.deal(11, 1)
-        self.deal(12, 1, category=2)
-        self.deal(13, 3, category=7)
-        refs = references()
-        leads, deals, _ = cohort_rows({**self.filters, "category_ids": []}, refs)
-        self.assertEqual({r["lead_id"] for r in leads}, {1, 2, 3})
-        self.assertEqual({r["deal_id"] for r in deals}, {11, 12, 13})
-        from bitrix24.services.crm_marts import COLUMNS, storage_row
-        restored = MartReader.restore(storage_row("deal", deals[0], "generation", stamp(6)))
-        self.assertEqual(restored["deal_id"], deals[0]["deal_id"])
-        self.assertEqual(set(restored["visits"]), set(deals[0]["visits"]))
-        self.assertEqual(
-            {key: value["days"] for key, value in restored["visits"].items()},
-            {key: value["days"] for key, value in deals[0]["visits"].items()},
-        )
-        self.assertEqual(len(COLUMNS), len(storage_row("deal", deals[0], "generation", stamp(6))))
-
     def test_publication_checks_counts_before_atomic_exchange(self):
-        self.lead(1)
         self.deal(11, 1)
         client = Mock()
         from bitrix24.services.crm_marts import reference_rows
         ref_count = len(reference_rows(references(), "generation"))
-        client.execute.side_effect = lambda sql, *args: ([(ref_count if "references_staging" in sql else 2,)] if sql.startswith("SELECT count()") else [(1,)] if sql.startswith("EXISTS TABLE") else [])
+        client.execute.side_effect = lambda sql, *args: ([(ref_count if "references_staging" in sql else 1,)] if sql.startswith("SELECT count()") else [(1,)] if sql.startswith("EXISTS TABLE") else [])
         with patch("bitrix24.services.crm_marts.get_clickhouse_client", return_value=client):
-            self.assertEqual(publish(chunk_size=1), 2)
+            self.assertEqual(publish(chunk_size=1), 1)
         calls = [call.args[0] for call in client.execute.call_args_list]
         self.assertEqual(sum(sql.startswith("RENAME TABLE") for sql in calls), 1)
         self.assertLess(next(i for i, sql in enumerate(calls) if sql.startswith("SELECT count()")), next(i for i, sql in enumerate(calls) if sql.startswith("RENAME TABLE")))

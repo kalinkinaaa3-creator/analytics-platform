@@ -26,6 +26,7 @@ PLAN_COLUMNS = [
     ("unprocessed_leads", "Необработанные лиды, шт"), ("target_conversion", "Конверсия в целевые, %"),
     ("target_delta", "Дельта количества целевых лидов, шт"), ("actual_target_cpl", "Фактическая средняя цена целевого лида, руб"),
     ("target_cpl_delta", "Дельта цены целевого лида, руб"), ("lead_opportunity", "Сумма лидов, руб"),
+    ("successful_deal_amount", "Сумма успешных сделок, руб"),
 ]
 SOURCE_COLUMNS = [
     ("week_start", "Неделя"), ("planned_target_leads", "Количество целевых лидов, шт"),

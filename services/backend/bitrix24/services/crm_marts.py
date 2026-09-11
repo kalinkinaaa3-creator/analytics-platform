@@ -1,4 +1,4 @@
-"""Atomic, typed ClickHouse marts for CRM entities and lead/deal cohorts."""
+"""Atomic, typed ClickHouse mart for CRM deals."""
 from decimal import Decimal
 from uuid import uuid4
 
@@ -6,12 +6,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from analytics.clickhouse.client import get_clickhouse_client
-from bitrix24.models import BitrixDeal, BitrixLead, BitrixLeadAnalytics
+from bitrix24.models import BitrixDeal
 from . import deal_repository as source
 
 TABLE = "default.bitrix_crm_entities"
 DEALS = "default.bitrix_deal_analytics"
-CYCLE = "default.bitrix_full_cycle_analytics"
+LEGACY_CYCLE = "default.bitrix_full_cycle_analytics"
 REFS = "default.bitrix_crm_references"
 
 COLUMNS = (
@@ -70,8 +70,6 @@ def reference_rows(refs, snapshot):
         add("category", row["category_id"], row["category_id"], row["name"], sort=row.get("sort"))
     for key, row in refs["stages"].items():
         add("deal_stage", key, name=row["name"], category=row["category_id"], sort=row.get("sort"), semantics=row.get("semantics"))
-    for row in refs["lead_stages"]:
-        add("lead_stage", row["status_id"], name=row["name"], sort=row.get("sort"), semantics=row.get("semantics"))
     for row in refs["sources"]:
         add("source", row["source_id"], name=row["source_name"])
     for number, row in refs["tracking"].items():
@@ -122,16 +120,9 @@ def storage_row(kind, row, snapshot, now):
 
 
 def recreate_views(client):
-    client.execute(f"DROP VIEW IF EXISTS {CYCLE}")
+    client.execute(f"DROP VIEW IF EXISTS {LEGACY_CYCLE}")
     client.execute(f"DROP VIEW IF EXISTS {DEALS}")
     client.execute(f"CREATE VIEW {DEALS} AS SELECT * FROM {TABLE} WHERE entity_type = 'deal'")
-    client.execute(f"""CREATE VIEW {CYCLE} AS SELECT
-        l.entity_id lead_id, l.source_created_at lead_created_at, l.manager_id lead_manager_id,
-        l.department_name lead_department_name, l.source_id lead_source_id, l.title lead_title,
-        d.entity_id deal_id, d.title deal_title, d.category_id, d.amount deal_amount,
-        d.result deal_result, d.closed_at deal_closed_at, l.snapshot
-        FROM (SELECT * FROM {TABLE} WHERE entity_type = 'lead') l
-        LEFT ALL JOIN {DEALS} d ON d.lead_id = l.entity_id""")
 
 
 def publish(*, chunk_size=1000):
@@ -160,17 +151,6 @@ def publish(*, chunk_size=1000):
                     client.execute(f"INSERT INTO {staging} ({', '.join(COLUMNS)}) VALUES", values)
                     count += len(values)
 
-            leads = BitrixLeadAnalytics.objects.filter(
-                lead_id__in=BitrixLead.objects.filter(is_deleted=False).values("lead_id")
-            )
-            fields = ("lead_id", "title", "source_created_at", "source_id", "source_name", "status_id",
-                      "status_name", "dashboard_status", "manager_id", "manager_name", "department_name", "opportunity")
-            pending = []
-            for row in leads.order_by("lead_id").values(*fields).iterator(chunk_size=chunk_size):
-                pending.append(row)
-                if len(pending) >= chunk_size:
-                    write("lead", source.enrich_leads(pending)); pending = []
-            write("lead", source.enrich_leads(pending))
             pending = []
             ids = BitrixDeal.objects.filter(is_deleted=False).order_by("deal_id").values_list("deal_id", flat=True)
             for deal_id in ids.iterator(chunk_size=chunk_size):
@@ -184,7 +164,7 @@ def publish(*, chunk_size=1000):
             raise RuntimeError("CRM reference snapshot row count mismatch")
         # Existing views depend on the old table schema (including payload),
         # so remove them before replacing the physical table.
-        client.execute(f"DROP VIEW IF EXISTS {CYCLE}")
+        client.execute(f"DROP VIEW IF EXISTS {LEGACY_CYCLE}")
         client.execute(f"DROP VIEW IF EXISTS {DEALS}")
         entity_exists = client.execute(f"EXISTS TABLE {TABLE}")[0][0]
         refs_exist = client.execute(f"EXISTS TABLE {REFS}")[0][0]
@@ -220,7 +200,7 @@ class MartReader:
 
     @staticmethod
     def restore_refs(values):
-        refs = {"categories": [], "category_map": {}, "stages": {}, "lead_stages": [], "sources": [],
+        refs = {"categories": [], "category_map": {}, "stages": {}, "sources": [],
                 "tracking": {}, "users": {}, "deal_types": {}, "activities": {}}
         for value in values:
             row = dict(zip(REF_COLUMNS, value)); kind = row["ref_type"]
@@ -232,15 +212,12 @@ class MartReader:
                 refs["stages"][row["ref_key"]] = {"key": row["ref_key"], "status_id": row["ref_key"].split(":", 1)[-1],
                     "name": row["name"], "category_id": row["category_id"], "category_name": category.get("name", str(row["category_id"])),
                     "category_sort": category.get("sort", 0), "sort": row["sort"], "semantics": row["semantics"]}
-            elif kind == "lead_stage":
-                refs["lead_stages"].append({"status_id": row["ref_key"], "name": row["name"], "sort": row["sort"], "semantics": row["semantics"]})
             elif kind == "source": refs["sources"].append({"source_id": row["ref_key"], "source_name": row["name"]})
             elif kind == "tracking": refs["tracking"][row["number_id"]] = {"user_id": row["number_id"], "manager_name": row["name"], "department_name": row["department_name"]}
             elif kind == "user": refs["users"][row["number_id"]] = {"user_id": row["number_id"], "full_name": row["name"]}
             elif kind == "deal_type": refs["deal_types"][row["ref_key"]] = row["name"]
             elif kind == "activity": refs["activities"][row["ref_key"]] = row["name"]
         refs["categories"].sort(key=lambda row: (row["sort"], row["category_id"]))
-        refs["lead_stages"].sort(key=lambda row: row["sort"])
         return refs
 
     @staticmethod
@@ -286,6 +263,8 @@ class MartReader:
             parts.append(condition)
         if filters.get("exclude_untracked_department", True):
             args["tracked"] = tuple(tracking) or (-1,); parts.append("manager_id IN %(tracked)s")
+        if filters.get("lead_link") == "linked":
+            parts.append("lead_id > 0")
         for field, column in (("manager_ids", "manager_id"), ("source_ids", "source_id")):
             if filters.get(field):
                 parts.append(f"{column} IN %({field})s"); args[field] = tuple(filters[field])
@@ -297,25 +276,6 @@ class MartReader:
             if filters.get(field):
                 parts.append(f"{column} IN %({field})s"); args[field] = tuple(filters[field])
         return self.select("deal", parts, args)
-
-    def cohort(self, filters, *, include_standalone=True):
-        parts, args = self.conditions(filters)
-        leads = self.select("lead", parts, args)
-        lead_ids = {row["lead_id"] for row in leads}
-        linked = self.select("deal", ["lead_id IN %(lead_ids)s"], {"lead_ids": tuple(lead_ids) or (-1,)})
-        categories = set(filters.get("category_ids", []))
-        deals = [row for row in linked if not categories or row["category_id"] in categories]
-        all_linked = {row["lead_id"] for row in linked if row["lead_id"]}
-        selected = {row["lead_id"] for row in deals}
-        leads = [row for row in leads if row["lead_id"] in selected or row["lead_id"] not in all_linked]
-        if not include_standalone:
-            return leads, deals, []
-        deal_parts, deal_args = self.conditions(filters)
-        deal_parts.append(f"(lead_id = 0 OR lead_id NOT IN (SELECT entity_id FROM {TABLE} WHERE entity_type = 'lead'))")
-        standalone = self.select("deal", deal_parts, deal_args)
-        if categories:
-            standalone = [row for row in standalone if row["category_id"] in categories]
-        return leads, deals, standalone
 
     def options(self, filters, *, faceted=True):
         refs, tracking = self.refs, self.refs["tracking"]

@@ -9,10 +9,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.views import APIView
 
 from bitrix24.cache import get_dashboard_cache, set_dashboard_cache
 from bitrix24.models import BitrixLeadAnalytics, BitrixSyncState
+from bitrix24.services.department_preferences import display_names, manager_options, save_manager_options, selected_manager_ids
 from bitrix24.services.dashboard_query import LeadDashboardFilters, LeadDashboardQuery
 from bitrix24.services.export import (
     export_leads_xlsx,
@@ -61,13 +63,21 @@ def _filters(validated_data) -> LeadDashboardFilters:
     )
 
 
+def _personal_payload(user, payload):
+    payload = dict(payload)
+    if payload.pop("use_personal_departments", True) and not payload["department_names"] and not payload["manager_ids"]:
+        payload["manager_ids"] = selected_manager_ids(user) or [-1]
+        payload["exclude_untracked_department"] = False
+    return payload
+
+
 class LeadDashboardView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def post(self, request):
         serializer = LeadDashboardRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        payload = serializer.validated_data
+        payload = _personal_payload(request.user, serializer.validated_data)
         cached = get_dashboard_cache(payload)
         if cached is not None:
             return Response(cached)
@@ -89,7 +99,7 @@ class LeadDashboardFiltersView(APIView):
             changes["exclude_untracked_department"] = False
         return filtered_lead_analytics_queryset(replace(filters, **changes))
 
-    def _response(self, filters=None):
+    def _response(self, filters=None, user=None):
         department_rows = self._option_rows(filters, "department_names")
         manager_rows = self._option_rows(filters, "manager_ids")
         source_rows = self._option_rows(filters, "source_ids")
@@ -98,6 +108,8 @@ class LeadDashboardFiltersView(APIView):
         status_rows = self._option_rows(filters, "status_ids")
         sync_state = BitrixSyncState.objects.filter(entity="leads").first()
         current_refresh = refresh_state()
+        personal = manager_options(user) if user else []
+        selected_departments = sorted({row["filter_department_name"] for row in personal if row["selected"]})
         return Response(
             {
                 "departments": list(
@@ -141,16 +153,18 @@ class LeadDashboardFiltersView(APIView):
                     else None
                 ) or (sync_state.last_success_at if sync_state else None),
                 "refresh": current_refresh,
+                "default_department_names": selected_departments,
+                "department_preferences": personal,
             }
         )
 
     def get(self, request):
-        return self._response()
+        return self._response(user=request.user)
 
     def post(self, request):
         serializer = LeadDashboardRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        return self._response(_filters(serializer.validated_data))
+        return self._response(_filters(serializer.validated_data), request.user)
 
 
 class LeadDashboardExportView(APIView):
@@ -159,14 +173,15 @@ class LeadDashboardExportView(APIView):
     def post(self, request):
         serializer = LeadDashboardRowsRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        payload = _personal_payload(request.user, serializer.validated_data)
         options = {
-            key: serializer.validated_data[key]
+            key: payload[key]
             for key in (
                 "segment_type", "segment_key", "segment_keys", "period",
                 "sort_by", "sort_direction",
             )
         }
-        path, _ = export_leads_xlsx(_filters(serializer.validated_data), **options)
+        path, _ = export_leads_xlsx(_filters(payload), **options)
         response = FileResponse(
             path.open("rb"),
             as_attachment=True,
@@ -185,7 +200,7 @@ class LeadDashboardRowsView(APIView):
     def post(self, request):
         serializer = LeadDashboardRowsRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        payload = serializer.validated_data
+        payload = _personal_payload(request.user, serializer.validated_data)
         page = payload["page"]
         page_size = payload["page_size"]
         queryset = filtered_lead_analytics_queryset(
@@ -318,3 +333,23 @@ class ManagerTrackingUploadView(APIView):
             {**result, "status": "running", "pid": pid},
             status=status.HTTP_202_ACCEPTED,
         )
+        names = display_names(request.user)
+        for item in items:
+            item["department_name"] = names.get(item.get("manager_id"), item.get("department_name"))
+
+
+class DepartmentPreferenceView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request):
+        if not _can_view_crm(request.user):
+            raise PermissionDenied("Нет доступа к Аналитике CRM.")
+        return Response({"options": manager_options(request.user)})
+
+    def post(self, request):
+        if not _can_view_crm(request.user):
+            raise PermissionDenied("Нет доступа к Аналитике CRM.")
+        rows = request.data.get("rows")
+        if not isinstance(rows, list):
+            return Response({"rows": "Ожидается список менеджеров."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"options": save_manager_options(request.user, rows)})

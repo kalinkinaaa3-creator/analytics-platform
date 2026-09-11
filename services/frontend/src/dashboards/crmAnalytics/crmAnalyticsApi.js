@@ -62,3 +62,11 @@ export async function uploadManagerTracking(file) {
     headers: { "Content-Type": "multipart/form-data" },
   })).data;
 }
+
+export async function fetchDepartmentPreferences() {
+  return (await api.get("/v1/bitrix24/dashboard/department-preferences/")).data;
+}
+
+export async function saveDepartmentPreferences(rows) {
+  return (await api.post("/v1/bitrix24/dashboard/department-preferences/", { rows })).data;
+}

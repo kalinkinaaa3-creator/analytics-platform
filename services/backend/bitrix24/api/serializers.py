@@ -35,6 +35,7 @@ class LeadDashboardRequestSerializer(serializers.Serializer):
         default=list,
     )
     exclude_untracked_department = serializers.BooleanField(default=True)
+    use_personal_departments = serializers.BooleanField(default=True)
     group_by = serializers.ChoiceField(
         choices=("day", "week", "month", "year"),
         default="month",

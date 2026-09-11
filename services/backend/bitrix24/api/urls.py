@@ -9,11 +9,12 @@ from .views import (
     LeadDashboardRefreshView,
     ManagerTrackingTemplateView,
     ManagerTrackingUploadView,
+    DepartmentPreferenceView,
 )
 
 
 urlpatterns = [
-    re_path(r"^dashboard/(?P<section>deals|full-cycle)/(?P<part>filters|summary|results|sources|managers|loss-reasons|funnel|rows|export)/$", DealReportView.as_view(), name="bitrix24-deal-report"),
+    re_path(r"^dashboard/(?P<section>deals)/(?P<part>filters|summary|results|sources|managers|loss-reasons|rows|export)/$", DealReportView.as_view(), name="bitrix24-deal-report"),
     path("dashboard/", LeadDashboardView.as_view(), name="bitrix24-dashboard"),
     path("dashboard/filters/", LeadDashboardFiltersView.as_view(), name="bitrix24-filters"),
     path("dashboard/export/", LeadDashboardExportView.as_view(), name="bitrix24-export"),
@@ -21,4 +22,5 @@ urlpatterns = [
     path("dashboard/refresh/", LeadDashboardRefreshView.as_view(), name="bitrix24-refresh"),
     path("dashboard/managers/template/", ManagerTrackingTemplateView.as_view(), name="bitrix24-manager-template"),
     path("dashboard/managers/upload/", ManagerTrackingUploadView.as_view(), name="bitrix24-manager-upload"),
+    path("dashboard/department-preferences/", DepartmentPreferenceView.as_view(), name="bitrix24-department-preferences"),
 ]

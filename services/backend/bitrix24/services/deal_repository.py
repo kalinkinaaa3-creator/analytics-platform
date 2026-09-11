@@ -7,8 +7,8 @@ from django.db.models import Q
 from django.utils import timezone
 
 from bitrix24.models import (
-    BitrixCrmDictionary, BitrixCrmField, BitrixDeal, BitrixDealCategory, BitrixLead,
-    BitrixLeadAnalytics, BitrixManagerTracking, BitrixStageHistory, BitrixUser,
+    BitrixCrmDictionary, BitrixCrmField, BitrixDeal, BitrixDealCategory,
+    BitrixManagerTracking, BitrixStageHistory, BitrixUser,
 )
 from bitrix24.services.dashboard_query import UNTRACKED_DEPARTMENT_NAME
 from .deal_metrics import enrich_deal, stage_key
@@ -31,12 +31,10 @@ def references():
             item = {"category_id": category_id, "name": f"Воронка #{category_id} (нет в справочнике)", "sort": 999999}
             category_map[category_id] = item
             categories.append(item)
-    stages, lead_stages, sources = {}, [], []
+    stages, sources = {}, []
     for row in BitrixCrmDictionary.objects.filter(is_deleted=False).values("entity_id", "status_id", "name", "sort", "semantics"):
         entity = row["entity_id"]
-        if entity == "STATUS":
-            lead_stages.append(row)
-        elif entity == "SOURCE":
+        if entity == "SOURCE":
             sources.append({"source_id": row["status_id"], "source_name": row["name"]})
         elif entity == "DEAL_STAGE" or entity.startswith("DEAL_STAGE_"):
             try:
@@ -62,7 +60,6 @@ def references():
             if item.get("ID") is not None
         }
     return {"categories": categories, "category_map": category_map, "stages": stages,
-            "lead_stages": sorted(lead_stages, key=lambda r: r["sort"] or 0),
             "sources": sources, "tracking": tracking, "users": users,
             "deal_types": enum_fields.get("UF_CRM_69B904B3E0AD1", {}),
             "activities": enum_fields.get("UF_CRM_64254B7D4853D", {})}
@@ -94,25 +91,6 @@ def histories(entity_type, ids):
     return result
 
 
-def enrich_leads(rows):
-    events = histories(1, [row["lead_id"] for row in rows])
-    now = timezone.now()
-    for row in rows:
-        history = sorted(events.get(row["lead_id"], []), key=lambda e: (e["created_at"], e["history_id"]))
-        visits = {}
-        for index, event in enumerate(history):
-            end = history[index + 1]["created_at"] if index + 1 < len(history) else now
-            key = event["stage_id"]
-            visits[key] = visits.get(key, 0) + max(0, (end - event["created_at"]).total_seconds() / 86400)
-        visits.setdefault(row["status_id"], None)
-        row["visited"] = set(visits)
-        row["visit_days"] = visits
-        row["history_missing"] = not history
-        if row["source_created_at"]:
-            row["source_created_at"] = row["source_created_at"].astimezone(MOSCOW)
-    return rows
-
-
 def enrich_rows(query, refs):
     rows = list(query.values("deal_id", "title", "category_id", "stage_id", "stage_semantic_id", "assigned_by_id",
                              "lead_id", "company_id", "source_created_at", "source_updated_at", "opportunity", "currency_id", "source_id", "raw_payload"))
@@ -140,20 +118,19 @@ def enrich_rows(query, refs):
     return result
 
 
-def deal_queryset(filters, refs, *, cohort=False):
+def deal_queryset(filters, refs):
     query = BitrixDeal.objects.filter(is_deleted=False)
     if filters.get("category_ids"):
         query = query.filter(category_id__in=filters["category_ids"])
-    if not cohort:
-        start, end = date_bounds(filters)
-        query = query.filter(source_created_at__gte=start, source_created_at__lt=end)
-        query = manager_scope(query, filters, refs, "assigned_by_id")
-        if filters.get("stage_keys"):
-            condition = Q(pk__in=[])
-            for key in filters["stage_keys"]:
-                category, stage = key.split(":", 1)
-                condition |= Q(category_id=int(category), stage_id=stage)
-            query = query.filter(condition)
+    start, end = date_bounds(filters)
+    query = query.filter(source_created_at__gte=start, source_created_at__lt=end)
+    query = manager_scope(query, filters, refs, "assigned_by_id")
+    if filters.get("stage_keys"):
+        condition = Q(pk__in=[])
+        for key in filters["stage_keys"]:
+            category, stage = key.split(":", 1)
+            condition |= Q(category_id=int(category), stage_id=stage)
+        query = query.filter(condition)
     return query
 
 
@@ -162,30 +139,6 @@ def deal_rows(filters, refs):
     if filters.get("results"):
         rows = [row for row in rows if row["result"] in filters["results"]]
     return rows
-
-
-def cohort_rows(filters, refs):
-    start, end = date_bounds(filters)
-    leads = BitrixLeadAnalytics.objects.filter(source_created_at__gte=start, source_created_at__lt=end)
-    leads = leads.filter(lead_id__in=BitrixLead.objects.filter(is_deleted=False).values("lead_id"))
-    leads = manager_scope(leads, filters, refs, "manager_id")
-    if filters.get("source_ids"):
-        leads = leads.filter(source_id__in=filters["source_ids"])
-    deals = deal_queryset(filters, refs, cohort=True)
-    if filters.get("category_ids"):
-        # User-approved rule: selected-category leads OR leads with no active deals.
-        leads = leads.filter(Q(lead_id__in=deals.values("lead_id")) | ~Q(lead_id__in=BitrixDeal.objects.filter(
-            is_deleted=False, lead_id__isnull=False).exclude(lead_id=0).values("lead_id")))
-    rows = list(leads.values("lead_id", "title", "source_created_at", "source_id", "source_name", "status_id",
-                            "status_name", "dashboard_status", "manager_id", "manager_name", "department_name", "opportunity"))
-    ids = [row["lead_id"] for row in rows]
-    enrich_leads(rows)
-    linked = enrich_rows(deals.filter(lead_id__in=ids), refs) if ids else []
-    # Without a lead there is no lead cohort: list these separately by deal creation.
-    standalone = enrich_rows(manager_scope(deals.exclude(lead_id__in=BitrixLead.objects.filter(
-        is_deleted=False).values("lead_id")).filter(
-        source_created_at__gte=start, source_created_at__lt=end), filters, refs, "assigned_by_id"), refs)
-    return rows, linked, standalone
 
 
 def filter_options(filters, refs):

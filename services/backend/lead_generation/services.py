@@ -10,6 +10,7 @@ from django.utils import timezone
 from .cache import REPORT_TIMEOUT, SOURCE_OPTIONS_TIMEOUT, invalidate_lead_generation_cache, report_cache_key
 from .clickhouse import MART_TABLE, ensure_mart_table
 from .models import LeadGenerationPlan, LeadGenerationSourcePreference
+from bitrix24.services.crm_marts import DEALS as BITRIX_DEALS_TABLE
 
 
 MIN_WEEK = date(2024, 12, 30)
@@ -77,6 +78,7 @@ def _week_range(filters):
 
 def _plan_report(filters):
     facts = _facts(filters)
+    successful_deals = _successful_deal_amounts(filters)
     plans = _plan_rows(filters)
     rows = []
     for week in _week_range(filters):
@@ -104,9 +106,28 @@ def _plan_report(filters):
             "actual_target_cpl": cost / target if target else None,
             "target_cpl_delta": plan_cpl - cost / target if target else None,
             "lead_opportunity": _number(fact.get("opportunity")),
+            "successful_deal_amount": _number(successful_deals.get(week)),
         }
         rows.append(row)
     return rows
+
+
+def _successful_deal_amounts(filters):
+    """All successful RUB deals grouped by the deal's own creation week."""
+    client = ensure_mart_table()
+    if not client.execute(f"EXISTS TABLE {BITRIX_DEALS_TABLE}")[0][0]:
+        return {}
+    rows = client.execute(f"""
+        SELECT toStartOfWeek(source_created_at, 1) AS week_start,
+               sum(amount) AS amount
+        FROM {BITRIX_DEALS_TABLE}
+        WHERE result = 'S'
+          AND currency_id = 'RUB'
+          AND source_created_at >= %(date_from)s
+          AND source_created_at < %(date_to)s
+        GROUP BY week_start
+    """, {"date_from": filters["week_from"], "date_to": filters["week_to"] + timedelta(days=7)})
+    return {week: float(amount or 0) for week, amount in rows}
 
 
 def _source_report(filters, preference=None):

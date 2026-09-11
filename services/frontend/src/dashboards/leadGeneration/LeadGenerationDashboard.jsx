@@ -23,6 +23,7 @@ const PLAN_COLUMNS = [
   ["target_conversion", "Конверсия «в целевые», %", "percent", "fact", "Целевые лиды ÷ Общее количество лидов × 100%"], ["target_delta", "Дельта количества целевых лидов, шт", "number", "fact", "Фактические целевые лиды − Плановые целевые лиды"],
   ["actual_target_cpl", "Фактическая средняя цена целевого лида, руб", "money", "control", "Расходы ÷ Фактические целевые лиды"], ["target_cpl_delta", "Дельта цены целевого лида, руб", "money", "control", "Плановая цена целевого лида − Фактическая цена целевого лида"],
   ["lead_opportunity", "Сумма лидов, руб", "money", "crm-revenue"],
+  ["successful_deal_amount", "Сумма успешных сделок, руб", "money", "crm-revenue"],
 ];
 
 const SOURCE_COLUMNS = [
@@ -43,7 +44,7 @@ const GROUPS = {
 const GROUP_COLORS = { "revenue-1c":"#36554a", "crm-revenue":"#3e4d3c", period:"#4a5c47", plan:"#4a5c47", "source-plan":"#4a5c47", potential:"#36554a", direct:"#3d4f5e", fact:"#424355", "source-fact":"#424355", control:"#5e423e", "source-control":"#5e423e", "source-target":"#2e4a4c" };
 const SOURCE_GROUP_COLORS = ["#3e4d3c", "#5e5445", "#405464", "#6b3a35", "#433e4b", "#354f52", "#5c4f3b", "#4e5a50"];
 const SIGNED_METRICS = new Set(["cost_delta", "target_delta", "target_cpl_delta", "target_deviation"]);
-const POSITIVE_METRICS = new Set(["target_leads", "target_conversion", "lead_opportunity"]);
+const POSITIVE_METRICS = new Set(["target_leads", "target_conversion", "lead_opportunity", "successful_deal_amount"]);
 const NEGATIVE_METRICS = new Set(["non_target_leads", "unprocessed_leads"]);
 const UNFORMATTED_METRICS = new Set(["target_lead_price", "average_revenue_per_lead", "budget_revenue_share", "target_conversion", "actual_target_cpl", "associated_share", "other_share", "conversion"]);
 const BAR_COLORS = {
