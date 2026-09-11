@@ -204,7 +204,7 @@ class DealReportView(APIView):
             filters.pop("period", None)
         if part == "filters":
             mart = reader()
-            return Response({**mart.options(filters), "snapshot": mart.snapshot})
+            return Response({**mart.options(filters, faceted=section == "deals"), "snapshot": mart.snapshot})
         data = bundle(section, filters)
         def respond(value):
             return Response({**value, "snapshot": data["snapshot"]})

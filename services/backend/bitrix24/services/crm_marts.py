@@ -317,10 +317,26 @@ class MartReader:
             standalone = [row for row in standalone if row["category_id"] in categories]
         return leads, deals, standalone
 
-    def options(self, filters):
+    def options(self, filters, *, faceted=True):
         refs, tracking = self.refs, self.refs["tracking"]
+        if not faceted:
+            users = []
+            for key, user in refs["users"].items():
+                department = tracking.get(key, {}).get("department_name", source.UNTRACKED_DEPARTMENT_NAME)
+                if filters.get("exclude_untracked_department", True) and key not in tracking: continue
+                if filters.get("department_names") and department not in filters["department_names"]: continue
+                users.append({"manager_id": key, "manager_name": user["full_name"]})
+            stages = [row for row in refs["stages"].values() if not filters.get("category_ids") or row["category_id"] in filters["category_ids"]]
+            return {"categories": refs["categories"], "default_category_ids": source.DEFAULT_CATEGORIES,
+                    "stages": sorted(stages, key=lambda row: (row["category_sort"], row["category_id"], row["sort"] or 0)),
+                    "departments": [{"department_name": name} for name in sorted({row["department_name"] for row in tracking.values()} | {source.UNTRACKED_DEPARTMENT_NAME})],
+                    "managers": users,
+                    "sources": sorted([*refs["sources"], {"source_id": "", "source_name": "Источник не указан"}], key=lambda row: row["source_name"])}
+
         def available(ignore, column):
             scoped = {**filters, ignore: []}
+            if ignore == "department_names":
+                scoped["exclude_untracked_department"] = False
             parts, args = self.conditions(scoped)
             for field, deal_column in (("category_ids", "category_id"), ("stage_keys", "stage_key"), ("results", "result")):
                 if field != ignore and scoped.get(field):
