@@ -4,7 +4,7 @@ import tempfile
 from datetime import datetime, time, timedelta
 from pathlib import Path
 
-from django.db.models import Q
+from django.db.models import Case, CharField, F, Q, Value, When
 from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl.cell import WriteOnlyCell
@@ -69,12 +69,17 @@ def filtered_lead_analytics_queryset(
         source_created_at__gte=_aware_start(filters.date_start),
         source_created_at__lt=_aware_start(filters.date_end + timedelta(days=1)),
     )
+    department_field = "department_name"
+    if filters.tracked_manager_ids is not None:
+        department_field = "effective_department_name"
+        queryset = queryset.annotate(effective_department_name=Case(
+            When(manager_id__in=filters.tracked_manager_ids, then=F("department_name")),
+            default=Value(UNTRACKED_DEPARTMENT_NAME), output_field=CharField(),
+        ))
     if filters.exclude_untracked_department:
-        queryset = queryset.exclude(
-            department_name=UNTRACKED_DEPARTMENT_NAME
-        )
+        queryset = queryset.exclude(**{department_field: UNTRACKED_DEPARTMENT_NAME})
     for field_name, values in (
-        ("department_name", filters.department_names),
+        (department_field, filters.department_names),
         ("manager_id", filters.manager_ids),
         ("source_id", filters.source_ids),
         ("project_id", filters.project_ids),

@@ -1,4 +1,5 @@
 from bitrix24.models import BitrixDeal, BitrixLead, BitrixUserDepartmentPreference
+from bitrix24.cache import invalidate_bitrix24_cache
 from bitrix24.services.manager_departments import automatic_manager_directory
 
 
@@ -62,6 +63,7 @@ def save_manager_options(user, rows):
             # Departments without data are absent from the form, not deselected.
             normalized.append({"manager_id": manager_id, "selected": original["selected"], "display_name": original["display_name"]})
     BitrixUserDepartmentPreference.objects.update_or_create(user=user, defaults={"manager_settings": normalized})
+    invalidate_bitrix24_cache()
     return manager_options(user, with_data_only=True)
 
 

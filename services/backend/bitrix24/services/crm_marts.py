@@ -252,6 +252,9 @@ class MartReader:
         start, end = source.date_bounds(filters)
         parts, args = ["source_created_at >= %(start)s", "source_created_at < %(end)s"], {"start": start, "end": end}
         tracking = self.refs["tracking"]
+        if "tracked_manager_ids" in filters:
+            tracked_ids = set(filters["tracked_manager_ids"])
+            tracking = {key: row for key, row in tracking.items() if key in tracked_ids}
         departments = filters.get("department_names", [])
         if departments:
             ids = tuple(key for key, value in tracking.items() if value["department_name"] in departments)
@@ -277,8 +280,11 @@ class MartReader:
                 parts.append(f"{column} IN %({field})s"); args[field] = tuple(filters[field])
         return self.select("deal", parts, args)
 
-    def options(self, filters, *, faceted=True):
+    def options(self, filters, *, faceted=True, personal_manager_ids=None):
         refs, tracking = self.refs, self.refs["tracking"]
+        if "tracked_manager_ids" in filters:
+            tracked_ids = set(filters["tracked_manager_ids"])
+            tracking = {key: row for key, row in tracking.items() if key in tracked_ids}
         if not faceted:
             users = []
             for key, user in refs["users"].items():
@@ -296,6 +302,9 @@ class MartReader:
         def available(ignore, column):
             scoped = {**filters, ignore: []}
             if ignore == "department_names":
+                scoped["exclude_untracked_department"] = False
+            elif personal_manager_ids is not None:
+                scoped["manager_ids"] = list(personal_manager_ids) or [-1]
                 scoped["exclude_untracked_department"] = False
             parts, args = self.conditions(scoped)
             for field, deal_column in (("category_ids", "category_id"), ("stage_keys", "stage_key"), ("results", "result")):

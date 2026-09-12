@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 from bitrix24.cache import get_dashboard_cache, set_dashboard_cache
 from bitrix24.models import BitrixLeadAnalytics, BitrixSyncState
 from bitrix24.services.department_preferences import display_names, manager_options, save_manager_options, selected_manager_ids
-from bitrix24.services.dashboard_query import LeadDashboardFilters, LeadDashboardQuery
+from bitrix24.services.dashboard_query import LeadDashboardFilters, LeadDashboardQuery, UNTRACKED_DEPARTMENT_NAME
 from bitrix24.services.export import (
     export_leads_xlsx,
     filtered_lead_analytics_queryset,
@@ -40,6 +40,7 @@ def _filters(validated_data) -> LeadDashboardFilters:
         date_end=validated_data["date_end"],
         department_names=tuple(validated_data["department_names"]),
         manager_ids=tuple(validated_data["manager_ids"]),
+        tracked_manager_ids=tuple(validated_data["tracked_manager_ids"]) if "tracked_manager_ids" in validated_data else None,
         source_ids=tuple(validated_data["source_ids"]),
         project_ids=tuple(validated_data["project_ids"]),
         semantic_status_ids=tuple(validated_data["semantic_status_ids"]),
@@ -53,8 +54,9 @@ def _filters(validated_data) -> LeadDashboardFilters:
 
 def _personal_payload(user, payload):
     payload = dict(payload)
+    payload["tracked_manager_ids"] = selected_manager_ids(user)
     if payload.pop("use_personal_departments", True) and not payload["department_names"] and not payload["manager_ids"]:
-        payload["manager_ids"] = selected_manager_ids(user) or [-1]
+        payload["manager_ids"] = payload["tracked_manager_ids"] or [-1]
         payload["exclude_untracked_department"] = False
     return payload
 
@@ -79,33 +81,39 @@ class LeadDashboardFiltersView(APIView):
     permission_classes = (IsAuthenticated,)
 
     @staticmethod
-    def _option_rows(filters, field_name):
+    def _option_rows(filters, field_name, personal_ids=None):
         if filters is None:
             return BitrixLeadAnalytics.objects.all()
         changes = {field_name: ()}
         if field_name == "department_names":
             changes["exclude_untracked_department"] = False
+        elif personal_ids is not None:
+            changes["manager_ids"] = tuple(personal_ids) or (-1,)
+            changes["exclude_untracked_department"] = False
         return filtered_lead_analytics_queryset(replace(filters, **changes))
 
-    def _response(self, filters=None, user=None):
-        department_rows = self._option_rows(filters, "department_names")
-        manager_rows = self._option_rows(filters, "manager_ids")
-        source_rows = self._option_rows(filters, "source_ids")
-        project_rows = self._option_rows(filters, "project_ids")
-        semantic_status_rows = self._option_rows(filters, "semantic_status_ids")
-        status_rows = self._option_rows(filters, "status_ids")
+    def _response(self, filters=None, user=None, use_personal_departments=True):
+        personal = manager_options(user) if user else []
+        if filters is not None and user:
+            filters = replace(filters, tracked_manager_ids=tuple(row["manager_id"] for row in personal if row["selected"]))
+        personal_ids = [row["manager_id"] for row in personal if row["selected"]] if (
+            user and filters and use_personal_departments and not filters.department_names and not filters.manager_ids
+        ) else None
+        department_rows = self._option_rows(filters, "department_names", personal_ids)
+        manager_rows = self._option_rows(filters, "manager_ids", personal_ids)
+        source_rows = self._option_rows(filters, "source_ids", personal_ids)
+        project_rows = self._option_rows(filters, "project_ids", personal_ids)
+        semantic_status_rows = self._option_rows(filters, "semantic_status_ids", personal_ids)
+        status_rows = self._option_rows(filters, "status_ids", personal_ids)
+        department_field = "effective_department_name" if filters and filters.tracked_manager_ids is not None else "department_name"
         sync_state = BitrixSyncState.objects.filter(entity="leads").first()
         current_refresh = refresh_state()
-        personal = manager_options(user) if user else []
         selected_departments = sorted({row["filter_department_name"] for row in personal if row["selected"]})
         return Response(
             {
-                "departments": list(
-                    department_rows.exclude(department_name="")
-                    .values("department_name")
-                    .distinct()
-                    .order_by("department_name")
-                ),
+                "departments": [{"department_name": name} for name in department_rows.exclude(
+                    **{department_field: ""}
+                ).values_list(department_field, flat=True).order_by(department_field).distinct()],
                 "managers": list(
                     manager_rows.exclude(manager_id__isnull=True)
                     .values("manager_id", "manager_name")
@@ -152,7 +160,7 @@ class LeadDashboardFiltersView(APIView):
     def post(self, request):
         serializer = LeadDashboardRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        return self._response(_filters(serializer.validated_data), request.user)
+        return self._response(_filters(serializer.validated_data), request.user, serializer.validated_data["use_personal_departments"])
 
 
 class LeadDashboardExportView(APIView):
@@ -241,6 +249,10 @@ class LeadDashboardRowsView(APIView):
                 "calculated_at",
             )[offset : offset + page_size]
         )
+        tracked_ids = set(payload["tracked_manager_ids"])
+        names = display_names(request.user)
+        for item in items:
+            item["department_name"] = names.get(item["manager_id"], item["department_name"]) if item["manager_id"] in tracked_ids else UNTRACKED_DEPARTMENT_NAME
         return Response(
             {
                 "items": items,

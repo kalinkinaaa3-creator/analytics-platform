@@ -3,7 +3,7 @@ import { useCallback, useLayoutEffect, useState } from "react";
 const DASHBOARD_SELECTOR = ".crm-dashboard, .project-gantt-dashboard, .revenue-dashboard, .wordstat-dashboard, .purchases, .accreceiv, .turnover";
 const EDGE_PADDING = 12;
 
-export function useDropdownPosition({ open, rootRef, menuRef, contentKey = "", preferredWidth = null }) {
+export function useDropdownPosition({ open, rootRef, menuRef, contentKey = "", preferredWidth = null, portal = false }) {
   const [position, setPosition] = useState({ left: 0, width: null, maxWidth: null, ready: false });
   const resetPosition = useCallback(() => {
     setPosition((current) => (
@@ -21,7 +21,7 @@ export function useDropdownPosition({ open, rootRef, menuRef, contentKey = "", p
     const menu = menuRef.current;
     if (!root || !menu) return undefined;
 
-    const dashboard = root.closest(DASHBOARD_SELECTOR);
+    const dashboard = portal ? null : root.closest(DASHBOARD_SELECTOR);
 
     function measure() {
       if (!rootRef.current || !menuRef.current) return;
@@ -41,7 +41,7 @@ export function useDropdownPosition({ open, rootRef, menuRef, contentKey = "", p
       const configuredWidth = typeof preferredWidth === "function"
         ? preferredWidth()
         : preferredWidth;
-      const naturalWidth = configuredWidth || Math.max(menuBounds.width, menuRef.current.scrollWidth);
+      const naturalWidth = configuredWidth || Math.max(menuBounds.width, menuRef.current.scrollWidth, portal ? rootBounds.width : 0);
       const effectiveWidth = Math.min(naturalWidth, availableWidth);
 
       let left = 0;
@@ -52,15 +52,24 @@ export function useDropdownPosition({ open, rootRef, menuRef, contentKey = "", p
       }
 
       const next = {
-        left: Math.round(left),
+        left: Math.round(portal ? Math.max(leftBoundary, rootBounds.left + left) : left),
         width: effectiveWidth ? Math.floor(effectiveWidth) : null,
         maxWidth: availableWidth ? Math.floor(availableWidth) : null,
         ready: true,
       };
+      if (portal) {
+        const below = Math.max(0, window.innerHeight - rootBounds.bottom - EDGE_PADDING - 4);
+        const above = Math.max(0, rootBounds.top - EDGE_PADDING - 4);
+        const openAbove = below < Math.min(menuRef.current.scrollHeight, 390) && above > below;
+        next.maxHeight = Math.floor(openAbove ? above : below);
+        next.top = Math.round(openAbove ? rootBounds.top - Math.min(menuRef.current.scrollHeight, 390, above) - 4 : rootBounds.bottom + 4);
+      }
       setPosition((current) => (
         current.left === next.left
         && current.width === next.width
         && current.maxWidth === next.maxWidth
+        && current.top === next.top
+        && current.maxHeight === next.maxHeight
         && current.ready
           ? current
           : next
@@ -92,11 +101,12 @@ export function useDropdownPosition({ open, rootRef, menuRef, contentKey = "", p
       window.visualViewport?.removeEventListener("resize", measure);
       window.visualViewport?.removeEventListener("scroll", measure);
     };
-  }, [open, rootRef, menuRef, contentKey, preferredWidth]);
+  }, [open, rootRef, menuRef, contentKey, preferredWidth, portal]);
 
   return {
     menuStyle: {
       left: position.left,
+      ...(portal ? { position: "fixed", top: position.top ?? 0, maxHeight: position.maxHeight } : {}),
       ...(position.width ? { width: position.width } : {}),
       ...(position.maxWidth ? { maxWidth: position.maxWidth } : {}),
       visibility: position.ready ? "visible" : "hidden",

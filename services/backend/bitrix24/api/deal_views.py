@@ -15,10 +15,10 @@ from bitrix24.services.deal_metrics import metrics, panel, dimension
 from bitrix24.services.deal_repository import (
     DEFAULT_CATEGORIES, MOSCOW,
 )
-from bitrix24.services.dashboard_query import previous_comparison_date, group_period_start, previous_group_period
+from bitrix24.services.dashboard_query import previous_comparison_date, group_period_start, previous_group_period, UNTRACKED_DEPARTMENT_NAME
 from bitrix24.services.refresh import refresh_state
 from bitrix24.services.crm_marts import MartReader, MartUnavailable, SnapshotChanged
-from bitrix24.services.department_preferences import display_names, manager_options, selected_manager_ids
+from bitrix24.services.department_preferences import display_names, manager_options
 from .views import _can_view_crm
 
 
@@ -85,6 +85,12 @@ def bundle(section, filters):
     start = group_period_start(scope["date_start"], scope["group_by"])
     prior = {**scope, "date_start": previous_group_period(start, scope["group_by"]), "date_end": start - timedelta(days=1)}
     current, old, prior_rows = mart.deals(scope), mart.deals(previous), mart.deals(prior)
+    if "tracked_manager_ids" in scope:
+        tracked_ids = set(scope["tracked_manager_ids"])
+        for period_rows in (current, old, prior_rows):
+            for row in period_rows:
+                if row["manager_id"] not in tracked_ids:
+                    row["department_name"] = UNTRACKED_DEPARTMENT_NAME
     result = {"current": current, "previous": old, "prior": prior_rows, "refs": refs}
     result["comparison_period"] = {"date_start": previous["date_start"], "date_end": previous["date_end"]}
     result["snapshot"] = mart.snapshot
@@ -155,7 +161,8 @@ def export_response(rows, section, filters):
     info = book.create_sheet("Условия")
     info.append(["Раздел", section])
     for key, value in filters.items():
-        info.append([key, str(value)])
+        if key != "tracked_manager_ids":
+            info.append([key, str(value)])
     info.append(["Период", "Дата создания сделки"])
     stream = BytesIO()
     book.save(stream)
@@ -173,13 +180,16 @@ class DealReportView(APIView):
         serializer = DealRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         filters = serializer.validated_data
-        if part != "filters" and filters.pop("use_personal_departments", True) and not filters["department_names"] and not filters["manager_ids"]:
-            filters["manager_ids"] = selected_manager_ids(request.user) or [-1]
+        personal = manager_options(request.user)
+        selected_ids = [row["manager_id"] for row in personal if row["selected"]]
+        filters["tracked_manager_ids"] = selected_ids
+        use_personal = filters.pop("use_personal_departments", True) and not filters["department_names"] and not filters["manager_ids"]
+        if part != "filters" and use_personal:
+            filters["manager_ids"] = selected_ids or [-1]
             filters["exclude_untracked_department"] = False
         if part == "filters":
             mart = reader()
-            personal = manager_options(request.user)
-            return Response({**mart.options(filters), "snapshot": mart.snapshot,
+            return Response({**mart.options(filters, personal_manager_ids=selected_ids if use_personal else None), "snapshot": mart.snapshot,
                              "default_department_names": sorted({row["filter_department_name"] for row in personal if row["selected"]}),
                              "department_preferences": personal})
         data = bundle(section, filters)
@@ -193,7 +203,7 @@ class DealReportView(APIView):
             public_rows = [{k: v for k, v in row.items() if k not in ("visits", "visited")} for row in rows[start:start + filters["page_size"]]]
             names = display_names(request.user)
             for row in public_rows:
-                row["department_name"] = names.get(row.get("manager_id"), row.get("department_name"))
+                row["department_name"] = names.get(row.get("manager_id"), row.get("department_name")) if row.get("manager_id") in selected_ids else UNTRACKED_DEPARTMENT_NAME
             durations = [row.get("processing_duration_days") for row in rows if row.get("processing_duration_days") is not None]
             return respond({"items": public_rows, "total": len(rows), "page": filters["page"],
                              "pages": (len(rows) + filters["page_size"] - 1) // filters["page_size"],

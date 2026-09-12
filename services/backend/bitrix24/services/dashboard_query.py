@@ -89,6 +89,7 @@ class LeadDashboardFilters:
     status_ids: tuple[str, ...] = field(default_factory=tuple)
     exclude_untracked_department: bool = True
     group_by: str = "month"
+    tracked_manager_ids: tuple[int, ...] | None = None
 
     def __post_init__(self):
         if self.date_end < self.date_start:
@@ -115,6 +116,11 @@ class LeadDashboardQuery:
             "date_start": filters.date_start,
             "date_end_exclusive": filters.date_end + timedelta(days=1),
         }
+        department_column = "department_name"
+        if filters.tracked_manager_ids is not None:
+            params["tracked_manager_ids"] = filters.tracked_manager_ids or (-1,)
+            params["untracked_department_name"] = UNTRACKED_DEPARTMENT_NAME
+            department_column = "if(manager_id IN %(tracked_manager_ids)s, department_name, %(untracked_department_name)s)"
         for field_name, values in (
             ("department_name", filters.department_names),
             ("manager_id", filters.manager_ids),
@@ -125,10 +131,11 @@ class LeadDashboardQuery:
         ):
             if values:
                 parameter = f"filter_{field_name}"
-                conditions.append(f"{field_name} IN %({parameter})s")
+                column = department_column if field_name == "department_name" else field_name
+                conditions.append(f"{column} IN %({parameter})s")
                 params[parameter] = tuple(values)
         if filters.exclude_untracked_department:
-            conditions.append("department_name != %(untracked_department_name)s")
+            conditions.append(f"{department_column} != %(untracked_department_name)s")
             params["untracked_department_name"] = UNTRACKED_DEPARTMENT_NAME
         return " AND ".join(conditions), params
 
@@ -187,6 +194,7 @@ class LeadDashboardQuery:
             date_end=previous_comparison_date(filters.date_end, filters.group_by),
             department_names=filters.department_names,
             manager_ids=filters.manager_ids,
+            tracked_manager_ids=filters.tracked_manager_ids,
             source_ids=filters.source_ids,
             project_ids=filters.project_ids,
             semantic_status_ids=filters.semantic_status_ids,
@@ -212,6 +220,7 @@ class LeadDashboardQuery:
             date_end=current_period_start - timedelta(days=1),
             department_names=filters.department_names,
             manager_ids=filters.manager_ids,
+            tracked_manager_ids=filters.tracked_manager_ids,
             source_ids=filters.source_ids,
             project_ids=filters.project_ids,
             semantic_status_ids=filters.semantic_status_ids,

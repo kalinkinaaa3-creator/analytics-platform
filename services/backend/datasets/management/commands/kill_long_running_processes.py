@@ -8,6 +8,7 @@ from analytics.services.bitrix_notify import send_bitrix_message
 
 
 logger = logging.getLogger("maintenance.process_kill")
+EXEMPT_MANAGEMENT_COMMANDS = frozenset({"load_yd_wordstat_api"})
 
 
 class Command(BaseCommand):
@@ -59,6 +60,14 @@ class Command(BaseCommand):
 
                 # Не убиваем uvicorn / основной Django server
                 if "uvicorn" in cmdline_str:
+                    continue
+
+                if any(
+                    str(arg).replace("\\", "/").rsplit("/", 1)[-1] == "manage.py"
+                    and cmdline[index + 1] in EXEMPT_MANAGEMENT_COMMANDS
+                    for index, arg in enumerate(cmdline[:-1])
+                ):
+                    logger.info("Skipping exempt management command: pid=%s, cmdline=%s", process.pid, cmdline_str)
                     continue
 
                 # Убиваем только процессы, связанные с /app/manage.py или /app
