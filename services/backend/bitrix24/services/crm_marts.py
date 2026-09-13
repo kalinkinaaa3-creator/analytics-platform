@@ -27,7 +27,7 @@ COLUMNS = (
     "visit_stage_keys", "visit_days", "visit_semantics", "snapshot",
 )
 LEGACY_COLUMNS = COLUMNS
-COLUMNS = (*COLUMNS, "category_sort", "stage_sort", "stage_semantics", "manager_tracked")
+COLUMNS = (*[column for column in COLUMNS if column != "entity_type"], "category_sort", "stage_sort", "stage_semantics", "manager_tracked")
 
 REF_COLUMNS = ("ref_type", "ref_key", "number_id", "name", "category_id", "sort", "semantics", "department_name", "snapshot")
 
@@ -42,7 +42,7 @@ class MartUnavailable(RuntimeError):
 
 def create_table(client, name, snapshot):
     client.execute(f"""CREATE TABLE {name} (
-        entity_type LowCardinality(String), entity_id Int64, lead_id Int64, title String,
+        entity_id Int64, lead_id Int64, title String,
         source_created_at Nullable(DateTime64(3, 'Europe/Moscow')),
         source_updated_at Nullable(DateTime64(3, 'Europe/Moscow')),
         manager_id Int64, assigned_by_id Int64, manager_name String, department_name String, company_id Int64,
@@ -58,7 +58,7 @@ def create_table(client, name, snapshot):
         history_missing UInt8, visit_stage_keys Array(String), visit_days Array(Nullable(Float64)),
         visit_semantics Array(String), snapshot String,
         category_sort Int64, stage_sort Int64, stage_semantics String, manager_tracked UInt8
-    ) ENGINE = MergeTree ORDER BY (entity_type, entity_id) COMMENT '{snapshot}'""")
+    ) ENGINE = MergeTree ORDER BY entity_id COMMENT '{snapshot}'""")
 
 
 def reference_rows(refs, snapshot):
@@ -247,27 +247,27 @@ class MartReader:
         return refs
 
     @staticmethod
-    def restore(values):
-        row = dict(zip(COLUMNS, values))
-        row["deal_id"] = row["entity_id"] if row["entity_type"] == "deal" else None
+    def restore(values, columns=COLUMNS):
+        row = dict(zip(columns, values))
+        row.pop("entity_type", None)
+        row["deal_id"] = row["entity_id"]
         keys, days, semantics = row.pop("visit_stage_keys"), row.pop("visit_days"), row.pop("visit_semantics")
         row["visited"] = set(keys)
-        if row["entity_type"] == "deal":
-            row["visits"] = {key: {"days": days[index], "semantics": semantics[index]} for index, key in enumerate(keys)}
-        else:
-            row["visit_days"] = {key: days[index] for index, key in enumerate(keys)}
+        row["visits"] = {key: {"days": days[index], "semantics": semantics[index]} for index, key in enumerate(keys)}
         row["amount"], row["opportunity"] = float(row["amount"]), float(row["opportunity"])
         row["is_return_customer"] = None if row["is_return_customer"] is None else bool(row["is_return_customer"])
         row["history_missing"] = bool(row["history_missing"])
         return row
 
-    def select(self, entity_type, parts=(), args=None):
-        args = {**(args or {}), "entity_type": entity_type}
+    def select(self, parts=(), args=None):
+        args = dict(args or {})
         columns = LEGACY_COLUMNS if self.legacy else COLUMNS
-        sql = f"SELECT {', '.join(columns)} FROM {self.table} WHERE entity_type = %(entity_type)s"
+        sql = f"SELECT {', '.join(columns)} FROM {self.table} WHERE 1"
+        if self.legacy:
+            sql += " AND entity_type = 'deal'"
         if parts:
             sql += " AND " + " AND ".join(parts)
-        return [self.restore(row) for row in self.client.execute(sql, args)]
+        return [self.restore(row, columns) for row in self.client.execute(sql, args)]
 
     def check(self):
         if self.legacy:
@@ -308,7 +308,7 @@ class MartReader:
         for field, column in (("category_ids", "category_id"), ("stage_keys", "stage_key"), ("results", "result")):
             if filters.get(field):
                 parts.append(f"{column} IN %({field})s"); args[field] = tuple(filters[field])
-        return self.select("deal", parts, args)
+        return self.select(parts, args)
 
     def options(self, filters, *, faceted=True, personal_manager_ids=None):
         refs, tracking = self.refs, self.refs["tracking"]
@@ -341,8 +341,9 @@ class MartReader:
                 if field != ignore and scoped.get(field):
                     parts.append(f"{deal_column} IN %({field})s")
                     args[field] = tuple(scoped[field])
-            args["entity_type"] = "deal"
-            sql = f"SELECT DISTINCT {column} FROM {getattr(self, 'table', TABLE)} WHERE entity_type = %(entity_type)s"
+            sql = f"SELECT DISTINCT {column} FROM {getattr(self, 'table', TABLE)} WHERE 1"
+            if getattr(self, "legacy", False):
+                sql += " AND entity_type = 'deal'"
             if parts:
                 sql += " AND " + " AND ".join(parts)
             return {row[0] for row in self.client.execute(sql, args)}

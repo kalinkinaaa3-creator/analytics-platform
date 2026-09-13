@@ -16,11 +16,11 @@ class FacetSqlClient:
     """Execute the mart's SELECT DISTINCT facet queries against a small SQL fixture."""
     def __init__(self):
         self.db = sqlite3.connect(":memory:")
-        self.db.execute("CREATE TABLE entities (entity_type TEXT, source_created_at TEXT, manager_id INTEGER, category_id INTEGER, stage_key TEXT, result TEXT, source_id TEXT, lead_id INTEGER)")
-        self.db.executemany("INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [
-            ("deal", "2026-02-02", 10, 0, "0:WON", "S", "web", 1),
-            ("deal", "2026-02-02", 20, 2, "2:NEW", "P", "phone", 0),
-            ("deal", "2026-02-02", 30, 0, "0:NEW", "P", "web", 2),
+        self.db.execute("CREATE TABLE entities (source_created_at TEXT, manager_id INTEGER, category_id INTEGER, stage_key TEXT, result TEXT, source_id TEXT, lead_id INTEGER)")
+        self.db.executemany("INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?, ?)", [
+            ("2026-02-02", 10, 0, "0:WON", "S", "web", 1),
+            ("2026-02-02", 20, 2, "2:NEW", "P", "phone", 0),
+            ("2026-02-02", 30, 0, "0:NEW", "P", "web", 2),
         ])
 
     def execute(self, sql, args):

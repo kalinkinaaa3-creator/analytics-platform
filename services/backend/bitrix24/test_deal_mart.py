@@ -42,7 +42,7 @@ class DealMartTests(TestCase):
         reader = MartReader(self.mart_client(empty=True))
         self.assertEqual(reader.snapshot, "published")
         self.assertEqual(reader.refs["categories"], [])
-        self.assertEqual(reader.select("deal"), [])
+        self.assertEqual(reader.select(), [])
 
     def test_snapshot_switch_while_reading_references_is_rejected(self):
         client = self.mart_client()
