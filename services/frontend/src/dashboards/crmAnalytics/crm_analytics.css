@@ -233,12 +233,17 @@
 .crm-conversion-tooltip > div b { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .crm-table-wrap { position: relative; min-height: 180px; max-height: none; flex: 1 1 auto; }
 .crm-modal .crm-table-wrap table { width: 100%; min-width: 1700px; table-layout: fixed; }
+.crm-modal--lead-details { --crm-detail-column-count: 12; }
+.crm-modal--deal-details { --crm-detail-column-count: 15; }
+.crm-modal--lead-details .crm-table-wrap table,.crm-modal--deal-details .crm-table-wrap table { min-width: calc((var(--crm-detail-column-count) - 2) * 135px + 220px + 150px); }
+.crm-detail-col { width: 135px; }
+.crm-detail-col--title { width: 220px; }
+.crm-detail-col--duration { width: 150px; }
 .crm-modal .crm-table-wrap th > button { max-width: 100%; }
 .crm-modal .crm-table-wrap th:last-child .crm-comparison-head { column-gap: 9px; }
 .crm-modal .crm-table-wrap th:last-child .crm-comparison-head > i { box-sizing: border-box; }
 .crm-modal .crm-table-wrap th:last-child .crm-comparison-head__label { overflow: visible; white-space: normal; overflow-wrap: normal; word-break: normal; hyphens: none; text-overflow: clip; }
-.crm-modal--deal-details .crm-table-wrap th:last-child { width: 150px; box-sizing: border-box; }
-.crm-modal--deal-details .crm-table-wrap th:last-child .crm-comparison-head__label { min-width: min-content; }
+.crm-modal .crm-table-wrap th:last-child .crm-comparison-head__label { min-width: min-content; }
 .crm-modal--lead-details .crm-table-wrap th:nth-child(2),.crm-modal--lead-details .crm-table-wrap td:nth-child(2),.crm-modal--deal-details .crm-table-wrap th:nth-child(3),.crm-modal--deal-details .crm-table-wrap td:nth-child(3) { width: 220px; min-width: 220px; max-width: 220px; box-sizing: border-box; overflow: hidden; white-space: nowrap; }
 .crm-detail-title { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crm-modal--lead-details .crm-table-wrap td:nth-child(n+4):nth-child(-n+8),.crm-modal--deal-details .crm-table-wrap td:nth-child(n+5):nth-child(-n+11) { white-space: normal; overflow-wrap: anywhere; word-break: normal; }
