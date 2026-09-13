@@ -3,7 +3,8 @@ from collections import defaultdict
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from django.db.models import Q
+from django.db.models import Case, JSONField, Q, When
+from django.db.models.fields.json import KeyTransform
 from django.utils import timezone
 
 from bitrix24.models import (
@@ -93,25 +94,35 @@ def histories(entity_type, ids):
 
 
 def enrich_rows(query, refs):
+    # Extract only the three values needed for analytics, not the complete JSON.
+    query = query.annotate(
+        analytics_return_customer=Case(
+            When(raw_payload__has_key="isReturnCustomer", then=KeyTransform("isReturnCustomer", "raw_payload")),
+            default=KeyTransform("IS_RETURN_CUSTOMER", "raw_payload"), output_field=JSONField(),
+        ),
+        analytics_deal_type=KeyTransform("UF_CRM_69B904B3E0AD1", "raw_payload"),
+        analytics_activity=KeyTransform("UF_CRM_64254B7D4853D", "raw_payload"),
+    )
     rows = list(query.values("deal_id", "title", "category_id", "stage_id", "stage_semantic_id", "assigned_by_id",
-                             "lead_id", "company_id", "source_created_at", "source_updated_at", "opportunity", "currency_id", "source_id", "raw_payload"))
+                             "lead_id", "company_id", "source_created_at", "source_updated_at", "opportunity", "currency_id", "source_id",
+                             "analytics_return_customer", "analytics_deal_type", "analytics_activity"))
     events = histories(2, [row["deal_id"] for row in rows])
     now = timezone.now()
     result = []
+    source_names = {item["source_id"]: item["source_name"] for item in refs["sources"]}
     for row in rows:
         user_id = row["assigned_by_id"]
         tracking = refs["tracking"].get(user_id, {})
         row["manager_name"] = refs["users"].get(user_id, {}).get("full_name") or tracking.get("manager_name") or "Менеджер не назначен"
         row["department_name"] = tracking.get("department_name", UNTRACKED_DEPARTMENT_NAME)
         row["category_name"] = refs["category_map"].get(row["category_id"], {}).get("name", str(row["category_id"]))
-        raw = row.pop("raw_payload") or {}
-        return_value = raw.get("isReturnCustomer", raw.get("IS_RETURN_CUSTOMER"))
+        return_value = row.pop("analytics_return_customer")
         row["is_return_customer"] = return_value is True or str(return_value).upper() in ("Y", "TRUE", "1")
-        row["deal_type_id"] = str(raw.get("UF_CRM_69B904B3E0AD1") or "")
+        row["deal_type_id"] = str(row.pop("analytics_deal_type") or "")
         row["deal_type_name"] = refs["deal_types"].get(row["deal_type_id"], row["deal_type_id"])
-        row["activity_id"] = str(raw.get("UF_CRM_64254B7D4853D") or "")
+        row["activity_id"] = str(row.pop("analytics_activity") or "")
         row["activity_name"] = refs["activities"].get(row["activity_id"], row["activity_id"])
-        row["source_name"] = next((item["source_name"] for item in refs["sources"] if item["source_id"] == row.get("source_id")), "")
+        row["source_name"] = source_names.get(row.get("source_id"), "")
         # Calendar grouping follows Moscow business dates, including UTC boundaries.
         if row["source_created_at"]:
             row["source_created_at"] = row["source_created_at"].astimezone(MOSCOW)

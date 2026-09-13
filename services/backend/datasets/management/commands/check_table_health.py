@@ -13,6 +13,11 @@ from analytics.services.bitrix_notify import send_bitrix_message
 
 logger = logging.getLogger("maintenance.table_health")
 
+WORDSTAT_BITRIX_IGNORED_PROBLEMS = {
+    "postgres: device/region sums exceed total demand",
+    "clickhouse_demand: device/region sums exceed total demand",
+}
+
 
 TABLE_CHECKS = [
     {
@@ -952,6 +957,7 @@ class Command(BaseCommand):
                 date_add_column = check.get("date_add_column")
                 data_date_column = check.get("data_date_column")
                 fresh_days = check.get("fresh_days")
+                has_date_add = False
 
                 logger.info("Checking table: %s (%s)", name, table)
 
@@ -975,6 +981,7 @@ class Command(BaseCommand):
                         problems.append(f"{name}: нет колонки {date_add_column}")
                         logger.warning("%s: missing column %s", table, date_add_column)
                     else:
+                        has_date_add = True
                         max_date_add = scalar(
                             cursor,
                             f'''
@@ -1027,8 +1034,16 @@ class Command(BaseCommand):
                         )
 
                         if count_recent <= 0:
+                            update_suffix = ""
+                            if table in ("fb_purchases_raw", "fb_purchases_use"):
+                                last_updated = scalar(
+                                    cursor,
+                                    f'''SELECT MAX("{date_add_column}" AT TIME ZONE 'Europe/Moscow') FROM "{table}"''',
+                                ) if has_date_add else None
+                                last_updated_label = last_updated.strftime("%Y-%m-%d %H:%M") if last_updated else "неизвестна"
+                                update_suffix = f", последняя дата обновления: {last_updated_label}"
                             problems.append(
-                                f"{name}: нет данных за период {period_start} — {yesterday}"
+                                f"{name}: нет данных за период {period_start} — {yesterday}{update_suffix}"
                             )
 
                 ok.append(name)
@@ -1043,7 +1058,10 @@ class Command(BaseCommand):
                 if wordstat["ok"]:
                     wordstat_ok.append("Wordstat")
                 else:
-                    wordstat_problems.extend(f"Wordstat: {problem}" for problem in wordstat["problems"])
+                    wordstat_problems.extend(
+                        f"Wordstat: {problem}" for problem in wordstat["problems"]
+                        if problem not in WORDSTAT_BITRIX_IGNORED_PROBLEMS
+                    )
                 logger.info("Wordstat health: %s", wordstat)
             except Exception as exc:
                 logger.exception("Wordstat health check failed")

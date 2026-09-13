@@ -14,6 +14,7 @@ class PublishedDealRefreshTests(SimpleTestCase):
         self.mart.deals.return_value = [{"deal_id": 1}]
         self.cache = {}
         self.addCleanup(patch.stopall)
+        self.build = patch("bitrix24.api.deal_views.DealDashboardQuery.build", return_value={"cards": {"total": 1}}).start()
         patch("bitrix24.api.deal_views.reader", return_value=self.mart).start()
         patch("bitrix24.api.deal_views.get_dashboard_cache", side_effect=lambda key: self.cache.get(key["snapshot"])).start()
         self.save = patch("bitrix24.api.deal_views.set_dashboard_cache", side_effect=lambda key, value: self.cache.update({key["snapshot"]: value})).start()
@@ -22,9 +23,10 @@ class PublishedDealRefreshTests(SimpleTestCase):
 
     def test_uncached_report_reads_published_snapshot_during_refresh(self):
         result = bundle("deals", self.filters)
-        self.assertEqual(result["current"], [{"deal_id": 1}])
+        self.assertEqual(result["cards"], {"total": 1})
         self.assertEqual(result["snapshot"], "published")
-        self.assertEqual(self.mart.deals.call_count, 3)
+        self.build.assert_called_once()
+        self.mart.deals.assert_not_called()
         self.mart.check.assert_called_once_with()
         self.save.assert_called_once()
 
@@ -37,8 +39,8 @@ class PublishedDealRefreshTests(SimpleTestCase):
     def test_new_publication_does_not_reuse_previous_cached_report(self):
         bundle("deals", self.filters)
         self.mart.snapshot = "new-publication"
-        self.mart.deals.return_value = [{"deal_id": 2}]
+        self.build.return_value = {"cards": {"total": 2}}
         result = bundle("deals", self.filters)
         self.assertEqual(result["snapshot"], "new-publication")
-        self.assertEqual(result["current"], [{"deal_id": 2}])
+        self.assertEqual(result["cards"], {"total": 2})
         self.assertEqual(self.save.call_count, 2)

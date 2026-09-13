@@ -1,13 +1,15 @@
 """Regression cases for deal metrics, publication and actual closure history."""
 from datetime import datetime, date, timedelta
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
+from django.db import connection
 from unittest.mock import Mock, patch
 from decimal import Decimal
 
 
 from bitrix24.models import (BitrixDeal, BitrixDealCategory, BitrixCrmDictionary,
                             BitrixDepartment, BitrixUser, BitrixStageHistory)
-from bitrix24.services.deal_repository import MOSCOW, references, deal_rows
+from bitrix24.services.deal_repository import MOSCOW, references, deal_rows, enrich_rows
 from bitrix24.services.deal_metrics import enrich_deal, metrics, panel
 from bitrix24.services.crm_marts import MartReader, SnapshotChanged, publish
 
@@ -94,6 +96,42 @@ class DealRepositoryTests(TestCase):
         reader = MartReader(client)
         with self.assertRaises(SnapshotChanged):
             reader.check()
+
+    def test_analytics_extracts_only_used_json_values_with_original_fallback(self):
+        payloads = [
+            {"isReturnCustomer": True, "IS_RETURN_CUSTOMER": "N"},
+            {"IS_RETURN_CUSTOMER": "Y"},
+            {"isReturnCustomer": None, "IS_RETURN_CUSTOMER": "Y"},
+            {},
+        ]
+        for index, payload in enumerate(payloads, 1):
+            self.deal(index, None, month=1)
+            BitrixDeal.objects.filter(deal_id=index).update(raw_payload={
+                **payload, "UF_CRM_69B904B3E0AD1": "type-a",
+                "UF_CRM_64254B7D4853D": "activity-b", "COMMENTS": "unused" * 10000,
+            })
+        refs = references()
+        with CaptureQueriesContext(connection) as queries:
+            rows = enrich_rows(BitrixDeal.objects.order_by("deal_id"), refs)
+        self.assertEqual([row["is_return_customer"] for row in rows], [True, True, False, False])
+        self.assertTrue(all(row["deal_type_id"] == "type-a" and row["activity_id"] == "activity-b" for row in rows))
+        self.assertNotRegex(queries[0]["sql"], r'(?:SELECT |, )"bitrix24_deal"\."raw_payload"(?: AS |,)')
+        self.assertTrue(all("raw_payload" not in row for row in rows))
+
+    def test_stage_interval_rebuild_does_not_fetch_history_payload(self):
+        from bitrix24.services.calculators.stage_intervals import rebuild_stage_intervals
+        from bitrix24.models import BitrixStageInterval
+        self.deal(1, None, month=1)
+        for index, month in ((1, 1), (2, 2)):
+            BitrixStageHistory.objects.create(
+                entity_type_id=2, entity_id=1, history_id=index, stage_id="NEW" if index == 1 else "WON",
+                created_at=stamp(month), raw_payload={"unused": "x" * 10000},
+            )
+        with CaptureQueriesContext(connection) as queries:
+            count, affected = rebuild_stage_intervals(entity_type_id=2, calculated_at=stamp(3))
+        self.assertEqual((count, affected), (2, {1}))
+        self.assertEqual(list(BitrixStageInterval.objects.order_by("sequence_number").values_list("duration_seconds", "is_current")), [(31 * 86400, False), (28 * 86400, True)])
+        self.assertTrue(all("raw_payload" not in query["sql"] for query in queries))
 
 
 @override_settings(LEAD_GENERATION_REPORT_CACHE_TIMEOUT=900)

@@ -34,18 +34,7 @@ def enrich_deal(row, histories, stages, now):
     row["stage_key"] = current_key
     row["stage_name"] = stage.get("name") or row["stage_id"] or "Стадия не указана"
     row["result_name"] = RESULT_NAMES[row["result"]]
-    visits = {}
     histories = sorted(histories, key=lambda h: (h["created_at"], h["history_id"]))
-    for index, event in enumerate(histories):
-        key = stage_key(event["category_id"], event["stage_id"])
-        end = histories[index + 1]["created_at"] if index + 1 < len(histories) else now
-        visit = visits.setdefault(key, {"entered_at": event["created_at"], "days": 0})
-        visit["days"] += max(0, (end - event["created_at"]).total_seconds() / 86400)
-    # Current stage is known even when its entry timestamp is missing.
-    visits.setdefault(current_key, {"entered_at": None, "days": None})
-    for key, visit in visits.items():
-        visit["semantics"] = stages.get(key, {}).get("semantics", "")
-    row["visits"] = visits
     # Reopening a deal invalidates its previous closure. Only the final run of
     # terminal history events matching the current outcome can close it now.
     closed_at = None

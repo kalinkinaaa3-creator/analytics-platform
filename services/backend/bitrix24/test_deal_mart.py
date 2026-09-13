@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
 from django.test import TestCase
+from django.core.cache import cache
 
 from bitrix24.services.crm_marts import (
     TABLE, LEGACY_TABLE, REFS, MartReader, SnapshotChanged, publish,
@@ -8,6 +9,9 @@ from bitrix24.services.crm_marts import (
 
 
 class DealMartTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
     def mart_client(self, *, empty=False):
         client = Mock()
         def execute(sql, args=None):
@@ -56,7 +60,7 @@ class DealMartTests(TestCase):
             return execute(sql, args)
         client.execute.side_effect = changing
         with self.assertRaises(SnapshotChanged):
-            MartReader(client)
+            MartReader(client).refs
 
     def test_publication_migrates_view_and_preserves_legacy_physical_tables(self):
         client = Mock()

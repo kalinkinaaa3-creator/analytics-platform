@@ -66,7 +66,7 @@ def rebuild_stage_intervals(
         queryset = queryset.exclude(entity_id__in=BitrixDeal.objects.filter(is_deleted=True).values("deal_id"))
     if entity_ids is not None:
         queryset = queryset.filter(entity_id__in=entity_ids)
-    queryset = queryset.order_by("entity_id", "created_at", "history_id")
+    queryset = queryset.only("history_id", "entity_id", "stage_id", "created_at").order_by("entity_id", "created_at", "history_id")
 
     current_entity_id = None
     current_rows = []

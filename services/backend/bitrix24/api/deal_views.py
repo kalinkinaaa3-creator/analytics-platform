@@ -1,4 +1,3 @@
-from datetime import timedelta
 from io import BytesIO
 
 from django.http import FileResponse
@@ -11,13 +10,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from bitrix24.cache import get_dashboard_cache, set_dashboard_cache
-from bitrix24.services.deal_metrics import metrics, panel, dimension
+from bitrix24.services.deal_metrics import dimension
+from bitrix24.services.deal_dashboard_query import DealDashboardQuery, PARTS
 from bitrix24.services.deal_repository import (
     DEFAULT_CATEGORIES, MOSCOW,
 )
-from bitrix24.services.dashboard_query import previous_comparison_date, group_period_start, previous_group_period, UNTRACKED_DEPARTMENT_NAME
+from bitrix24.services.dashboard_query import group_period_start, UNTRACKED_DEPARTMENT_NAME
 from bitrix24.services.crm_marts import MartReader, MartUnavailable, SnapshotChanged
-from bitrix24.services.department_preferences import display_names, manager_options
+from bitrix24.services.department_preferences import manager_options
 from bitrix24.services.export import _format_duration
 from .views import _can_view_crm
 
@@ -71,37 +71,40 @@ def reader():
         raise Updating() from exc
 
 
-def bundle(section, filters):
-    scope = {key: value for key, value in filters.items() if key not in (
-        "tab", "segment_type", "segment_key", "segment_keys", "detail_category_id", "period", "page", "page_size", "sort_by", "sort_direction")}
-    mart = reader()
-    key = {"crm_section": section, "schema": 5, "snapshot": mart.snapshot, **scope}
+def report_scope(filters):
+    return {key: sorted(value, key=str) if isinstance(value, (list, tuple)) else value
+            for key, value in filters.items() if key not in (
+                "tab", "segment_type", "segment_key", "segment_keys", "detail_category_id", "period",
+                "page", "page_size", "sort_by", "sort_direction")}
+
+
+def bundle(section, filters, mart=None):
+    mart = mart or reader()
+    scope = report_scope(filters)
+    key = {"crm_section": section, "schema": 6, "snapshot": mart.snapshot, **scope}
     cached = get_dashboard_cache(key)
     if cached is not None:
         return cached
-    refs = mart.refs
-    previous = {**scope, "date_start": previous_comparison_date(scope["date_start"], scope["group_by"]),
-                "date_end": previous_comparison_date(scope["date_end"], scope["group_by"])}
-    start = group_period_start(scope["date_start"], scope["group_by"])
-    prior = {**scope, "date_start": previous_group_period(start, scope["group_by"]), "date_end": start - timedelta(days=1)}
-    current, old, prior_rows = mart.deals(scope), mart.deals(previous), mart.deals(prior)
-    if "tracked_manager_ids" in scope:
-        tracked_ids = set(scope["tracked_manager_ids"])
-        for period_rows in (current, old, prior_rows):
-            for row in period_rows:
-                if row["manager_id"] not in tracked_ids:
-                    row["department_name"] = UNTRACKED_DEPARTMENT_NAME
-    result = {"current": current, "previous": old, "prior": prior_rows, "refs": refs}
-    result["comparison_period"] = {"date_start": previous["date_start"], "date_end": previous["date_end"]}
-    result["snapshot"] = mart.snapshot
-    # Refresh builds staging tables; the published snapshot remains readable.
-    # Reject only a publication that changed the snapshot during these queries.
+    result = {**DealDashboardQuery(mart).build(scope), "snapshot": mart.snapshot}
     try:
         mart.check()
     except SnapshotChanged as exc:
         raise Updating() from exc
     set_dashboard_cache(key, result)
     return result
+
+
+def filter_options(mart, filters, personal_ids):
+    scope = report_scope(filters)
+    scope.pop("group_by", None)
+    key = {"deal_options": 1, "snapshot": mart.snapshot, "personal_ids": personal_ids, **scope}
+    cached = get_dashboard_cache(key)
+    if cached is not None:
+        return cached
+    options = mart.options(scope, personal_manager_ids=personal_ids)
+    mart.check()
+    set_dashboard_cache(key, options)
+    return options
 
 
 def rows_for(section, data, filters):
@@ -187,40 +190,53 @@ class DealReportView(APIView):
         selected_ids = [row["manager_id"] for row in personal if row["selected"]]
         filters["tracked_manager_ids"] = selected_ids
         use_personal = filters.pop("use_personal_departments", True) and not filters["department_names"] and not filters["manager_ids"]
-        if part != "filters" and use_personal:
+        option_filters = dict(filters)
+        if use_personal:
             filters["manager_ids"] = selected_ids or [-1]
             filters["exclude_untracked_department"] = False
-        if part == "filters":
-            mart = reader()
-            options = mart.options(filters, personal_manager_ids=selected_ids if use_personal else None)
-            try:
+        mart = reader()
+        try:
+            if part in ("filters", "report"):
+                options = {**filter_options(mart, option_filters, selected_ids if use_personal else None),
+                           "snapshot": mart.snapshot,
+                           "default_department_names": sorted({row["filter_department_name"] for row in personal if row["selected"]}),
+                           "department_preferences": personal}
+                if part == "filters":
+                    mart.check()
+                    return Response(options)
+            if part in ("rows", "export"):
+                query = DealDashboardQuery(mart)
+                if part == "export":
+                    selected = set(selected_ids)
+                    rows = ({**row, "department_name": row["department_name"] if row["manager_id"] in selected else UNTRACKED_DEPARTMENT_NAME}
+                            for row in query.export_rows(filters))
+                    response = export_response(rows, section, filters)
+                    mart.check()
+                    return response
+                summary_key = {"deal_detail_summary": 1, "snapshot": mart.snapshot,
+                               **{key: value for key, value in filters.items() if key not in ("page", "page_size", "sort_by", "sort_direction", "tab")}}
+                summary = get_dashboard_cache(summary_key)
+                if summary is None:
+                    summary = query.detail_summary(filters)
+                    mart.check()
+                    set_dashboard_cache(summary_key, summary)
+                rows = query.detail_rows(filters, limit=filters["page_size"], offset=(filters["page"] - 1) * filters["page_size"])
+                names = {row["manager_id"]: row["display_name"] for row in personal}
+                selected = set(selected_ids)
+                for row in rows:
+                    row["department_name"] = names.get(row["manager_id"], row["department_name"]) if row["manager_id"] in selected else UNTRACKED_DEPARTMENT_NAME
                 mart.check()
-            except SnapshotChanged as exc:
-                raise Updating() from exc
-            return Response({**options, "snapshot": mart.snapshot,
-                             "default_department_names": sorted({row["filter_department_name"] for row in personal if row["selected"]}),
-                             "department_preferences": personal})
-        data = bundle(section, filters)
-        def respond(value):
-            return Response({**value, "snapshot": data["snapshot"]})
-        if part in ("rows", "export"):
-            rows = rows_for(section, data, filters)
-            if part == "export":
-                return export_response(rows, section, filters)
-            start = (filters["page"] - 1) * filters["page_size"]
-            public_rows = [{k: v for k, v in row.items() if k not in ("visits", "visited")} for row in rows[start:start + filters["page_size"]]]
-            names = display_names(request.user)
-            for row in public_rows:
-                row["department_name"] = names.get(row.get("manager_id"), row.get("department_name")) if row.get("manager_id") in selected_ids else UNTRACKED_DEPARTMENT_NAME
-            durations = [row.get("processing_duration_days") for row in rows if row.get("processing_duration_days") is not None]
-            return respond({"items": public_rows, "total": len(rows), "page": filters["page"],
-                             "pages": (len(rows) + filters["page_size"] - 1) // filters["page_size"],
-                             "summary": {"total": len(rows), "amount": sum(row.get("amount") or 0 for row in rows),
-                                         "return_customers": sum(row.get("is_return_customer") is True for row in rows),
-                                         "processing_duration_days": sum(durations) / len(durations) if durations else None}})
-        comparison = data["comparison_period"]
-        if part == "summary":
-            return respond({"cards": metrics(data["current"]), "comparison_period": comparison})
-        if part in ("results", "sources", "managers", "loss-reasons"):
-            return respond({**panel(data["current"], data["previous"], data["prior"], part, filters["group_by"], data["refs"]["stages"]), "comparison_period": comparison})
-        raise serializers.ValidationError("Неизвестный раздел отчёта.")
+                return Response({"items": rows, "total": summary["total"], "page": filters["page"],
+                                 "pages": (summary["total"] + filters["page_size"] - 1) // filters["page_size"],
+                                 "summary": summary, "snapshot": mart.snapshot})
+            data = bundle(section, filters, mart)
+            mart.check()
+            if part == "report":
+                return Response({**data, "options": options})
+            if part == "summary":
+                return Response({"cards": data["cards"], "comparison_period": data["comparison_period"], "snapshot": data["snapshot"]})
+            if part in PARTS:
+                return Response({**data[part], "snapshot": data["snapshot"]})
+        except SnapshotChanged as exc:
+            raise Updating() from exc
+        raise serializers.ValidationError("\u041d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043d\u044b\u0439 \u0440\u0430\u0437\u0434\u0435\u043b \u043e\u0442\u0447\u0451\u0442\u0430.")

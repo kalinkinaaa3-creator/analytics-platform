@@ -90,14 +90,12 @@ export function CrmDealSection({ section, active, tab = "funnel", onTabChange = 
       try {
         for (let attempt = 0; attempt < 2; attempt += 1) {
           try {
-            const [summary, opts] = await Promise.all([crmSectionRequest(section, "summary", filters, controller.signal), crmSectionRequest(section, "filters", filters, controller.signal)]);
-            const parts = ["results", "sources", "managers", "loss-reasons"];
-            const values = await Promise.all(parts.map((part) => crmSectionRequest(section, part, filters, controller.signal)));
-            if (summary.snapshot && [opts, ...values].some((value) => value.snapshot !== summary.snapshot)) {
-              if (attempt === 0) continue;
-              throw Object.assign(new Error("CRM snapshot changed"), { response: { status: 409 } });
+            const result = await crmSectionRequest(section, "report", filters, controller.signal);
+            if (request === generation.current && !controller.signal.aborted) {
+              reportScope.current = scopeKey;
+              setOptions(result.options);
+              setReport(result);
             }
-            if (request === generation.current && !controller.signal.aborted) { reportScope.current = scopeKey; setOptions(opts); setReport({ ...summary, ...Object.fromEntries(parts.map((part, index) => [part, values[index]])) }); }
             break;
           } catch (e) {
             if (e.response?.status !== 409 || attempt > 0 || controller.signal.aborted) throw e;

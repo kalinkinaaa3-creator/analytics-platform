@@ -12,7 +12,7 @@ from .views import (
 
 
 urlpatterns = [
-    re_path(r"^dashboard/(?P<section>deals)/(?P<part>filters|summary|results|sources|managers|loss-reasons|rows|export)/$", DealReportView.as_view(), name="bitrix24-deal-report"),
+    re_path(r"^dashboard/(?P<section>deals)/(?P<part>report|filters|summary|results|sources|managers|loss-reasons|rows|export)/$", DealReportView.as_view(), name="bitrix24-deal-report"),
     path("dashboard/", LeadDashboardView.as_view(), name="bitrix24-dashboard"),
     path("dashboard/filters/", LeadDashboardFiltersView.as_view(), name="bitrix24-filters"),
     path("dashboard/export/", LeadDashboardExportView.as_view(), name="bitrix24-export"),

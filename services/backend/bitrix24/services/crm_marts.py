@@ -4,9 +4,11 @@ from uuid import uuid4
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.functional import cached_property
 
 from analytics.clickhouse.client import get_clickhouse_client
 from bitrix24.models import BitrixDeal
+from bitrix24.cache import get_dashboard_cache, set_dashboard_cache
 from . import deal_repository as source
 
 TABLE = "default.bitrix_deal_analytics"
@@ -27,7 +29,7 @@ COLUMNS = (
     "visit_stage_keys", "visit_days", "visit_semantics", "snapshot",
 )
 LEGACY_COLUMNS = COLUMNS
-COLUMNS = (*[column for column in COLUMNS if column not in ("entity_type", "cycle_days", "stage_days")], "category_sort", "stage_sort", "stage_semantics", "manager_tracked")
+COLUMNS = (*[column for column in COLUMNS if column not in ("entity_type", "cycle_days", "stage_days", "visit_stage_keys", "visit_days", "visit_semantics")], "category_sort", "stage_sort", "stage_semantics", "manager_tracked")
 
 REF_COLUMNS = ("ref_type", "ref_key", "number_id", "name", "category_id", "sort", "semantics", "department_name", "snapshot")
 
@@ -54,8 +56,7 @@ def create_table(client, name, snapshot):
         speed_calculated_at Nullable(DateTime64(3, 'Europe/Moscow')),
         processing_duration_days Nullable(Float64), is_return_customer Nullable(UInt8),
         deal_type_id String, deal_type_name String, activity_id String, activity_name String,
-        history_missing UInt8, visit_stage_keys Array(String), visit_days Array(Nullable(Float64)),
-        visit_semantics Array(String), snapshot String,
+        history_missing UInt8, snapshot String,
         category_sort Int64, stage_sort Int64, stage_semantics String, manager_tracked UInt8
     ) ENGINE = MergeTree ORDER BY entity_id COMMENT '{snapshot}'""")
 
@@ -82,12 +83,6 @@ def reference_rows(refs, snapshot):
 
 
 def storage_row(kind, row, snapshot, now, refs):
-    visits = row.get("visits") or {}
-    keys = sorted((row.get("visited") or set()) if kind == "lead" else visits)
-    days = ([row.get("visit_days", {}).get(key) for key in keys] if kind == "lead"
-            else [visits[key].get("days") for key in keys])
-    semantics = ([""] * len(keys) if kind == "lead"
-                 else [visits[key].get("semantics") or "" for key in keys])
     manager_id = row.get("assigned_by_id", row.get("manager_id")) or 0
     values = {
         "entity_type": kind, "entity_id": row.get("deal_id", row.get("lead_id")) or 0,
@@ -111,7 +106,7 @@ def storage_row(kind, row, snapshot, now, refs):
         "is_return_customer": row.get("is_return_customer"), "deal_type_id": row.get("deal_type_id") or "",
         "deal_type_name": row.get("deal_type_name") or "", "activity_id": row.get("activity_id") or "",
         "activity_name": row.get("activity_name") or "", "history_missing": int(bool(row.get("history_missing"))),
-        "visit_stage_keys": keys, "visit_days": days, "visit_semantics": semantics, "snapshot": snapshot,
+        "snapshot": snapshot,
         "category_sort": refs["category_map"].get(row.get("category_id"), {}).get("sort") or 0,
         "stage_sort": refs["stages"].get(row.get("stage_key"), {}).get("sort") or 0,
         "stage_semantics": refs["stages"].get(row.get("stage_key"), {}).get("semantics") or "",
@@ -196,8 +191,17 @@ class MartReader:
             self.snapshot = metadata[1]
             if not self.snapshot:
                 raise MartUnavailable("CRM ClickHouse snapshot is not published")
-            self.refs = self.published_references()
-            self.check()
+
+    @cached_property
+    def refs(self):
+        key = {"deal_references": 1, "snapshot": self.snapshot}
+        cached = get_dashboard_cache(key)
+        if cached is not None:
+            return cached
+        refs = self.published_references()
+        self.check()
+        set_dashboard_cache(key, refs)
+        return refs
 
     def published_references(self):
         refs = {"categories": [], "category_map": {}, "stages": {}, "sources": [],
@@ -250,9 +254,8 @@ class MartReader:
         for field in ("entity_type", "cycle_days", "stage_days"):
             row.pop(field, None)
         row["deal_id"] = row["entity_id"]
-        keys, days, semantics = row.pop("visit_stage_keys"), row.pop("visit_days"), row.pop("visit_semantics")
-        row["visited"] = set(keys)
-        row["visits"] = {key: {"days": days[index], "semantics": semantics[index]} for index, key in enumerate(keys)}
+        for field in ("visit_stage_keys", "visit_days", "visit_semantics"):
+            row.pop(field, None)
         row["amount"], row["opportunity"] = float(row["amount"]), float(row["opportunity"])
         row["is_return_customer"] = None if row["is_return_customer"] is None else bool(row["is_return_customer"])
         row["history_missing"] = bool(row["history_missing"])
@@ -260,7 +263,7 @@ class MartReader:
 
     def select(self, parts=(), args=None):
         args = dict(args or {})
-        columns = LEGACY_COLUMNS if self.legacy else COLUMNS
+        columns = tuple(column for column in LEGACY_COLUMNS if column not in ("cycle_days", "stage_days", "visit_stage_keys", "visit_days", "visit_semantics")) if self.legacy else COLUMNS
         sql = f"SELECT {', '.join(columns)} FROM {self.table} WHERE 1"
         if self.legacy:
             sql += " AND entity_type = 'deal'"
@@ -302,11 +305,15 @@ class MartReader:
                 parts.append(f"{column} IN %({field})s"); args[field] = tuple(filters[field])
         return parts, args
 
-    def deals(self, filters):
+    def deal_conditions(self, filters):
         parts, args = self.conditions(filters)
         for field, column in (("category_ids", "category_id"), ("stage_keys", "stage_key"), ("results", "result")):
             if filters.get(field):
                 parts.append(f"{column} IN %({field})s"); args[field] = tuple(filters[field])
+        return parts, args
+
+    def deals(self, filters):
+        parts, args = self.deal_conditions(filters)
         return self.select(parts, args)
 
     def options(self, filters, *, faceted=True, personal_manager_ids=None):
