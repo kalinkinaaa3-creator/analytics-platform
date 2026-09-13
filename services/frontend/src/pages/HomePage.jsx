@@ -1,7 +1,7 @@
 export function HomePage() {
   return (
     <>
-      <h2 style={{ fontSize: "34px", color: "black" }}>
+      <h2 style={{ fontSize: "34px", color: "#923e3e" }}>
         Выберите раздел слева
       </h2>
 
