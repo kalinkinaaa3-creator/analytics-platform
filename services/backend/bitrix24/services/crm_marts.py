@@ -9,8 +9,8 @@ from analytics.clickhouse.client import get_clickhouse_client
 from bitrix24.models import BitrixDeal
 from . import deal_repository as source
 
-TABLE = "default.bitrix_crm_entities"
-DEALS = "default.bitrix_deal_analytics"
+TABLE = "default.bitrix_deal_analytics"
+LEGACY_TABLE = "default.bitrix_crm_entities"
 LEGACY_CYCLE = "default.bitrix_full_cycle_analytics"
 REFS = "default.bitrix_crm_references"
 
@@ -24,6 +24,9 @@ COLUMNS = (
     "deal_type_id", "deal_type_name", "activity_id", "activity_name", "history_missing",
     "visit_stage_keys", "visit_days", "visit_semantics", "snapshot",
 )
+LEGACY_COLUMNS = COLUMNS
+COLUMNS = (*COLUMNS, "category_sort", "stage_sort", "stage_semantics", "manager_tracked")
+
 REF_COLUMNS = ("ref_type", "ref_key", "number_id", "name", "category_id", "sort", "semantics", "department_name", "snapshot")
 
 
@@ -35,7 +38,7 @@ class MartUnavailable(RuntimeError):
     pass
 
 
-def create_table(client, name):
+def create_table(client, name, snapshot):
     client.execute(f"""CREATE TABLE {name} (
         entity_type LowCardinality(String), entity_id Int64, lead_id Int64, title String,
         source_created_at Nullable(DateTime64(3, 'Europe/Moscow')),
@@ -51,15 +54,9 @@ def create_table(client, name):
         processing_duration_days Nullable(Float64), is_return_customer Nullable(UInt8),
         deal_type_id String, deal_type_name String, activity_id String, activity_name String,
         history_missing UInt8, visit_stage_keys Array(String), visit_days Array(Nullable(Float64)),
-        visit_semantics Array(String), snapshot String
-    ) ENGINE = MergeTree ORDER BY (entity_type, entity_id)""")
-
-
-def create_ref_table(client, name):
-    client.execute(f"""CREATE TABLE {name} (
-        ref_type LowCardinality(String), ref_key String, number_id Int64, name String,
-        category_id Int64, sort Int64, semantics String, department_name String, snapshot String
-    ) ENGINE = MergeTree ORDER BY (ref_type, ref_key, number_id)""")
+        visit_semantics Array(String), snapshot String,
+        category_sort Int64, stage_sort Int64, stage_semantics String, manager_tracked UInt8
+    ) ENGINE = MergeTree ORDER BY (entity_type, entity_id) COMMENT '{snapshot}'""")
 
 
 def reference_rows(refs, snapshot):
@@ -83,7 +80,7 @@ def reference_rows(refs, snapshot):
     return rows
 
 
-def storage_row(kind, row, snapshot, now):
+def storage_row(kind, row, snapshot, now, refs):
     visits = row.get("visits") or {}
     keys = sorted((row.get("visited") or set()) if kind == "lead" else visits)
     days = ([row.get("visit_days", {}).get(key) for key in keys] if kind == "lead"
@@ -115,25 +112,29 @@ def storage_row(kind, row, snapshot, now):
         "deal_type_name": row.get("deal_type_name") or "", "activity_id": row.get("activity_id") or "",
         "activity_name": row.get("activity_name") or "", "history_missing": int(bool(row.get("history_missing"))),
         "visit_stage_keys": keys, "visit_days": days, "visit_semantics": semantics, "snapshot": snapshot,
+        "category_sort": refs["category_map"].get(row.get("category_id"), {}).get("sort") or 0,
+        "stage_sort": refs["stages"].get(row.get("stage_key"), {}).get("sort") or 0,
+        "stage_semantics": refs["stages"].get(row.get("stage_key"), {}).get("semantics") or "",
+        "manager_tracked": int(manager_id in refs["tracking"]),
     }
     return tuple(values[column] for column in COLUMNS)
 
 
-def recreate_views(client):
-    client.execute(f"DROP VIEW IF EXISTS {LEGACY_CYCLE}")
-    client.execute(f"DROP VIEW IF EXISTS {DEALS}")
-    client.execute(f"CREATE VIEW {DEALS} AS SELECT * FROM {TABLE} WHERE entity_type = 'deal'")
+def table_metadata(client, table=TABLE):
+    database, name = table.split(".", 1)
+    rows = client.execute(
+        "SELECT engine, comment FROM system.tables WHERE database = %(database)s AND name = %(name)s",
+        {"database": database, "name": name},
+    )
+    return rows[0] if rows else None
 
 
 def publish(*, chunk_size=1000):
     client = get_clickhouse_client()
     staging = f"{TABLE}_staging_{uuid4().hex[:12]}"
-    ref_staging = f"{REFS}_staging_{uuid4().hex[:12]}"
     backup = f"{TABLE}_backup_{uuid4().hex[:12]}"
-    ref_backup = f"{REFS}_backup_{uuid4().hex[:12]}"
     snapshot, now = uuid4().hex, timezone.now()
-    create_table(client, staging)
-    create_ref_table(client, ref_staging)
+    create_table(client, staging, snapshot)
     count = 0
     try:
         with transaction.atomic():
@@ -142,11 +143,10 @@ def publish(*, chunk_size=1000):
                 with connection.cursor() as cursor:
                     cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
             refs = source.references()
-            client.execute(f"INSERT INTO {ref_staging} ({', '.join(REF_COLUMNS)}) VALUES", reference_rows(refs, snapshot))
 
-            def write(kind, rows):
+            def write(rows):
                 nonlocal count
-                values = [storage_row(kind, row, snapshot, now) for row in rows]
+                values = [storage_row("deal", row, snapshot, now, refs) for row in rows]
                 if values:
                     client.execute(f"INSERT INTO {staging} ({', '.join(COLUMNS)}) VALUES", values)
                     count += len(values)
@@ -156,47 +156,71 @@ def publish(*, chunk_size=1000):
             for deal_id in ids.iterator(chunk_size=chunk_size):
                 pending.append(deal_id)
                 if len(pending) >= chunk_size:
-                    write("deal", source.enrich_rows(BitrixDeal.objects.filter(deal_id__in=pending), refs)); pending = []
-            write("deal", source.enrich_rows(BitrixDeal.objects.filter(deal_id__in=pending), refs))
+                    write(source.enrich_rows(BitrixDeal.objects.filter(deal_id__in=pending), refs))
+                    pending = []
+            write(source.enrich_rows(BitrixDeal.objects.filter(deal_id__in=pending), refs))
         if client.execute(f"SELECT count() FROM {staging}")[0][0] != count:
             raise RuntimeError("CRM snapshot row count mismatch")
-        if client.execute(f"SELECT count() FROM {ref_staging}")[0][0] != len(reference_rows(refs, snapshot)):
-            raise RuntimeError("CRM reference snapshot row count mismatch")
-        # Existing views depend on the old table schema (including payload),
-        # so remove them before replacing the physical table.
-        client.execute(f"DROP VIEW IF EXISTS {LEGACY_CYCLE}")
-        client.execute(f"DROP VIEW IF EXISTS {DEALS}")
-        entity_exists = client.execute(f"EXISTS TABLE {TABLE}")[0][0]
-        refs_exist = client.execute(f"EXISTS TABLE {REFS}")[0][0]
-        if entity_exists and refs_exist:
-            client.execute(f"RENAME TABLE {TABLE} TO {backup}, {staging} TO {TABLE}, {REFS} TO {ref_backup}, {ref_staging} TO {REFS}")
-            client.execute(f"DROP TABLE {backup}")
-            client.execute(f"DROP TABLE {ref_backup}")
-        elif entity_exists:
-            client.execute(f"RENAME TABLE {TABLE} TO {backup}, {staging} TO {TABLE}, {ref_staging} TO {REFS}")
-            client.execute(f"DROP TABLE {backup}")
+        metadata = table_metadata(client)
+        if metadata is None:
+            client.execute(f"RENAME TABLE {staging} TO {TABLE}")
+        elif metadata[0] == "View":
+            # One-time conversion: retain the legacy physical tables for rollback.
+            # Readers can use them throughout the initial publication.
+            client.execute(f"RENAME TABLE {TABLE} TO {backup}, {staging} TO {TABLE}")
+            client.execute(f"DROP VIEW IF EXISTS {backup}")
         else:
-            client.execute(f"RENAME TABLE {staging} TO {TABLE}, {ref_staging} TO {REFS}")
-        recreate_views(client)
+            client.execute(f"EXCHANGE TABLES {TABLE} AND {staging}")
     finally:
         client.execute(f"DROP TABLE IF EXISTS {staging}")
-        client.execute(f"DROP TABLE IF EXISTS {ref_staging}")
-        client.execute(f"DROP TABLE IF EXISTS {backup}")
-        client.execute(f"DROP TABLE IF EXISTS {ref_backup}")
     return count
 
 
 class MartReader:
     def __init__(self, client=None):
         self.client = client or get_clickhouse_client()
-        if not self.client.execute("EXISTS TABLE " + TABLE)[0][0] or not self.client.execute("EXISTS TABLE " + REFS)[0][0]:
-            raise MartUnavailable("CRM ClickHouse snapshot is not published")
-        rows = self.client.execute(f"SELECT DISTINCT snapshot FROM {TABLE}")
-        ref_rows = self.client.execute(f"SELECT {', '.join(REF_COLUMNS)} FROM {REFS} ORDER BY ref_type, ref_key, number_id")
-        if len(rows) != 1 or not ref_rows or {row[-1] for row in ref_rows} != {rows[0][0]}:
-            raise MartUnavailable("CRM ClickHouse snapshot is not published")
-        self.snapshot = rows[0][0]
-        self.refs = self.restore_refs(ref_rows)
+        metadata = table_metadata(self.client)
+        self.legacy = metadata is None or metadata[0] == "View"
+        self.table = LEGACY_TABLE if self.legacy else TABLE
+        if self.legacy:
+            if not self.client.execute("EXISTS TABLE " + LEGACY_TABLE)[0][0] or not self.client.execute("EXISTS TABLE " + REFS)[0][0]:
+                raise MartUnavailable("CRM ClickHouse snapshot is not published")
+            rows = self.client.execute(f"SELECT DISTINCT snapshot FROM {LEGACY_TABLE}")
+            ref_rows = self.client.execute(f"SELECT {', '.join(REF_COLUMNS)} FROM {REFS} ORDER BY ref_type, ref_key, number_id")
+            if len(rows) != 1 or not ref_rows or {row[-1] for row in ref_rows} != {rows[0][0]}:
+                raise MartUnavailable("CRM ClickHouse snapshot is not published")
+            self.snapshot = rows[0][0]
+            self.refs = self.restore_refs(ref_rows)
+        else:
+            # Table metadata also identifies a valid, completely empty snapshot.
+            self.snapshot = metadata[1]
+            if not self.snapshot:
+                raise MartUnavailable("CRM ClickHouse snapshot is not published")
+            self.refs = self.published_references()
+            self.check()
+
+    def published_references(self):
+        refs = {"categories": [], "category_map": {}, "stages": {}, "sources": [],
+                "tracking": {}, "users": {}, "deal_types": {}, "activities": {}}
+        def distinct(columns):
+            return self.client.execute(f"SELECT DISTINCT {columns} FROM {TABLE}")
+        for key, name, sort in distinct("category_id, category_name, category_sort"):
+            item = {"category_id": key, "name": name, "sort": sort}
+            refs["categories"].append(item)
+            refs["category_map"][key] = item
+        for key, stage_id, name, category, category_name, category_sort, sort, semantics in distinct(
+            "stage_key, stage_id, stage_name, category_id, category_name, category_sort, stage_sort, stage_semantics"
+        ):
+            refs["stages"][key] = {"key": key, "status_id": stage_id, "name": name,
+                "category_id": category, "category_name": category_name, "category_sort": category_sort,
+                "sort": sort, "semantics": semantics}
+        for key, name, department, tracked in distinct("manager_id, manager_name, department_name, manager_tracked"):
+            refs["users"][key] = {"user_id": key, "full_name": name}
+            if tracked:
+                refs["tracking"][key] = {"user_id": key, "manager_name": name, "department_name": department}
+        refs["sources"] = [{"source_id": key, "source_name": name} for key, name in distinct("source_id, source_name") if key]
+        refs["categories"].sort(key=lambda row: (row["sort"], row["category_id"]))
+        return refs
 
     @staticmethod
     def restore_refs(values):
@@ -237,15 +261,19 @@ class MartReader:
 
     def select(self, entity_type, parts=(), args=None):
         args = {**(args or {}), "entity_type": entity_type}
-        sql = f"SELECT {', '.join(COLUMNS)} FROM {TABLE} WHERE entity_type = %(entity_type)s"
+        columns = LEGACY_COLUMNS if self.legacy else COLUMNS
+        sql = f"SELECT {', '.join(columns)} FROM {self.table} WHERE entity_type = %(entity_type)s"
         if parts:
             sql += " AND " + " AND ".join(parts)
         return [self.restore(row) for row in self.client.execute(sql, args)]
 
     def check(self):
-        entity = self.client.execute(f"SELECT DISTINCT snapshot FROM {TABLE}")
-        refs = self.client.execute(f"SELECT DISTINCT snapshot FROM {REFS}")
-        if entity != [(self.snapshot,)] or refs != [(self.snapshot,)]:
+        if self.legacy:
+            entity = self.client.execute(f"SELECT DISTINCT snapshot FROM {LEGACY_TABLE}")
+            refs = self.client.execute(f"SELECT DISTINCT snapshot FROM {REFS}")
+            if entity != [(self.snapshot,)] or refs != [(self.snapshot,)]:
+                raise SnapshotChanged("CRM snapshot changed during the request")
+        elif table_metadata(self.client) != ("MergeTree", self.snapshot):
             raise SnapshotChanged("CRM snapshot changed during the request")
 
     def conditions(self, filters):
@@ -312,7 +340,7 @@ class MartReader:
                     parts.append(f"{deal_column} IN %({field})s")
                     args[field] = tuple(scoped[field])
             args["entity_type"] = "deal"
-            sql = f"SELECT DISTINCT {column} FROM {TABLE} WHERE entity_type = %(entity_type)s"
+            sql = f"SELECT DISTINCT {column} FROM {getattr(self, 'table', TABLE)} WHERE entity_type = %(entity_type)s"
             if parts:
                 sql += " AND " + " AND ".join(parts)
             return {row[0] for row in self.client.execute(sql, args)}

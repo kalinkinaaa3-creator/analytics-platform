@@ -96,7 +96,13 @@ def filtered_lead_analytics_queryset(
             "low_quality_status": "status_id",
         }
         segment_field = segment_fields[segment_type]
-        if segment_type == "manager" and segment_keys:
+        if segment_type == "source":
+            source_keys = list(segment_keys) if segment_keys else [segment_key]
+            source_filter = Q(source_id__in=[key for key in source_keys if key != "__missing_source__"])
+            if "__missing_source__" in source_keys:
+                source_filter |= Q(source_id="") | Q(source_id__isnull=True) | Q(source_name="") | Q(source_name__isnull=True)
+            queryset = queryset.filter(source_filter)
+        elif segment_type == "manager" and segment_keys:
             assigned_keys = [key for key in segment_keys if key != "__unassigned__"]
             manager_filter = Q(manager_id__in=assigned_keys)
             if "__unassigned__" in segment_keys:

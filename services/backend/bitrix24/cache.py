@@ -11,7 +11,7 @@ BITRIX24_CACHE_TIMEOUT = 60 * 15
 def dashboard_cache_key(payload) -> str:
     serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
     digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
-    return f"{BITRIX24_CACHE_PREFIX}:dashboard:v12:{digest}"
+    return f"{BITRIX24_CACHE_PREFIX}:dashboard:v13:{digest}"
 
 
 def get_dashboard_cache(payload):

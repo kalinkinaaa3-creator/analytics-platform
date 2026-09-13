@@ -16,9 +16,9 @@ from bitrix24.services.deal_repository import (
     DEFAULT_CATEGORIES, MOSCOW,
 )
 from bitrix24.services.dashboard_query import previous_comparison_date, group_period_start, previous_group_period, UNTRACKED_DEPARTMENT_NAME
-from bitrix24.services.refresh import refresh_state
 from bitrix24.services.crm_marts import MartReader, MartUnavailable, SnapshotChanged
 from bitrix24.services.department_preferences import display_names, manager_options
+from bitrix24.services.export import _format_duration
 from .views import _can_view_crm
 
 
@@ -67,6 +67,8 @@ def reader():
         return MartReader()
     except MartUnavailable as exc:
         raise NotPublished() from exc
+    except SnapshotChanged as exc:
+        raise Updating() from exc
 
 
 def bundle(section, filters):
@@ -77,8 +79,6 @@ def bundle(section, filters):
     cached = get_dashboard_cache(key)
     if cached is not None:
         return cached
-    if refresh_state().get("running"):
-        raise Updating()
     refs = mart.refs
     previous = {**scope, "date_start": previous_comparison_date(scope["date_start"], scope["group_by"]),
                 "date_end": previous_comparison_date(scope["date_end"], scope["group_by"])}
@@ -94,9 +94,8 @@ def bundle(section, filters):
     result = {"current": current, "previous": old, "prior": prior_rows, "refs": refs}
     result["comparison_period"] = {"date_start": previous["date_start"], "date_end": previous["date_end"]}
     result["snapshot"] = mart.snapshot
-    # Do not cache a result when a load started while its queries were running.
-    if refresh_state().get("running"):
-        raise Updating()
+    # Refresh builds staging tables; the published snapshot remains readable.
+    # Reject only a publication that changed the snapshot during these queries.
     try:
         mart.check()
     except SnapshotChanged as exc:
@@ -126,7 +125,7 @@ DEAL_EXPORT_COLUMNS = [
     ("category_name", "Воронка"), ("stage_name", "Стадия"), ("source_name", "Источник"),
     ("activity_name", "Мероприятие"), ("source_created_at", "Дата создания"),
     ("speed_calculated_at", "Скорость рассчитана по"), ("amount", "Сумма, руб"),
-    ("processing_duration_days", "Скорость обработки, дней"),
+    ("processing_duration_days", "Скорость обработки"),
 ]
 
 
@@ -157,6 +156,10 @@ def export_response(rows, section, filters):
     sheet.append(header_cells)
     for row in rows:
         row = dict(row)
+        duration_days = row.get("processing_duration_days")
+        row["processing_duration_days"] = _format_duration(
+            duration_days * 86400 if duration_days is not None else None
+        )
         sheet.append([cell(row.get(key)) for key, _ in columns])
     info = book.create_sheet("Условия")
     info.append(["Раздел", section])
@@ -189,7 +192,12 @@ class DealReportView(APIView):
             filters["exclude_untracked_department"] = False
         if part == "filters":
             mart = reader()
-            return Response({**mart.options(filters, personal_manager_ids=selected_ids if use_personal else None), "snapshot": mart.snapshot,
+            options = mart.options(filters, personal_manager_ids=selected_ids if use_personal else None)
+            try:
+                mart.check()
+            except SnapshotChanged as exc:
+                raise Updating() from exc
+            return Response({**options, "snapshot": mart.snapshot,
                              "default_department_names": sorted({row["filter_department_name"] for row in personal if row["selected"]}),
                              "department_preferences": personal})
         data = bundle(section, filters)

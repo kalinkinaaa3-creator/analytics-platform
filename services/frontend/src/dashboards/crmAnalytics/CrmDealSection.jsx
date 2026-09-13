@@ -1,7 +1,7 @@
 import { SummaryTableFrame } from "./SummaryTableFrame";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DateRangePicker } from "../../components/DateRangePicker";
-import { MultiSelect, DynamicsChart, FormulaHeader, GlobalSpinner, ConversionModal, CrmToast, DeltaMetric, InlineDelta } from "./CrmAnalyticsDashboard";
+import { MultiSelect, DynamicsChart, FormulaHeader, periodLabel, GlobalSpinner, ConversionModal, CrmToast, DeltaMetric, InlineDelta } from "./CrmAnalyticsDashboard";
 import { crmSectionRequest, exportCrmSection } from "./crmDealApi";
 
 const GROUPS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"], ["year", "Год"]];
@@ -40,22 +40,13 @@ function DealSummaryTable({ report, kind, onSelect, categories, comparisonPeriod
 const DEAL_DETAIL_COLUMNS = [["deal_id", "ID сделки"], ["lead_id", "ID лида"], ["title", "Наименование сделки"], ["is_return_customer", "Повторная сделка"], ["deal_type_name", "Тип"], ["manager_name", "Менеджер"], ["department_name", "Подразделение"], ["category_name", "Воронка"], ["stage_name", "Стадия"], ["source_name", "Источник"], ["activity_name", "Мероприятие"], ["source_created_at", "Дата создания"], ["speed_calculated_at", "Скорость рассчитана по"], ["amount", "Сумма, руб"], ["processing_duration_days", "Скорость обработки"]];
 const humanDuration = (days) => { if (days == null) return "—"; const seconds = Math.max(0, Math.round(Number(days) * 86400)); const wholeDays = Math.floor(seconds / 86400); const hours = Math.floor((seconds % 86400) / 3600); return wholeDays ? `${wholeDays} дн. ${hours} час.` : hours ? `${hours} час.` : `${Math.max(1, Math.round(seconds / 60))} мин.`; };
 const periodCaption = (start, end) => `${new Date(`${start}T00:00:00`).toLocaleDateString("ru-RU")} — ${new Date(`${end}T00:00:00`).toLocaleDateString("ru-RU")}`;
-function groupedPeriodCaption(period, groupBy, selectedStart, selectedEnd) {
-  if (!period) return null;
-  const start = new Date(`${period}T00:00:00Z`); const end = new Date(start);
-  if (groupBy === "week") end.setUTCDate(end.getUTCDate() + 6);
-  else if (groupBy === "month") { end.setUTCMonth(end.getUTCMonth() + 1); end.setUTCDate(0); }
-  else if (groupBy === "year") { end.setUTCFullYear(end.getUTCFullYear() + 1); end.setUTCDate(0); }
-  const lower = new Date(`${selectedStart}T00:00:00Z`); const upper = new Date(`${selectedEnd}T00:00:00Z`);
-  if (start < lower) start.setTime(lower.getTime()); if (end > upper) end.setTime(upper.getTime());
-  return periodCaption(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10));
-}
+
 function Details({ state, data, busy, onClose, onChange, onExport, filters }) {
   const tableHeadRef = useRef(null); const [tableHeadHeight, setTableHeadHeight] = useState(52);
   useLayoutEffect(() => { const node = tableHeadRef.current; if (!node) return undefined; const update = () => setTableHeadHeight(Math.ceil(node.getBoundingClientRect().height)); update(); const observer = new ResizeObserver(update); observer.observe(node); return () => observer.disconnect(); }, [state]);
   if (!state) return null;
   const columns = DEAL_DETAIL_COLUMNS;
-  const speedHelp = ["Завершённая сделка: (дата входа в текущую финальную стадию − дата создания сделки) / 86 400 сек.", "Сделка в работе: (дата расчёта − дата создания сделки) / 86 400 сек.", "В строке «Итого» показывается средняя скорость обработки выбранных сделок."];
+  const speedHelp = ["Завершённая сделка: (дата перехода в текущую финальную стадию − дата создания сделки) / 86 400 сек.", "Сделка в работе: (дата расчёта − дата создания сделки) / 86 400 сек.", "В строке «Итого» показывается средняя скорость обработки выбранных сделок."];
   const displayValue = (row, key) => {
     if (key === "title") return <span className="crm-detail-title" title={row[key] || ""}>{row[key] || "—"}</span>;
     if (key === "is_return_customer") return <small className="crm-customer-badge">{row[key] ? "Повторная" : "Новая"}</small>;
@@ -67,7 +58,7 @@ function Details({ state, data, busy, onClose, onChange, onExport, filters }) {
     if (typeof row[key] === "number") return format(row[key], key.endsWith("days") ? 1 : 0);
     return row[key] || "—";
   };
-  return <div className="crm-modal crm-modal--deal-details" role="dialog" aria-modal="false" aria-label={state.title}><div className="crm-modal__card"><div className="crm-modal__header"><div><h2>{state.title}</h2><p>{groupedPeriodCaption(state.period, filters.group_by, filters.date_start, filters.date_end) || periodCaption(filters.date_start, filters.date_end)} · найдено {format(data.total)}</p></div><div><button className="crm-action" onClick={onExport}>Экспорт</button><button type="button" className="crm-close" onClick={onClose} aria-label="Закрыть">×</button></div></div><div className="crm-table-wrap" style={{ "--crm-detail-header-height": `${tableHeadHeight}px` }}><table><thead ref={tableHeadRef}><tr>{columns.map(([key, label]) => <th key={key}><button type="button" onClick={() => onChange({ ...state, page: 1, sort_by: key, sort_direction: state.sort_by === (key) && state.sort_direction === "desc" ? "asc" : "desc" })}>{key === "processing_duration_days" ? <FormulaHeader formulas={speedHelp}>{label}</FormulaHeader> : label}<i className={state.sort_by === key ? "is-active" : ""}>{state.sort_by === key ? (state.sort_direction === "asc" ? "↑" : "↓") : "↕"}</i></button></th>)}</tr></thead><tbody>{!busy && <tr className="crm-detail-summary"><td>Итого</td><td>—</td><td>{dealsLabel(data.summary?.total)}</td><td>{format(data.summary?.return_customers)} повторных</td>{Array.from({ length: 9 }, (_, index) => <td key={index}>—</td>)}<td>{format(data.summary?.amount)}</td><td>{humanDuration(data.summary?.processing_duration_days)}</td></tr>}{!busy && (data.items || []).map((row, index) => <tr key={`${row.lead_id}-${row.deal_id}-${index}`}>{columns.map(([key]) => <td key={key}>{displayValue(row, key)}</td>)}</tr>)}</tbody></table>{busy && <div className="crm-loading">Загрузка данных…</div>}</div><div className="crm-pagination"><button type="button" disabled={busy || state.page <= 1} onClick={() => onChange({ ...state, page: state.page - 1 })}>Назад</button><span>Страница {state.page} из {data.pages || 1}</span><button type="button" disabled={busy || state.page >= (data.pages || 1)} onClick={() => onChange({ ...state, page: state.page + 1 })}>Далее</button></div></div></div>;
+  return <div className="crm-modal crm-modal--deal-details" role="dialog" aria-modal="false" aria-label={state.title}><div className="crm-modal__card"><div className="crm-modal__header"><div><h2>{state.title}</h2><p>{state.period ? periodLabel(state.period, filters.group_by) : periodCaption(filters.date_start, filters.date_end)} · найдено {format(data.total)}</p></div><div><button className="crm-action" onClick={onExport}>Экспорт</button><button type="button" className="crm-close" onClick={onClose} aria-label="Закрыть">×</button></div></div><div className="crm-table-wrap" style={{ "--crm-detail-header-height": `${tableHeadHeight}px` }}><table><thead ref={tableHeadRef}><tr>{columns.map(([key, label]) => <th key={key}><button type="button" onClick={() => onChange({ ...state, page: 1, sort_by: key, sort_direction: state.sort_by === (key) && state.sort_direction === "desc" ? "asc" : "desc" })}>{key === "processing_duration_days" ? <FormulaHeader formulas={speedHelp}>{label}</FormulaHeader> : label}<i className={state.sort_by === key ? "is-active" : ""}>{state.sort_by === key ? (state.sort_direction === "asc" ? "↑" : "↓") : "↕"}</i></button></th>)}</tr></thead><tbody>{!busy && <tr className="crm-detail-summary"><td>Итого</td><td>—</td><td>{dealsLabel(data.summary?.total)}</td><td>{format(data.summary?.return_customers)} повторных</td>{Array.from({ length: 9 }, (_, index) => <td key={index}>—</td>)}<td>{format(data.summary?.amount)}</td><td>{humanDuration(data.summary?.processing_duration_days)}</td></tr>}{!busy && (data.items || []).map((row, index) => <tr key={`${row.lead_id}-${row.deal_id}-${index}`}>{columns.map(([key]) => <td key={key}>{displayValue(row, key)}</td>)}</tr>)}</tbody></table>{busy && <div className="crm-loading">Загрузка данных…</div>}</div><div className="crm-pagination"><button type="button" disabled={busy || state.page <= 1} onClick={() => onChange({ ...state, page: state.page - 1 })}>Назад</button><span>Страница {state.page} из {data.pages || 1}</span><button type="button" disabled={busy || state.page >= (data.pages || 1)} onClick={() => onChange({ ...state, page: state.page + 1 })}>Далее</button></div></div></div>;
 }
 
 export function CrmDealSection({ section, active, tab = "funnel", onTabChange = () => {}, resetToken = 0 }) {
@@ -84,9 +75,11 @@ export function CrmDealSection({ section, active, tab = "funnel", onTabChange = 
   const [conversion, setConversion] = useState(false);
   const [exporting, setExporting] = useState(false);
   const generation = useRef(0);
+  const reportScope = useRef(null);
   const previousResetToken = useRef(resetToken);
   useEffect(() => { if (previousResetToken.current === resetToken) return; previousResetToken.current = resetToken; setFilters(defaults()); setModal(null); setConversion(false); }, [resetToken]);
   const requestKey = JSON.stringify([section, filters, version, resetToken]);
+  const scopeKey = JSON.stringify([section, filters, resetToken]);
   const loading = settledKey !== requestKey;
   useEffect(() => { const receive = (event) => { if (event.detail?.dashboard === "CRMAnalytics" && !["running", "failed"].includes(event.detail.status)) setVersion((old) => old + 1); }; window.addEventListener("dashboard:updated", receive); return () => window.removeEventListener("dashboard:updated", receive); }, []);
   useEffect(() => {
@@ -96,22 +89,28 @@ export function CrmDealSection({ section, active, tab = "funnel", onTabChange = 
       setError("");
       try {
         for (let attempt = 0; attempt < 2; attempt += 1) {
-          const [summary, opts] = await Promise.all([crmSectionRequest(section, "summary", filters, controller.signal), crmSectionRequest(section, "filters", filters, controller.signal)]);
-          const parts = ["results", "sources", "managers", "loss-reasons"];
-          const values = await Promise.all(parts.map((part) => crmSectionRequest(section, part, filters, controller.signal)));
-          if (summary.snapshot && [opts, ...values].some((value) => value.snapshot !== summary.snapshot)) {
-            if (attempt === 0) continue;
-            throw new Error("CRM snapshot changed");
+          try {
+            const [summary, opts] = await Promise.all([crmSectionRequest(section, "summary", filters, controller.signal), crmSectionRequest(section, "filters", filters, controller.signal)]);
+            const parts = ["results", "sources", "managers", "loss-reasons"];
+            const values = await Promise.all(parts.map((part) => crmSectionRequest(section, part, filters, controller.signal)));
+            if (summary.snapshot && [opts, ...values].some((value) => value.snapshot !== summary.snapshot)) {
+              if (attempt === 0) continue;
+              throw Object.assign(new Error("CRM snapshot changed"), { response: { status: 409 } });
+            }
+            if (request === generation.current && !controller.signal.aborted) { reportScope.current = scopeKey; setOptions(opts); setReport({ ...summary, ...Object.fromEntries(parts.map((part, index) => [part, values[index]])) }); }
+            break;
+          } catch (e) {
+            if (e.response?.status !== 409 || attempt > 0 || controller.signal.aborted) throw e;
+            await new Promise((resolve) => setTimeout(resolve, 300));
+            if (controller.signal.aborted) return;
           }
-          if (request === generation.current && !controller.signal.aborted) { setOptions(opts); setReport({ ...summary, ...Object.fromEntries(parts.map((part, index) => [part, values[index]])) }); }
-          break;
         }
-      } catch (e) { if (!controller.signal.aborted) { setReport(null); setError(e.response?.data?.detail || "Не удалось загрузить отчёт CRM."); } }
+      } catch (e) { if (!controller.signal.aborted) { if (e.response?.status !== 409 || reportScope.current !== scopeKey) setReport(null); setError(e.response?.data?.detail || "Не удалось загрузить отчёт CRM."); } }
       finally { if (!controller.signal.aborted) setSettledKey(requestKey); }
     };
     const timer = setTimeout(load, 0);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [section, active, filters, version, requestKey, settledKey]);
+  }, [section, active, filters, version, requestKey, settledKey, scopeKey]);
   useEffect(() => {
     if (!modal || !active) return undefined;
     const controller = new AbortController();
@@ -138,7 +137,7 @@ export function CrmDealSection({ section, active, tab = "funnel", onTabChange = 
     <MultiSelect label="Статус" options={options.results ?? RESULTS} selected={filters.results} valueKey="id" labelKey="name" onChange={(value) => change({ results: value })} /><MultiSelect label="Стадия" options={options.stages.map((s) => ({ ...s, label: `${s.category_name} · ${s.name}` }))} selected={filters.stage_keys} valueKey="key" labelKey="label" onChange={(value) => change({ stage_keys: value })} />
     <DateRangePicker start={filters.date_start} end={filters.date_end} onChange={({ start, end }) => change({ date_start: start, date_end: end })} />
     <div className="crm-filter crm-group-filter"><span>Группировка</span><div>{GROUPS.map(([key, label]) => <button key={key} className={filters.group_by === key ? "active" : ""} onClick={() => change({ group_by: key })}>{label}</button>)}</div></div>
-    <div className="crm-filter crm-group-filter crm-lead-link-filter"><span>Связь с лидом <span className="crm-filter-help" tabIndex={0}><i aria-hidden="true">i</i><span role="tooltip">Только сделки, имеющие прямую связь с исходным лидом</span></span></span><div><button type="button" className={filters.lead_link === "all" ? "active" : ""} onClick={() => change({ lead_link: "all" })}>Все сделки</button><button type="button" className={filters.lead_link === "linked" ? "active" : ""} onClick={() => change({ lead_link: "linked" })}>Из лидов</button></div></div>
+    <div className="crm-filter crm-group-filter crm-lead-link-filter"><span>Связь с лидом</span><div><button type="button" className={filters.lead_link === "all" ? "active" : ""} onClick={() => change({ lead_link: "all" })}>Все сделки</button><button type="button" className={filters.lead_link === "linked" ? "active" : ""} onClick={() => change({ lead_link: "linked" })}>Из лидов <span className="crm-filter-help" tabIndex={0}><i aria-hidden="true">i</i><span role="tooltip">Только сделки, имеющие прямую связь с лидом</span></span></button></div></div>
   </div></section>
     {error && <div className="crm-toast-stack" aria-live="polite"><CrmToast message={error} onClose={() => setError("")} /></div>}{report && <><Cards items={cardItems} />{cards.missing_history > 0 && <p className="crm-cohort-note">Есть записи без истории стадий: {format(cards.missing_history)}. Неизвестные даты и длительности показаны прочерком.</p>}<nav className="crm-tabs"><button className={tab === "funnel" ? "active" : ""} onClick={() => setTab("funnel")}>Статусы и источники сделок</button><button className={tab === "managers" ? "active" : ""} onClick={() => setTab("managers")}>Менеджеры и эффективность сделок</button></nav>{cards.total ? <section className="crm-chart-grid">{kinds.map(([kind, title], index) => <DynamicsChart key={kind} title={title} rows={report[kind]?.rows || []} groupBy={filters.group_by} segmentType={kind} tooltipSide={index === 0 ? "right" : "left"} dimensionOrder={kind === "stages" || kind === "results" ? (report[kind]?.summary || []).map((row) => row.key) : undefined} onOpen={open} summaryContent={<DealSummaryTable kind={kind} report={report[kind] || {}} categories={options.categories} comparisonPeriod={report[kind]?.comparison_period} onSelect={(key) => open(kind, key, null, title)} />} />)}</section> : <p className="crm-empty">По выбранным условиям сделки не найдены</p>}</>}
     {(loading || exporting) && <GlobalSpinner />}{conversion && <ConversionModal open rows={report?.results?.rows || []} groupBy={filters.group_by} dateStart={filters.date_start} dateEnd={filters.date_end} onClose={() => setConversion(false)} />}<Details filters={filters} state={modal} data={details} busy={detailLoading} onClose={() => setModal(null)} onChange={setModal} onExport={() => exportRows(true)} />

@@ -268,7 +268,11 @@ class LeadDashboardQuery:
 
     DIMENSIONS = {
         "dashboard_status": ("dashboard_status", "dashboard_status", "1", "1"),
-        "source": ("source_id", "if(source_name = '', source_id, source_name)", "1", "1"),
+        "source": (
+            "if(ifNull(source_id, '') = '' OR ifNull(source_name, '') = '', '__missing_source__', source_id)",
+            "if(ifNull(source_id, '') = '' OR ifNull(source_name, '') = '', 'Источник не указан', source_name)",
+            "1", "1",
+        ),
         "manager": (
             "ifNull(toString(manager_id), '__unassigned__')",
             "if(manager_id IS NULL, 'Менеджер не назначен', "

@@ -70,25 +70,23 @@ class DealRepositoryTests(TestCase):
     def test_publication_checks_counts_before_atomic_exchange(self):
         self.deal(11, 1)
         client = Mock()
-        from bitrix24.services.crm_marts import reference_rows
-        ref_count = len(reference_rows(references(), "generation"))
-        client.execute.side_effect = lambda sql, *args: ([(ref_count if "references_staging" in sql else 1,)] if sql.startswith("SELECT count()") else [(1,)] if sql.startswith("EXISTS TABLE") else [])
+        client.execute.side_effect = lambda sql, *args: ([(1,)] if sql.startswith("SELECT count()") else [("MergeTree", "old")] if sql.startswith("SELECT engine") else [])
         with patch("bitrix24.services.crm_marts.get_clickhouse_client", return_value=client):
             self.assertEqual(publish(chunk_size=1), 1)
         calls = [call.args[0] for call in client.execute.call_args_list]
-        self.assertEqual(sum(sql.startswith("RENAME TABLE") for sql in calls), 1)
-        self.assertLess(next(i for i, sql in enumerate(calls) if sql.startswith("SELECT count()")), next(i for i, sql in enumerate(calls) if sql.startswith("RENAME TABLE")))
+        self.assertEqual(sum(sql.startswith("EXCHANGE TABLES") for sql in calls), 1)
+        self.assertLess(next(i for i, sql in enumerate(calls) if sql.startswith("SELECT count()")), next(i for i, sql in enumerate(calls) if sql.startswith("EXCHANGE TABLES")))
         client.reset_mock()
         client.execute.side_effect = lambda sql, *args: ([(0,)] if sql.startswith("SELECT count()") else [(1,)] if sql.startswith("EXISTS TABLE") else [])
         with patch("bitrix24.services.crm_marts.get_clickhouse_client", return_value=client), self.assertRaisesRegex(RuntimeError, "row count"):
             publish(chunk_size=1)
-        self.assertFalse(any(c.args[0].startswith("RENAME TABLE") for c in client.execute.call_args_list))
+        self.assertFalse(any(c.args[0].startswith(("RENAME TABLE", "EXCHANGE TABLES")) for c in client.execute.call_args_list))
 
     def test_snapshot_detects_replacement(self):
         refs = references()
         client = Mock()
         from bitrix24.services.crm_marts import reference_rows
-        client.execute.side_effect = [[(1,)], [(1,)], [("old",)], reference_rows(refs, "old"), [("new",)], [("old",)]]
+        client.execute.side_effect = [[("View", "")], [(1,)], [(1,)], [("old",)], reference_rows(refs, "old"), [("new",)], [("old",)]]
         reader = MartReader(client)
         with self.assertRaises(SnapshotChanged):
             reader.check()

@@ -159,8 +159,8 @@ def sync_lead_analytics_to_clickhouse(*, chunk_size: int = 1000) -> int:
             client.execute(insert_sql, batch)
             inserted += len(batch)
 
-        # New sections are published from the same completed PostgreSQL load.
-        # Their lead/deal pair is exchanged atomically inside publish().
+        # Publish the self-contained deal mart from the completed PostgreSQL load.
+        # Each mart is swapped independently after its staging table is ready.
         from bitrix24.services.crm_marts import publish
 
         publish(chunk_size=chunk_size)

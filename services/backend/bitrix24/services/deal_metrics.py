@@ -102,7 +102,9 @@ def dimension(row, kind):
     if kind == "managers":
         return str(row.get("assigned_by_id") or "__unassigned__"), row["manager_name"]
     if kind == "sources":
-        return row.get("source_id") or "", row.get("source_name") or "Источник не указан"
+        if not row.get("source_id") or not row.get("source_name"):
+            return "__missing_source__", "Источник не указан"
+        return row["source_id"], row["source_name"]
     return row["result"], row["result_name"]
 
 
