@@ -246,9 +246,9 @@
 .crm-modal .crm-table-wrap th:last-child .crm-comparison-head__label { min-width: min-content; }
 .crm-modal--lead-details .crm-table-wrap th:nth-child(2),.crm-modal--lead-details .crm-table-wrap td:nth-child(2),.crm-modal--deal-details .crm-table-wrap th:nth-child(3),.crm-modal--deal-details .crm-table-wrap td:nth-child(3) { width: 220px; min-width: 220px; max-width: 220px; box-sizing: border-box; overflow: hidden; white-space: nowrap; }
 .crm-detail-title { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.crm-modal--lead-details .crm-table-wrap td:nth-child(n+4):nth-child(-n+8),.crm-modal--deal-details .crm-table-wrap td:nth-child(n+5):nth-child(-n+11) { white-space: normal; overflow-wrap: anywhere; word-break: normal; }
-.crm-modal--lead-details .crm-customer-badge,.crm-modal--deal-details .crm-customer-badge { max-width: 100%; box-sizing: border-box; white-space: normal; overflow-wrap: anywhere; }
-.crm-modal--lead-details .crm-table-wrap td:nth-child(9),.crm-modal--lead-details .crm-table-wrap td:nth-child(10) { white-space: nowrap; }
+.crm-modal--lead-details .crm-table-wrap td:nth-child(n+4):nth-child(-n+8),.crm-modal--deal-details .crm-table-wrap td:nth-child(n+5):nth-child(-n+11) { white-space: normal; overflow-wrap: normal; word-break: normal; hyphens: none; overflow: hidden; }
+.crm-modal--lead-details .crm-customer-badge,.crm-modal--deal-details .crm-customer-badge { max-width: 100%; box-sizing: border-box; white-space: normal; overflow-wrap: normal; word-break: normal; hyphens: none; overflow: hidden; }
+.crm-modal--lead-details .crm-table-wrap td:nth-child(9),.crm-modal--lead-details .crm-table-wrap td:nth-child(10),.crm-modal--deal-details .crm-table-wrap td:nth-child(12),.crm-modal--deal-details .crm-table-wrap td:nth-child(13) { white-space: nowrap; }
 .crm-modal--lead-details .crm-table-wrap td:nth-child(11),.crm-modal--deal-details .crm-table-wrap td:nth-child(14) { text-align: right; }
 .crm-table-wrap > .crm-loading { position: absolute; inset: 52px 0 0; z-index: 5; display: flex; align-items: center; justify-content: center; min-height: 0; box-sizing: border-box; background: #fff; border: 0; border-radius: 0 0 6px 6px; }
 .crm-table-wrap > .crm-loading::before { width: 24px; height: 24px; margin-right: 10px; border: 3px solid #d8ddd4; border-top-color: #53604d; border-radius: 50%; content: ""; animation: crm-spin .75s linear infinite; }

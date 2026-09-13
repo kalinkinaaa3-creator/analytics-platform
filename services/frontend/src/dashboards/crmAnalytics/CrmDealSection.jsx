@@ -2,14 +2,13 @@ import { DetailTableColumns } from "./DetailTableColumns";
 import { SummaryTableFrame } from "./SummaryTableFrame";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DateRangePicker } from "../../components/DateRangePicker";
-import { MultiSelect, DynamicsChart, FormulaHeader, periodLabel, GlobalSpinner, ConversionModal, CrmToast, DeltaMetric, InlineDelta } from "./CrmAnalyticsDashboard";
+import { MultiSelect, DynamicsChart, FormulaHeader, periodLabel, DetailDateTime, GlobalSpinner, ConversionModal, CrmToast, DeltaMetric, InlineDelta } from "./CrmAnalyticsDashboard";
 import { crmSectionRequest, exportCrmSection } from "./crmDealApi";
 
 const GROUPS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"], ["year", "Год"]];
 const RESULTS = [{ id: "S", name: "Успешные" }, { id: "F", name: "Проигранные" }, { id: "P", name: "В работе" }];
 const UNTRACKED = "Неотслеживаемые";
 const format = (value, digits = 0) => value == null ? "—" : new Intl.NumberFormat("ru-RU", { maximumFractionDigits: digits }).format(value);
-const dateTime = (value) => value ? new Date(value).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : "—";
 const dealsLabel = (value) => { const count = Number(value || 0); const absolute = Math.abs(count); const lastTwo = absolute % 100; const last = absolute % 10; const word = lastTwo >= 11 && lastTwo <= 14 ? "сделок" : last === 1 ? "сделка" : last >= 2 && last <= 4 ? "сделки" : "сделок"; return `${format(count)} ${word}`; };
 function defaults() { const now = new Date(); const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10); return { date_start: `${now.getFullYear()}-01-01`, date_end: local, department_names: [], manager_ids: [], source_ids: [], category_ids: [0, 2, 5], stage_keys: [], results: [], exclude_untracked_department: true, use_personal_departments: true, group_by: "month", lead_link: "all" }; }
 
@@ -52,9 +51,9 @@ function Details({ state, data, busy, onClose, onChange, onExport, filters }) {
     if (key === "title") return <span className="crm-detail-title" title={row[key] || ""}>{row[key] || "—"}</span>;
     if (key === "is_return_customer") return <small className="crm-customer-badge">{row[key] ? "Повторная" : "Новая"}</small>;
     if (key === "deal_type_name") return <small className="crm-customer-badge">{row[key] || "Не указан"}</small>;
-    if (key === "speed_calculated_at") return dateTime(row[key]);
+    if (key === "speed_calculated_at") return <DetailDateTime value={row[key]} />;
     if (key === "processing_duration_days") return humanDuration(row[key]);
-    if (key.endsWith("_at")) return dateTime(row[key]);
+    if (key.endsWith("_at")) return <DetailDateTime value={row[key]} />;
     if (key === "amount") return format(row[key], 0);
     if (typeof row[key] === "number") return format(row[key], key.endsWith("days") ? 1 : 0);
     return row[key] || "—";
