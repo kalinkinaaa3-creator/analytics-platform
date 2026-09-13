@@ -92,6 +92,8 @@ def load_departments(
 
         deactivated = 0
         if mode == BitrixSyncRun.Mode.FULL:
+            if received == 0 and BitrixDepartment.objects.filter(is_deleted=False).exists():
+                raise Bitrix24ResponseError("Empty department response; existing departments preserved")
             deactivated = BitrixDepartment.objects.filter(
                 is_deleted=False,
             ).filter(
@@ -219,6 +221,8 @@ def load_users(
 
         deactivated = 0
         if mode == BitrixSyncRun.Mode.FULL:
+            if received == 0 and BitrixUser.objects.filter(is_deleted=False).exists():
+                raise Bitrix24ResponseError("Empty user response; existing users preserved")
             deactivated = BitrixUser.objects.filter(
                 is_deleted=False,
             ).filter(
@@ -294,6 +298,8 @@ def load_crm_dictionaries(
             created += len(objects) - len(existing)
             updated += len(existing)
             if mode == BitrixSyncRun.Mode.FULL:
+                if not objects and BitrixCrmDictionary.objects.filter(entity_id=entity_id, is_deleted=False).exists():
+                    raise Bitrix24ResponseError("Empty dictionary response; existing dictionary preserved")
                 deactivated += BitrixCrmDictionary.objects.filter(
                     entity_id=entity_id,
                     is_deleted=False,
@@ -373,6 +379,8 @@ def load_crm_fields(
         )
         deactivated = 0
         if mode == BitrixSyncRun.Mode.FULL:
+            if not objects and BitrixCrmField.objects.filter(entity_type_id=entity_type_id, is_deleted=False).exists():
+                raise Bitrix24ResponseError("Empty fields response; existing fields preserved")
             deactivated = BitrixCrmField.objects.filter(
                 entity_type_id=entity_type_id,
                 is_deleted=False,

@@ -139,6 +139,8 @@ def load_leads(
         raise ValueError(f"Unsupported Bitrix24 sync mode: {mode}.")
 
     is_window_reconciliation = mode == BitrixSyncRun.Mode.REPAIR
+    if mode == BitrixSyncRun.Mode.FULL and (date_from is not None or date_to is not None):
+        raise ValueError("Full lead loading cannot have date limits")
     if is_window_reconciliation:
         if created_from is None or created_to is None:
             raise ValueError("Repair mode requires created_from and created_to.")
@@ -225,6 +227,8 @@ def load_leads(
 
         deactivated = 0
         if mode == BitrixSyncRun.Mode.FULL:
+            if received == 0 and BitrixLead.objects.filter(is_deleted=False).exists():
+                raise Bitrix24ResponseError("Empty full lead response; existing leads preserved")
             deactivated = BitrixLead.objects.filter(
                 is_deleted=False,
             ).filter(

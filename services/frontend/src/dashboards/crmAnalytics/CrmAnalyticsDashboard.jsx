@@ -383,6 +383,7 @@ export function CrmAnalyticsDashboard({ dashboard: meta, toolbarTarget = null, e
   const preferencesSavePending = useRef(false);
   const reportRequest = useRef(0);
   const optionsRequest = useRef(0);
+  const detailController = useRef(null);
   const activeTab = tab || localTab;
   const previousResetToken = useRef(resetToken);
   useEffect(() => { if (previousResetToken.current === resetToken) return; previousResetToken.current = resetToken; setFilters(initialFilters()); setModal(null); setConversionOpen(false); }, [resetToken]);
@@ -415,7 +416,22 @@ export function CrmAnalyticsDashboard({ dashboard: meta, toolbarTarget = null, e
   useEffect(() => { loadOptions().catch(() => setError("Не удалось загрузить справочники фильтров.")); }, [loadOptions]); useEffect(() => { load(); }, [load]);
   /* eslint-enable react-hooks/set-state-in-effect */
   const detailPayload = useCallback((state) => ({ ...filters, segment_type: state.segment_type, segment_key: state.segment_key, segment_keys: state.segment_keys || [], period: state.period, page: state.page, page_size: 50, sort_by: state.sort_by, sort_direction: state.sort_direction }), [filters]);
-  const loadDetails = useCallback(async (state) => { setDetailLoading(true); setError(""); try { setDetailRows(await fetchCrmRows(detailPayload(state))); } catch (e) { setError(e.response?.data?.detail || "Не удалось загрузить детализацию."); } finally { setDetailLoading(false); } }, [detailPayload]);
+  const loadDetails = useCallback(async (state) => {
+    detailController.current?.abort();
+    const controller = new AbortController();
+    detailController.current = controller;
+    setDetailLoading(true); setError("");
+    try {
+      const rows = await fetchCrmRows(detailPayload(state), controller.signal);
+      if (!controller.signal.aborted) setDetailRows(rows);
+    } catch (e) {
+      if (!controller.signal.aborted) setError(e.response?.data?.detail || "Не удалось загрузить детализацию.");
+    } finally {
+      if (!controller.signal.aborted) setDetailLoading(false);
+    }
+  }, [detailPayload]);
+  useEffect(() => { if (!modal) detailController.current?.abort(); }, [modal]);
+  useEffect(() => () => detailController.current?.abort(), []);
   /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
   useEffect(() => { if (modal) { const next = { ...modal, date_start: filters.date_start, date_end: filters.date_end, group_by: filters.group_by, page: 1 }; setModal(next); loadDetails(next); } }, [filters]);
   /* eslint-enable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */

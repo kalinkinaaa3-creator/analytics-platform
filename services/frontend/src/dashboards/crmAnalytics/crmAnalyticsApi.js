@@ -1,20 +1,31 @@
 import { api } from "../../api/client";
 
+async function publishedRequest(url, payload, signal) {
+  for (let attempt = 0; ; attempt += 1) {
+    try { return await api.post(url, payload, { signal }); }
+    catch (error) {
+      if (error.response?.status !== 409 || attempt > 0 || signal?.aborted) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      if (signal?.aborted) throw error;
+    }
+  }
+}
+
 
 export async function fetchCrmFilters(payload) {
-  const response = await api.post("/v1/bitrix24/dashboard/filters/", payload);
+  const response = await publishedRequest("/v1/bitrix24/dashboard/filters/", payload);
   return response.data;
 }
 
 
 export async function fetchCrmDashboard(payload) {
-  const response = await api.post("/v1/bitrix24/dashboard/", payload);
+  const response = await publishedRequest("/v1/bitrix24/dashboard/", payload);
   return response.data;
 }
 
 
-export async function fetchCrmRows(payload) {
-  const response = await api.post("/v1/bitrix24/dashboard/rows/", payload);
+export async function fetchCrmRows(payload, signal) {
+  const response = await publishedRequest("/v1/bitrix24/dashboard/rows/", payload, signal);
   return response.data;
 }
 

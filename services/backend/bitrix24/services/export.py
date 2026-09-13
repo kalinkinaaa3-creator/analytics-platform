@@ -133,7 +133,7 @@ def filtered_lead_analytics_queryset(
     return queryset.order_by(f"{prefix}{sort_by}", "lead_id")
 
 
-def export_leads_xlsx(filters: LeadDashboardFilters, **query_options) -> tuple[Path, int]:
+def export_leads_xlsx(filters: LeadDashboardFilters, *, rows=None, **query_options) -> tuple[Path, int]:
     workbook = Workbook(write_only=True)
     sheet = workbook.create_sheet("Лидогенерация")
     sheet.freeze_panes = "A2"
@@ -148,12 +148,18 @@ def export_leads_xlsx(filters: LeadDashboardFilters, **query_options) -> tuple[P
         header_cells.append(cell)
     sheet.append(header_cells)
 
+    def text_cell(value):
+        cell = WriteOnlyCell(sheet, value=value)
+        if isinstance(value, str):
+            cell.data_type = "s"
+        return cell
+
+    if rows is None:
+        rows = filtered_lead_analytics_queryset(filters, **query_options).iterator(chunk_size=1000)
     count = 0
-    for item in filtered_lead_analytics_queryset(
-        filters, **query_options
-    ).iterator(chunk_size=1000):
+    for item in rows:
         sheet.append(
-            (
+            [text_cell(value) for value in (
                 item.lead_id,
                 item.title,
                 (
@@ -169,7 +175,7 @@ def export_leads_xlsx(filters: LeadDashboardFilters, **query_options) -> tuple[P
                 _excel_datetime(item.first_processing_at or item.calculated_at),
                 item.opportunity,
                 _format_duration(item.processing_duration_seconds),
-            )
+            )]
         )
         count += 1
 

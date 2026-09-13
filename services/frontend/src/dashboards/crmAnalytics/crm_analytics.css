@@ -125,7 +125,7 @@
 .crm-kpi-help > i,.crm-filter-help > i,.crm-comparison-head > i,.crm-conversion-help > i { display: grid; width: 15px; height: 15px; place-items: center; background: #f2f4ef; border: 1px solid #aeb6aa; border-radius: 50%; color: #64705f; font: 700 10px Georgia,serif; }
 .crm-kpi-cards .crm-kpi-help > span,.crm-filter-help > span { position: absolute; top: calc(100% + 10px); left: 50%; z-index: 40; display: block; width: 280px; min-height: 0; padding: 11px 13px; visibility: hidden; background: linear-gradient(145deg,#fff,#f7f8f5); border: 1px solid #c7cdc3; border-radius: 9px; box-shadow: 0 10px 28px rgba(42,50,39,.2); color: #3d463a; font-size: 12px; font-weight: 500; line-height: 1.45; white-space: normal; opacity: 0; transform: translate(-50%,-4px); transition: opacity .14s ease,transform .14s ease,visibility .14s ease; pointer-events: none; }
 .crm-kpi-help > span::before,.crm-filter-help > span::before { position: absolute; top: -6px; left: 50%; width: 10px; height: 10px; background: #fff; border-top: 1px solid #c7cdc3; border-left: 1px solid #c7cdc3; content: ""; transform: translateX(-50%) rotate(45deg); }
-.crm-filter-help { margin-left: 4px; vertical-align: middle; }
+.crm-filter-help { margin-left: 4px; }
 .crm-kpi-help:hover > span,.crm-kpi-help:focus > span,.crm-filter-help:hover > span,.crm-filter-help:focus > span { visibility: visible; opacity: 1; transform: translate(-50%,0); }
 .crm-kpi-cards article:last-child .crm-kpi-help > span,.crm-filter-help > span { right: -8px; left: auto; transform: translate(0,-4px); }
 .crm-kpi-cards article:last-child .crm-kpi-help > span::before,.crm-filter-help > span::before { right: 10px; left: auto; transform: rotate(45deg); }
