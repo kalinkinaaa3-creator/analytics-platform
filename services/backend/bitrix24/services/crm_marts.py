@@ -10,6 +10,8 @@ from bitrix24.models import BitrixDeal
 from . import deal_repository as source
 
 TABLE = "default.bitrix_deal_analytics"
+# Public table name also imported by the lead-generation report.
+DEALS = TABLE
 LEGACY_TABLE = "default.bitrix_crm_entities"
 LEGACY_CYCLE = "default.bitrix_full_cycle_analytics"
 REFS = "default.bitrix_crm_references"
