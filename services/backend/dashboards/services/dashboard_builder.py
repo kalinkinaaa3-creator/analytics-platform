@@ -50,7 +50,7 @@ def get_dashboard_cache_schema_version(dashboard: Dashboard) -> int:
     return {
         "Wordstat": 4,
         "Turnover": 4,
-        "Purchases": 2,
+        "Purchases": 3,
         "Accreceiv": 2,
     }.get(dashboard.name, 1)
 

@@ -365,8 +365,15 @@ def build_price_chart_data(rows, indicator_rows):
     y_max = max(all_prices)
 
     step = 5
-    y_min_axis = math.floor((y_min - step) / step) * step
-    y_max_axis = math.ceil((y_max + step) / step) * step
+    while True:
+        y_min_axis = math.floor((y_min - step) / step) * step
+        y_max_axis = math.ceil((y_max + step) / step) * step
+        if (y_max_axis - y_min_axis) // step + 1 <= 8:
+            break
+        # Keep a readable 1/2/5 progression instead of thousands of 5-ruble ticks.
+        magnitude = 10 ** int(math.floor(math.log10(step)))
+        multiple = step // magnitude
+        step = (2 if multiple < 2 else 5 if multiple < 5 else 10) * magnitude
 
     y_range = y_max_axis - y_min_axis or 1
     n_points = len(points) or 1
