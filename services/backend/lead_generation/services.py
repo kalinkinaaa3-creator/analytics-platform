@@ -76,9 +76,9 @@ def _week_range(filters):
         current += timedelta(days=7)
 
 
-def _plan_report(filters):
+def _plan_report(filters, *, include_funnels=False):
     facts = _facts(filters)
-    successful_deals = _successful_deal_amounts(filters)
+    successful_deals, funnel_amounts, deal_funnels = _successful_deal_amounts(filters)
     plans = _plan_rows(filters)
     rows = []
     for week in _week_range(filters):
@@ -108,26 +108,41 @@ def _plan_report(filters):
             "lead_opportunity": _number(fact.get("opportunity")),
             "successful_deal_amount": _number(successful_deals.get(week)),
         }
+        row.update({item["key"]: _number(funnel_amounts.get(week, {}).get(item["key"])) for item in deal_funnels})
         rows.append(row)
-    return rows
+    return (rows, deal_funnels) if include_funnels else rows
 
 
 def _successful_deal_amounts(filters):
     """All successful RUB deals grouped by the deal's own creation week."""
     client = ensure_mart_table()
     if not client.execute(f"EXISTS TABLE {BITRIX_DEALS_TABLE}")[0][0]:
-        return {}
+        return {}, {}, []
     rows = client.execute(f"""
         SELECT toStartOfWeek(source_created_at, 1) AS week_start,
-               sum(amount) AS amount
+               category_id, any(category_name) AS category_name, sum(amount) AS amount
         FROM {BITRIX_DEALS_TABLE}
         WHERE result = 'S'
           AND currency_id = 'RUB'
           AND source_created_at >= %(date_from)s
           AND source_created_at < %(date_to)s
-        GROUP BY week_start
+        GROUP BY week_start, category_id
     """, {"date_from": filters["week_from"], "date_to": filters["week_to"] + timedelta(days=7)})
-    return {week: float(amount or 0) for week, amount in rows}
+    totals, by_week, categories = {}, {}, {}
+    for week, category_id, name, amount in rows:
+        key = f"successful_deal_category_{category_id}"
+        amount = amount or 0
+        totals[week] = totals.get(week, 0) + amount
+        weekly = by_week.setdefault(week, {})
+        weekly[key] = weekly.get(key, 0) + amount
+        category = categories.setdefault(key, {"key": key, "category_id": category_id,
+            "name": name or f"Воронка #{category_id}", "total": 0})
+        category["total"] += amount
+    columns = [{"key": item["key"], "category_id": item["category_id"],
+                "name": f"Сумма успешных сделок: {item['name']}, руб"}
+               for item in sorted(categories.values(), key=lambda item: (-item["total"], item["name"], item["category_id"]))
+               if item["total"] != 0]
+    return totals, by_week, columns
 
 
 def _source_report(filters, preference=None):
@@ -221,7 +236,8 @@ def build_report(page, filters, user):
     if cached is not None:
         return cached
     if page == "plan":
-        rows, sources = _plan_report(filters), []
+        rows, deal_funnels = _plan_report(filters, include_funnels=True)
+        sources = []
         from .revenue import add_revenue
         revenue_directions = add_revenue(rows, filters)
     elif page == "sources":
@@ -231,6 +247,7 @@ def build_report(page, filters, user):
     result = {"rows": rows, "sources": sources, "filters": {**filters, "week_from": filters["week_from"].isoformat(), "week_to": filters["week_to"].isoformat()}}
     if page == "plan":
         result["revenue_directions"] = revenue_directions
+        result["deal_funnels"] = deal_funnels
     cache.set(key, result, timeout=REPORT_TIMEOUT)
     return result
 

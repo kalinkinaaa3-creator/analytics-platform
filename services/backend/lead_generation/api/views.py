@@ -26,7 +26,7 @@ PLAN_COLUMNS = [
     ("unprocessed_leads", "Необработанные лиды, шт"), ("target_conversion", "Конверсия в целевые, %"),
     ("target_delta", "Дельта количества целевых лидов, шт"), ("actual_target_cpl", "Фактическая средняя цена целевого лида, руб"),
     ("target_cpl_delta", "Дельта цены целевого лида, руб"), ("lead_opportunity", "Сумма лидов, руб"),
-    ("successful_deal_amount", "Сумма успешных сделок, руб"),
+    ("successful_deal_amount", "Сумма успешных сделок итого, руб"),
 ]
 SOURCE_COLUMNS = [
     ("week_start", "Неделя"), ("planned_target_leads", "Количество целевых лидов, шт"),
@@ -138,6 +138,8 @@ class ReportExportView(AccessMixin, APIView):
             columns[position:position] = [("revenue_1c_total", "Выручка итого, руб")] + [
                 (item["key"], item["name"]) for item in report.get("revenue_directions", [])
             ]
+            position = next(i for i, (key, _) in enumerate(columns) if key == "successful_deal_amount") + 1
+            columns[position:position] = [(item["key"], item["name"]) for item in report.get("deal_funnels", [])]
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = "План" if page == "plan" else "Источники"
@@ -157,7 +159,7 @@ class ReportExportView(AccessMixin, APIView):
         total = _report_total(page, report["rows"], dynamic)
         if page == "plan":
             for key, _label in columns:
-                if key.startswith("revenue_1c_"):
+                if key.startswith(("revenue_1c_", "successful_deal_category_")):
                     total[key] = sum(float(row.get(key) or 0) for row in report["rows"])
         total_values = [total.get(key) for key, _label in columns]
         if page == "sources":
