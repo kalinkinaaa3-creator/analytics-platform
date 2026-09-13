@@ -26,8 +26,12 @@ class DealMetricsTests(TestCase):
         history = [event(1, 1, "NEW", "P"), event(2, 2, "WON", "S"), event(3, 3, "NEW", "P"), event(4, 4, "WON", "S")]
         result = enrich_deal(row, history, stages, stamp(6))
         self.assertEqual(result["closed_at"], stamp(4))
-        self.assertEqual(result["cycle_days"], 90)
-        self.assertEqual(result["stage_days"], 61)
+        self.assertEqual(result["processing_duration_days"], 90)
+        self.assertNotIn("cycle_days", result)
+        self.assertNotIn("stage_days", result)
+        running = enrich_deal({**row, "stage_id": "NEW", "stage_semantic_id": "P"}, history[:3], stages, stamp(6))
+        self.assertEqual(running["processing_duration_days"], 151)
+        self.assertIsNone(enrich_deal(row, [], stages, stamp(6))["processing_duration_days"])
         self.assertIsNone(enrich_deal({**row, "stage_id": "NEW", "stage_semantic_id": "P"}, history[:3], stages, stamp(6))["closed_at"])
 
 

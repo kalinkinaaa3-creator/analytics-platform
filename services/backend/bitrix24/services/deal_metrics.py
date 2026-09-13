@@ -46,18 +46,10 @@ def enrich_deal(row, histories, stages, now):
     for key, visit in visits.items():
         visit["semantics"] = stages.get(key, {}).get("semantics", "")
     row["visits"] = visits
-    row["stage_days"] = None
     # Reopening a deal invalidates its previous closure. Only the final run of
     # terminal history events matching the current outcome can close it now.
     closed_at = None
     latest_matches = bool(histories and stage_key(histories[-1]["category_id"], histories[-1]["stage_id"]) == current_key)
-    if latest_matches:
-        entered_at = histories[-1]["created_at"]
-        for event in reversed(histories):
-            if stage_key(event["category_id"], event["stage_id"]) != current_key:
-                break
-            entered_at = event["created_at"]
-        row["stage_days"] = max(0, (now - entered_at).total_seconds() / 86400)
     if row["result"] in ("S", "F") and latest_matches:
         for event in reversed(histories):
             event_stage = stages.get(stage_key(event["category_id"], event["stage_id"]), {})
@@ -67,10 +59,11 @@ def enrich_deal(row, histories, stages, now):
             closed_at = event["created_at"]
     created = row.get("source_created_at")
     row["closed_at"] = closed_at if created and closed_at and closed_at >= created else None
-    row["cycle_days"] = ((row["closed_at"] - created).total_seconds() / 86400) if row["closed_at"] else None
     row["calculated_at"] = now
     row["speed_calculated_at"] = row["closed_at"] if row["result"] in ("S", "F") else now
-    row["processing_duration_days"] = row["cycle_days"] if row["result"] in ("S", "F") else (
+    row["processing_duration_days"] = (
+        (row["closed_at"] - created).total_seconds() / 86400 if row["closed_at"] else None
+    ) if row["result"] in ("S", "F") else (
         max(0, (now - created).total_seconds() / 86400) if created else None
     )
     row["amount"] = float(row.get("opportunity") or 0)
@@ -90,8 +83,6 @@ def metrics(rows):
         "return_customers": sum(row.get("is_return_customer") is True for row in rows),
         "conversion": ratio(len(successful), len(successful) + lost),
         "average_check": average([row["amount"] for row in successful]),
-        "cycle_days": average([row["cycle_days"] for row in rows]),
-        "stage_days": average([row["stage_days"] for row in rows]),
         "missing_history": sum(row["history_missing"] for row in rows),
     }
 

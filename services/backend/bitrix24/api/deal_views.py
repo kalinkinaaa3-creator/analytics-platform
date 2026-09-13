@@ -75,7 +75,7 @@ def bundle(section, filters):
     scope = {key: value for key, value in filters.items() if key not in (
         "tab", "segment_type", "segment_key", "segment_keys", "detail_category_id", "period", "page", "page_size", "sort_by", "sort_direction")}
     mart = reader()
-    key = {"crm_section": section, "schema": 4, "snapshot": mart.snapshot, **scope}
+    key = {"crm_section": section, "schema": 5, "snapshot": mart.snapshot, **scope}
     cached = get_dashboard_cache(key)
     if cached is not None:
         return cached

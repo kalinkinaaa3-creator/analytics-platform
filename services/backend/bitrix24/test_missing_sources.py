@@ -21,7 +21,7 @@ class MissingSourceTests(TestCase):
                 source_name=source_name, source_created_at=created, calculated_at=created)
             self.rows.append(dict(deal_id=index, source_id=source_id, source_name=source_name,
                 source_created_at=created, result="P", category_id=0, amount=0,
-                cycle_days=None, stage_days=None, history_missing=False))
+                history_missing=False))
         self.filters = LeadDashboardFilters(date_start=date(2026, 1, 1), date_end=date(2026, 12, 31), exclude_untracked_department=False)
 
     def test_lead_missing_source_selection_and_other_group(self):

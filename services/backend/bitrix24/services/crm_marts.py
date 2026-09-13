@@ -27,7 +27,7 @@ COLUMNS = (
     "visit_stage_keys", "visit_days", "visit_semantics", "snapshot",
 )
 LEGACY_COLUMNS = COLUMNS
-COLUMNS = (*[column for column in COLUMNS if column != "entity_type"], "category_sort", "stage_sort", "stage_semantics", "manager_tracked")
+COLUMNS = (*[column for column in COLUMNS if column not in ("entity_type", "cycle_days", "stage_days")], "category_sort", "stage_sort", "stage_semantics", "manager_tracked")
 
 REF_COLUMNS = ("ref_type", "ref_key", "number_id", "name", "category_id", "sort", "semantics", "department_name", "snapshot")
 
@@ -50,8 +50,7 @@ def create_table(client, name, snapshot):
         result LowCardinality(String), result_name String, status_id String, status_name String,
         dashboard_status String, source_id String, source_name String,
         opportunity Decimal(20, 2), amount Decimal(20, 2), currency_id String,
-        closed_at Nullable(DateTime64(3, 'Europe/Moscow')), cycle_days Nullable(Float64),
-        stage_days Nullable(Float64), calculated_at DateTime64(3, 'Europe/Moscow'),
+        closed_at Nullable(DateTime64(3, 'Europe/Moscow')), calculated_at DateTime64(3, 'Europe/Moscow'),
         speed_calculated_at Nullable(DateTime64(3, 'Europe/Moscow')),
         processing_duration_days Nullable(Float64), is_return_customer Nullable(UInt8),
         deal_type_id String, deal_type_name String, activity_id String, activity_name String,
@@ -106,7 +105,6 @@ def storage_row(kind, row, snapshot, now, refs):
         "opportunity": Decimal(str(row.get("opportunity") or 0)),
         "amount": Decimal(str(row.get("amount", row.get("opportunity")) or 0)),
         "currency_id": row.get("currency_id") or "", "closed_at": row.get("closed_at"),
-        "cycle_days": row.get("cycle_days"), "stage_days": row.get("stage_days"),
         "calculated_at": row.get("calculated_at") or now,
         "speed_calculated_at": row.get("speed_calculated_at"),
         "processing_duration_days": row.get("processing_duration_days"),
@@ -249,7 +247,8 @@ class MartReader:
     @staticmethod
     def restore(values, columns=COLUMNS):
         row = dict(zip(columns, values))
-        row.pop("entity_type", None)
+        for field in ("entity_type", "cycle_days", "stage_days"):
+            row.pop(field, None)
         row["deal_id"] = row["entity_id"]
         keys, days, semantics = row.pop("visit_stage_keys"), row.pop("visit_days"), row.pop("visit_semantics")
         row["visited"] = set(keys)
