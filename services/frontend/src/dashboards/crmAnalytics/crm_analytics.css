@@ -1,5 +1,5 @@
 /* Dashboard and filters */
-.crm-dashboard { width: 100%; min-width: 0; box-sizing: border-box; padding: 18px; overflow-x: hidden; color: #222; font-family: Helvetica, sans-serif; }
+.crm-dashboard { container: crm-dashboard / inline-size; width: 100%; min-width: 0; box-sizing: border-box; padding: 18px; overflow-x: hidden; color: #222; font-family: Helvetica, sans-serif; }
 .crm-dashboard h1 { margin: 0 0 14px; font-size: 22px; }
 .crm-filters { position: relative; margin-bottom: 10px; padding: 10px; background: #fff; border: 1px solid #d5d8d1; border-radius: 8px; }
 .crm-filter-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 14px; margin-bottom: 14px; }
@@ -290,8 +290,9 @@
 @keyframes crm-spin { to { transform: rotate(360deg); } }
 
 /* Responsive layout */
-@media (max-width:1450px) { .crm-kpi-cards { grid-template-columns: repeat(4,minmax(0,1fr)); } .crm-chart-grid { grid-template-columns: 1fr; } }
+@container crm-dashboard (width < 1100px) { .crm-kpi-cards { grid-template-columns: repeat(4,minmax(0,1fr)); } .crm-chart-grid { grid-template-columns: 1fr; } }
+@container crm-dashboard (width < 700px) { .crm-kpi-cards { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width:1100px) { .crm-dashboard { padding: 12px; } }
-@media (max-width:900px) { .crm-kpi-cards { grid-template-columns: repeat(2,minmax(0,1fr)); } .crm-panel__heading { flex-direction: column; } .crm-panel__deviation-toggle { align-self: flex-end; } .crm-conversion-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width:900px) { .crm-panel__heading { flex-direction: column; } .crm-panel__deviation-toggle { align-self: flex-end; } .crm-conversion-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width:720px) { .crm-chart-tooltip { width: min(94vw,430px); max-height: 82vh; overflow-y: auto; } .crm-tooltip-header { grid-template-columns: 44px minmax(0,1fr); padding: 14px; } .crm-tooltip-calendar { width: 44px; height: 44px; border-radius: 11px; font-size: 23px; } .crm-tooltip-change { grid-column: 1 / -1; width: auto; margin-top: 2px; } .crm-tooltip-body { grid-template-columns: 1fr; } .crm-tooltip-breakdown { padding: 16px; } .crm-tooltip-donut { min-height: 300px; } }
 @media (max-width:600px) { .crm-toast-stack { bottom: 12px; left: 12px; width: calc(100vw - 24px); } }
