@@ -45,12 +45,6 @@ export function SummaryTableFrame({ children }) {
         return minimumWidth;
       };
       const minimumWidth = fitColumns();
-      if (grid?.classList.contains("crm-chart-grid")) {
-        const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
-        const panelInsets = panel.getBoundingClientRect().width - root.clientWidth;
-        // Reflow a panel only when its numbers cannot fit beside its neighbour.
-        panel.style.gridColumn = minimumWidth > (grid.clientWidth - gap) / 2 - panelInsets ? "1 / -1" : "";
-      }
       if (minimumWidth > root.clientWidth) {
         root.style.setProperty("--crm-summary-font-size", `${Math.max(10, Math.floor(12 * root.clientWidth / minimumWidth * 10) / 10)}px`);
         fitColumns();
@@ -62,7 +56,7 @@ export function SummaryTableFrame({ children }) {
     observer.observe(root);
     if (grid) observer.observe(grid);
     document.fonts?.ready.then(schedule);
-    return () => { disposed = true; observer.disconnect(); cancelAnimationFrame(frame); if (panel) panel.style.gridColumn = ""; };
+    return () => { disposed = true; observer.disconnect(); cancelAnimationFrame(frame); };
   }, [children]);
   return <div ref={rootRef} className="crm-summary-wrap">{children}</div>;
 }
