@@ -37,7 +37,7 @@ function DealSummaryTable({ report, kind, onSelect, categories, comparisonPeriod
   })}</tbody></table></SummaryTableFrame>;
 }
 
-const DEAL_DETAIL_COLUMNS = [["deal_id", "ID сделки"], ["lead_id", "ID лида"], ["title", "Наименование сделки"], ["is_return_customer", "Повторная сделка"], ["deal_type_name", "Тип"], ["manager_name", "Менеджер"], ["department_name", "Подразделение"], ["category_name", "Воронка"], ["stage_name", "Стадия"], ["source_name", "Источник"], ["activity_name", "Мероприятие"], ["source_created_at", "Дата создания"], ["speed_calculated_at", "Скорость рассчитана по"], ["amount", "Сумма, руб"], ["processing_duration_days", "Скорость обработки"]];
+const DEAL_DETAIL_COLUMNS = [["deal_id", "ID сделки"], ["lead_id", "ID лида"], ["title", "Наименование сделки"], ["is_return_customer", "Повторная сделка"], ["manager_name", "Менеджер"], ["department_name", "Подразделение"], ["category_name", "Воронка"], ["stage_name", "Стадия"], ["source_name", "Источник"], ["activity_name", "Мероприятие"], ["source_created_at", "Дата создания"], ["speed_calculated_at", "Скорость рассчитана по"], ["amount", "Сумма, руб"], ["processing_duration_days", "Скорость обработки"]];
 const humanDuration = (days) => { if (days == null) return "—"; const seconds = Math.max(0, Math.round(Number(days) * 86400)); const wholeDays = Math.floor(seconds / 86400); const hours = Math.floor((seconds % 86400) / 3600); return wholeDays ? `${wholeDays} дн. ${hours} час.` : hours ? `${hours} час.` : `${Math.max(1, Math.round(seconds / 60))} мин.`; };
 const periodCaption = (start, end) => `${new Date(`${start}T00:00:00`).toLocaleDateString("ru-RU")} — ${new Date(`${end}T00:00:00`).toLocaleDateString("ru-RU")}`;
 
@@ -50,7 +50,6 @@ function Details({ state, data, busy, onClose, onChange, onExport, filters }) {
   const displayValue = (row, key) => {
     if (key === "title") return <span className="crm-detail-title" title={row[key] || ""}>{row[key] || "—"}</span>;
     if (key === "is_return_customer") return <small className="crm-customer-badge">{row[key] ? "Повторная" : "Новая"}</small>;
-    if (key === "deal_type_name") return <small className="crm-customer-badge">{row[key] || "Не указан"}</small>;
     if (key === "speed_calculated_at") return <DetailDateTime value={row[key]} />;
     if (key === "processing_duration_days") return humanDuration(row[key]);
     if (key.endsWith("_at")) return <DetailDateTime value={row[key]} />;

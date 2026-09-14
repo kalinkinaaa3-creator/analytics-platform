@@ -123,7 +123,7 @@ def rows_for(section, data, filters):
 
 DEAL_EXPORT_COLUMNS = [
     ("deal_id", "ID сделки"), ("lead_id", "ID лида"), ("title", "Наименование сделки"),
-    ("is_return_customer", "Повторная сделка"), ("deal_type_name", "Тип"),
+    ("is_return_customer", "Повторная сделка"),
     ("manager_name", "Менеджер"), ("department_name", "Подразделение"),
     ("category_name", "Воронка"), ("stage_name", "Стадия"), ("source_name", "Источник"),
     ("activity_name", "Мероприятие"), ("source_created_at", "Дата создания"),
