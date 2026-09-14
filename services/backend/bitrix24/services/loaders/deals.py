@@ -12,16 +12,6 @@ from .common import as_bool, as_datetime, as_decimal, as_int, text
 from .references import _upsert_page, load_crm_dictionaries
 
 
-DEAL_SELECT = (
-    "id", "title", "categoryId", "stageId", "stageSemanticId", "assignedById",
-    "leadId", "companyId", "opportunity", "currencyId", "sourceId",
-    "createdTime", "updatedTime", "isReturnCustomer",
-    "UF_CRM_69B904B3E0AD1", "UF_CRM_64254B7D4853D",
-)
-# Retain previously stored values for fields no longer requested from Bitrix.
-UNREQUESTED_MODEL_FIELDS = {"contact_id", "contact_ids", "begin_date", "close_date"}
-
-
 def _normalize_deal(row, seen_at):
     deal_id = as_int(row.get("id"))
     if deal_id is None or as_datetime(row.get("updatedTime")) is None:
@@ -68,13 +58,13 @@ def load_deals(client, *, mode=BitrixSyncRun.Mode.INCREMENTAL,
         filters[">=updatedTime"] = date_from.isoformat()
     if date_to is not None:
         filters["<=updatedTime"] = date_to.isoformat()
-    params = {"entityTypeId": 2, "useOriginalUfNames": "Y", "select": list(DEAL_SELECT),
+    params = {"entityTypeId": 2, "useOriginalUfNames": "Y", "select": ["*"],
               "order": {"updatedTime": "ASC", "id": "ASC"}, "filter": filters}
     run = start_sync("deals", mode, source_updated_from=date_from)
     received = created = updated = 0
     position = None
     update_fields = tuple(f.name for f in BitrixDeal._meta.fields
-                          if f.name not in {"id", "deal_id", "date_add", *UNREQUESTED_MODEL_FIELDS})
+                          if f.name not in {"id", "deal_id", "date_add"})
     try:
         for page in client.iter_pages("crm.item.list", params):
             objects = [_normalize_deal(row, timezone.now()) for row in page]
