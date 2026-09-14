@@ -234,7 +234,7 @@
 .crm-table-wrap { position: relative; min-height: 180px; max-height: none; flex: 1 1 auto; }
 .crm-modal .crm-table-wrap table { width: 100%; min-width: 1700px; table-layout: fixed; }
 .crm-modal--lead-details { --crm-detail-column-count: 12; }
-.crm-modal--deal-details { --crm-detail-column-count: 15; }
+.crm-modal--deal-details { --crm-detail-column-count: 14; }
 .crm-modal--lead-details .crm-table-wrap table,.crm-modal--deal-details .crm-table-wrap table { min-width: calc((var(--crm-detail-column-count) - 2) * 135px + 220px + 150px); }
 .crm-detail-col { width: 135px; }
 .crm-detail-col--title { width: 220px; }
