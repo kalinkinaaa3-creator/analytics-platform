@@ -361,7 +361,8 @@ class MartReader:
         results = available("results", "result") | set(filters.get("results", []))
         department_manager_ids = available("department_names", "manager_id")
         department_names = {tracking[key]["department_name"] if key in tracking else source.UNTRACKED_DEPARTMENT_NAME for key in department_manager_ids}
-        department_names.update(filters.get("department_names", []))
+        # Match lead facets: only departments present in the effective manager scope.
+        # Echoing requested names here resurrects hidden personal defaults.
         users = [{"manager_id": key, "manager_name": refs["users"].get(key, {}).get("full_name") or str(key)} for key in manager_ids if key]
         stages = [row for key, row in refs["stages"].items() if key in stage_keys]
         categories = [row for row in refs["categories"] if row["category_id"] in category_ids]

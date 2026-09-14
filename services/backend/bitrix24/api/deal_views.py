@@ -97,7 +97,7 @@ def bundle(section, filters, mart=None):
 def filter_options(mart, filters, personal_ids):
     scope = report_scope(filters)
     scope.pop("group_by", None)
-    key = {"deal_options": 1, "snapshot": mart.snapshot, "personal_ids": personal_ids, **scope}
+    key = {"deal_options": 2, "snapshot": mart.snapshot, "personal_ids": personal_ids, **scope}
     cached = get_dashboard_cache(key)
     if cached is not None:
         return cached
