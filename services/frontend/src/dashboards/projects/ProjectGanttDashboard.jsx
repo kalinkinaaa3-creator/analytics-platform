@@ -576,7 +576,7 @@ export function ProjectGanttDashboard({ data, onFiltersChange }) {
   };
 
   return (
-    <div className="project-gantt-dashboard">
+    <div className="project-gantt-dashboard" data-last-updated={data?.last_update || ""}>
       <h2>Проекты</h2>
 
       <form id="filterForm" onSubmit={(event) => event.preventDefault()}>

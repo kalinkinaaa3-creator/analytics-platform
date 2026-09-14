@@ -2,7 +2,7 @@ from datetime import date, timedelta
 from copy import deepcopy
 from django.core.cache import cache
 from django.db.models import Max
-from datasets.models import FBPurchasesUse, TurnoverClear, AccreceivUse
+from datasets.models import FbProject, FBPurchasesUse, TurnoverClear, AccreceivUse
 
 from analytics.clickhouse.repository import ClickHouseRepository
 
@@ -48,6 +48,7 @@ def get_dashboard_cache_timeout(dashboard: Dashboard) -> int:
 
 def get_dashboard_cache_schema_version(dashboard: Dashboard) -> int:
     return {
+        "Projects": 2,
         "Wordstat": 4,
         "Turnover": 4,
         "Purchases": 3,
@@ -557,6 +558,7 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
 
         source_model = {
+            "fb_project_gantt": FbProject,
             "fb_purchases_dashboard": FBPurchasesUse,
             "fb_turnover_dashboard": TurnoverClear,
             "fb_accreceiv_dashboard": AccreceivUse,
