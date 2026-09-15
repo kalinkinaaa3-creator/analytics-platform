@@ -1,5 +1,6 @@
 from bitrix24.models import BitrixDepartment, BitrixUser
-from bitrix24.services.dashboard_query import UNTRACKED_DEPARTMENT_NAME
+
+UNKNOWN_DEPARTMENT_NAME = "Подразделение не указано"
 
 
 def automatic_manager_directory(*, active_only=False):
@@ -16,8 +17,9 @@ def automatic_manager_directory(*, active_only=False):
         row["user_id"]: {
             "user_id": row["user_id"],
             "manager_name": row["full_name"] or str(row["user_id"]),
+            "active": row["active"],
             "department_name": departments.get(row["primary_department_id"])
-            or UNTRACKED_DEPARTMENT_NAME,
+            or UNKNOWN_DEPARTMENT_NAME,
         }
-        for row in users.values("user_id", "full_name", "primary_department_id")
+        for row in users.values("user_id", "full_name", "primary_department_id", "active")
     }

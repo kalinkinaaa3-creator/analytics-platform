@@ -3,7 +3,7 @@ from bitrix24.cache import invalidate_bitrix24_cache
 from bitrix24.services.manager_departments import automatic_manager_directory
 
 
-def departments_with_data():
+def managers_with_data():
     """Use all loaded history, independently of dashboard dates and filters."""
     manager_ids = set()
     for model in (BitrixLead, BitrixDeal):
@@ -11,17 +11,14 @@ def departments_with_data():
             model.objects.filter(is_deleted=False, assigned_by_id__isnull=False)
             .order_by().values_list("assigned_by_id", flat=True).distinct()
         )
-    # Include inactive managers when identifying departments with historical data.
-    return {
-        row["department_name"]
-        for manager_id, row in automatic_manager_directory().items()
-        if manager_id in manager_ids
-    }
+    return manager_ids
 
 
 def manager_options(user, *, with_data_only=False):
+    historical_ids = managers_with_data()
     tracking = sorted(
-        automatic_manager_directory(active_only=True).values(),
+        (row for row in automatic_manager_directory().values()
+         if row["active"] or row["user_id"] in historical_ids),
         key=lambda row: (row["manager_name"], row["user_id"]),
     )
     preference = BitrixUserDepartmentPreference.objects.filter(user=user).first()
@@ -32,13 +29,14 @@ def manager_options(user, *, with_data_only=False):
         options.append({
             "manager_id": row["user_id"],
             "manager_name": row["manager_name"],
+            "active": row["active"],
             "crm_department_name": row["department_name"],
             "filter_department_name": row["department_name"],
             "display_name": stored.get("display_name") or row["department_name"],
-            "selected": bool(stored.get("selected", True)) if preference else True,
+            "selected": bool(stored.get("selected", row["active"])),
         })
     if with_data_only:
-        departments = departments_with_data()
+        departments = {row["department_name"] for row in tracking if row["user_id"] in historical_ids}
         options = [row for row in options if row["crm_department_name"] in departments]
     return options
 

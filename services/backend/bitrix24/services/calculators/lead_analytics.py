@@ -14,6 +14,7 @@ from bitrix24.models import (
     BitrixUser,
 )
 from bitrix24.services.dashboard_query import UNTRACKED_DEPARTMENT_NAME
+from bitrix24.services.manager_departments import UNKNOWN_DEPARTMENT_NAME
 
 
 APM_STATUS_ID = "5"
@@ -118,7 +119,7 @@ def rebuild_lead_analytics(*, lead_ids=None, calculated_at=None) -> int:
                     primary_department_id=primary_department_id,
                     department_name=(
                         departments.get(primary_department_id)
-                        or UNTRACKED_DEPARTMENT_NAME
+                        or (UNKNOWN_DEPARTMENT_NAME if user else UNTRACKED_DEPARTMENT_NAME)
                     ),
                     company_name=lead.company_title or lead.name or lead.title,
                     is_return_customer=lead.is_return_customer,
