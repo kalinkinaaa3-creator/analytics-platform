@@ -31,3 +31,6 @@ Thumbs.dbairflow/logs/
 
 # airflow
 airflow/logs/
+
+# parser
+services/parser-browser/tara-session/
