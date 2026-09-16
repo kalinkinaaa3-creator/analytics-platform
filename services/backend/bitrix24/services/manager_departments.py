@@ -18,6 +18,7 @@ def automatic_manager_directory(*, active_only=False):
             "user_id": row["user_id"],
             "manager_name": row["full_name"] or str(row["user_id"]),
             "active": row["active"],
+            "department_id": row["primary_department_id"],
             "department_name": departments.get(row["primary_department_id"])
             or UNKNOWN_DEPARTMENT_NAME,
         }
