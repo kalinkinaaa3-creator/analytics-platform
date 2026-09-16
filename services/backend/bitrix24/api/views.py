@@ -1,4 +1,5 @@
 from __future__ import annotations
+from bitrix24.services.personal_departments import department_mapping
 
 import os
 from dataclasses import replace
@@ -12,7 +13,7 @@ from rest_framework.views import APIView
 
 from bitrix24.cache import get_dashboard_cache, set_dashboard_cache
 from bitrix24.models import BitrixLeadAnalytics, BitrixSyncState
-from bitrix24.services.department_preferences import display_names, manager_options, save_manager_options, selected_manager_ids
+from bitrix24.services.department_preferences import display_names, manager_options, save_manager_options
 from bitrix24.services.dashboard_query import LeadDashboardFilters, UNTRACKED_DEPARTMENT_NAME
 from bitrix24.services.export import (
     export_leads_xlsx,
@@ -57,6 +58,7 @@ def _filters(validated_data) -> LeadDashboardFilters:
         date_start=validated_data["date_start"],
         date_end=validated_data["date_end"],
         department_names=tuple(validated_data["department_names"]),
+        personal_departments=validated_data.get("personal_departments"),
         manager_ids=tuple(validated_data["manager_ids"]),
         tracked_manager_ids=tuple(validated_data["tracked_manager_ids"]) if "tracked_manager_ids" in validated_data else None,
         source_ids=tuple(validated_data["source_ids"]),
@@ -72,7 +74,9 @@ def _filters(validated_data) -> LeadDashboardFilters:
 
 def _personal_payload(user, payload):
     payload = dict(payload)
-    payload["tracked_manager_ids"] = selected_manager_ids(user)
+    personal = manager_options(user)
+    payload["personal_departments"] = department_mapping(personal)
+    payload["tracked_manager_ids"] = [row["manager_id"] for row in personal if row["selected"]]
     if payload.pop("use_personal_departments", True) and not payload["department_names"] and not payload["manager_ids"]:
         payload["manager_ids"] = payload["tracked_manager_ids"] or [-1]
         payload["exclude_untracked_department"] = False
@@ -117,12 +121,12 @@ class LeadDashboardFiltersView(CrmPublishedView):
     def _response(self, filters=None, user=None, use_personal_departments=True):
         personal = manager_options(user) if user else []
         if filters is not None and user:
-            filters = replace(filters, tracked_manager_ids=tuple(row["manager_id"] for row in personal if row["selected"]))
+            filters = replace(filters, tracked_manager_ids=tuple(row["manager_id"] for row in personal if row["selected"]), personal_departments=department_mapping(personal))
         personal_ids = [row["manager_id"] for row in personal if row["selected"]] if (
             user and filters and use_personal_departments and not filters.department_names and not filters.manager_ids
         ) else None
         query = PublishedLeadQuery()
-        values = query.options(filters, personal_ids)
+        values = query.options(filters, personal_ids, personal_departments=department_mapping(personal) if user else None)
         query.check()
         sync_state = BitrixSyncState.objects.filter(entity="leads").first()
         current_refresh = refresh_state()

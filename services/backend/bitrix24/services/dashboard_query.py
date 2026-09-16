@@ -90,6 +90,7 @@ class LeadDashboardFilters:
     exclude_untracked_department: bool = True
     group_by: str = "month"
     tracked_manager_ids: tuple[int, ...] | None = None
+    personal_departments: tuple[tuple[int, str], ...] | None = None
 
     def __post_init__(self):
         if self.date_end < self.date_start:
@@ -117,7 +118,10 @@ class LeadDashboardQuery:
             "date_end_exclusive": filters.date_end + timedelta(days=1),
         }
         department_column = "department_name"
-        if filters.tracked_manager_ids is not None:
+        if filters.personal_departments is not None:
+            from .personal_departments import department_expression
+            department_column = department_expression(filters.personal_departments, params)
+        elif filters.tracked_manager_ids is not None:
             params["tracked_manager_ids"] = filters.tracked_manager_ids or (-1,)
             params["untracked_department_name"] = UNTRACKED_DEPARTMENT_NAME
             department_column = "if(manager_id IN %(tracked_manager_ids)s, department_name, %(untracked_department_name)s)"
@@ -195,6 +199,7 @@ class LeadDashboardQuery:
             department_names=filters.department_names,
             manager_ids=filters.manager_ids,
             tracked_manager_ids=filters.tracked_manager_ids,
+            personal_departments=filters.personal_departments,
             source_ids=filters.source_ids,
             project_ids=filters.project_ids,
             semantic_status_ids=filters.semantic_status_ids,
@@ -221,6 +226,7 @@ class LeadDashboardQuery:
             department_names=filters.department_names,
             manager_ids=filters.manager_ids,
             tracked_manager_ids=filters.tracked_manager_ids,
+            personal_departments=filters.personal_departments,
             source_ids=filters.source_ids,
             project_ids=filters.project_ids,
             semantic_status_ids=filters.semantic_status_ids,

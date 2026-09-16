@@ -178,7 +178,10 @@ class DealDashboardQuery:
     def detail_rows(self, filters, *, limit=None, offset=0):
         parts, args = self.detail_where(filters)
         order = SORT_FIELDS[filters["sort_by"]]
-        if order == "department_name" and "tracked_manager_ids" in filters:
+        if order == "department_name" and "personal_departments" in filters:
+            from .personal_departments import department_expression
+            order = department_expression(filters["personal_departments"], args)
+        elif order == "department_name" and "tracked_manager_ids" in filters:
             from .dashboard_query import UNTRACKED_DEPARTMENT_NAME
             order = "if(manager_id IN %(sort_tracked)s, department_name, %(sort_untracked)s)"
             args["sort_tracked"] = tuple(filters["tracked_manager_ids"]) or (-1,)

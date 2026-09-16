@@ -2,14 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { defaultSeasonIds, objectNoun, sortedChanges, statusDistribution } from "./wordstatDemandUtils.js";
 
-test("all positive and negative changes are retained, including neutral and zero-base rows", () => {
-  const items = Array.from({ length: 30 }, (_, i) => ({ id: String(i), absolute_change: 1, growth_percent: 0.1, current_volume: i, status: "stable" }));
-  items.push({ id: "new", absolute_change: 5, growth_percent: null, status: "new" }, { id: "down", absolute_change: -1, growth_percent: -0.1, status: "stable" }, { id: "missing", absolute_change: null });
-  const sorted = sortedChanges(items, "growth", { key: "growth_percent", direction: "desc" });
-  assert.equal(sorted.length, 31);
-  assert.equal(sorted.at(-1).id, "new");
-  assert.equal(sortedChanges(items, "decline", { key: "absolute_change", direction: "asc" })[0].id, "down");
-  assert.equal(sortedChanges(items, "growth", { key: "current_volume", direction: "desc" })[0].current_volume, 29);
+test("rankings match cards and exclude stable boundaries, new and missing rows", () => {
+  const items = [-3, -2.01, -2, -0.1, 0, 0.1, 2, 2.01, 3].map((value) => ({
+    id: String(value), absolute_change: value * 100, growth_percent: value,
+    status: value > 2 ? "growth" : value < -2 ? "decline" : "stable",
+  }));
+  items.push({ id: "new", absolute_change: 5, growth_percent: null, status: "new" },
+    { id: "missing", absolute_change: null, status: "missing" });
+  assert.deepEqual(sortedChanges(items, "growth", { key: "growth_percent", direction: "desc" }).map(p => p.id), ["3", "2.01"]);
+  assert.deepEqual(sortedChanges(items, "decline", { key: "absolute_change", direction: "asc" }).map(p => p.id), ["-3", "-2.01"]);
+  for (const direction of ["growth", "decline"]) {
+    assert.equal(sortedChanges(items, direction, { key: "growth_percent", direction: "asc" }).length, statusDistribution(items)[direction].count);
+    assert.deepEqual(sortedChanges(items.filter(p => p.status === "stable"), direction, {}), []);
+  }
 });
 
 test("cards count grouped items, retain missing values and use the same items as selection", () => {

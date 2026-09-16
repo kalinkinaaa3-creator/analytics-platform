@@ -283,10 +283,8 @@ class MartReader:
     def conditions(self, filters):
         start, end = source.date_bounds(filters)
         parts, args = ["source_created_at >= %(start)s", "source_created_at < %(end)s"], {"start": start, "end": end}
-        tracking = self.refs["tracking"]
-        if "tracked_manager_ids" in filters:
-            tracked_ids = set(filters["tracked_manager_ids"])
-            tracking = {key: row for key, row in tracking.items() if key in tracked_ids}
+        from .personal_departments import personal_tracking
+        tracking = personal_tracking(self.refs, filters)
         departments = filters.get("department_names", [])
         if departments:
             ids = tuple(key for key, value in tracking.items() if value["department_name"] in departments)
@@ -317,10 +315,8 @@ class MartReader:
         return self.select(parts, args)
 
     def options(self, filters, *, faceted=True, personal_manager_ids=None):
-        refs, tracking = self.refs, self.refs["tracking"]
-        if "tracked_manager_ids" in filters:
-            tracked_ids = set(filters["tracked_manager_ids"])
-            tracking = {key: row for key, row in tracking.items() if key in tracked_ids}
+        from .personal_departments import personal_tracking
+        refs, tracking = self.refs, personal_tracking(self.refs, filters)
         if not faceted:
             users = []
             for key, user in refs["users"].items():

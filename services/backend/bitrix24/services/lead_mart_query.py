@@ -51,6 +51,9 @@ class PublishedLeadQuery(LeadDashboardQuery):
         field = options.get("sort_by", "source_created_at")
         if field not in COLUMNS:
             raise ValueError("Unknown lead sort field")
+        if field == "department_name" and filters.personal_departments is not None:
+            from .personal_departments import department_expression
+            field = department_expression(filters.personal_departments, args)
         direction = "DESC" if options.get("sort_direction", "desc") == "desc" else "ASC"
         # Match PostgreSQL's existing NULL ordering.
         nulls = "FIRST" if direction == "DESC" else "LAST"
@@ -58,7 +61,10 @@ class PublishedLeadQuery(LeadDashboardQuery):
         rows = self._dict_rows(f"""SELECT {', '.join(COLUMNS)} FROM {TABLE_NAME}
             WHERE {where} ORDER BY {field} {direction} NULLS {nulls}, lead_id ASC
             LIMIT %(limit)s OFFSET %(offset)s""", args)
+        department_names = dict(filters.personal_departments or ())
         for row in rows:
+            if filters.personal_departments is not None:
+                row["department_name"] = department_names.get(row["manager_id"], UNTRACKED_DEPARTMENT_NAME)
             for key in ("is_return_customer", "is_apm", "is_low_quality", "is_unmapped", "is_processed", "is_final"):
                 row[key] = None if row[key] is None else bool(row[key])
         return rows
@@ -73,7 +79,8 @@ class PublishedLeadQuery(LeadDashboardQuery):
                 break
             offset += batch_size
 
-    def options(self, filters=None, personal_ids=None):
+    def options(self, filters=None, personal_ids=None, *, personal_departments=None):
+        mapping = filters.personal_departments if filters and filters.personal_departments is not None else personal_departments
         def facet(field, columns, *, extra="1", counted=False, order=None):
             if filters is None:
                 where, args = "1", {}
@@ -85,7 +92,12 @@ class PublishedLeadQuery(LeadDashboardQuery):
                     changes.update(manager_ids=tuple(personal_ids) or (-1,), exclude_untracked_department=False)
                 where, args = self._where(replace(filters, **changes))
             expression = columns
-            if field == "department_names" and filters and filters.tracked_manager_ids is not None:
+            if field == "department_names" and mapping is not None:
+                from .personal_departments import department_expression
+                expression = department_expression(mapping, args) + " AS effective_department"
+                columns = "effective_department"
+                extra = "effective_department != ''"
+            elif field == "department_names" and filters and filters.tracked_manager_ids is not None:
                 expression = "if(manager_id IN %(facet_tracked)s, department_name, %(facet_untracked)s) AS effective_department"
                 args.update(facet_tracked=filters.tracked_manager_ids or (-1,), facet_untracked=UNTRACKED_DEPARTMENT_NAME)
                 columns = "effective_department"

@@ -19,7 +19,7 @@ export function objectNoun(count, level) {
   return words[n % 100 >= 11 && n % 100 <= 14 ? 2 : last === 1 ? 0 : last >= 2 && last <= 4 ? 1 : 2];
 }
 export function sortedChanges(items, direction, sort) {
-  return items.filter((p) => p.absolute_change != null && (direction === "growth" ? p.absolute_change > 0 : p.absolute_change < 0)).sort((a, b) => {
+  return items.filter((p) => p.status === direction).sort((a, b) => {
     const av = a[sort.key], bv = b[sort.key];
     if (av == null || bv == null) return av == null && bv == null ? a.id.localeCompare(b.id) : av == null ? 1 : -1;
     return (av - bv) * (sort.direction === "asc" ? 1 : -1) || a.id.localeCompare(b.id);

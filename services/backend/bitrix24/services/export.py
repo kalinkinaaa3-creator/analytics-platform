@@ -70,7 +70,13 @@ def filtered_lead_analytics_queryset(
         source_created_at__lt=_aware_start(filters.date_end + timedelta(days=1)),
     )
     department_field = "department_name"
-    if filters.tracked_manager_ids is not None:
+    if filters.personal_departments is not None:
+        department_field = "effective_department_name"
+        queryset = queryset.annotate(effective_department_name=Case(
+            *[When(manager_id=manager_id, then=Value(name)) for manager_id, name in filters.personal_departments],
+            default=Value(UNTRACKED_DEPARTMENT_NAME), output_field=CharField(),
+        ))
+    elif filters.tracked_manager_ids is not None:
         department_field = "effective_department_name"
         queryset = queryset.annotate(effective_department_name=Case(
             When(manager_id__in=filters.tracked_manager_ids, then=F("department_name")),

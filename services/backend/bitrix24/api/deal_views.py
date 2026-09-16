@@ -1,3 +1,4 @@
+from bitrix24.services.personal_departments import department_mapping
 from io import BytesIO
 
 from django.http import FileResponse
@@ -167,7 +168,7 @@ def export_response(rows, section, filters):
     info = book.create_sheet("Условия")
     info.append(["Раздел", section])
     for key, value in filters.items():
-        if key != "tracked_manager_ids":
+        if key not in ("tracked_manager_ids", "personal_departments"):
             info.append([key, str(value)])
     info.append(["Период", "Дата создания сделки"])
     stream = BytesIO()
@@ -189,6 +190,7 @@ class DealReportView(APIView):
         personal = manager_options(request.user)
         selected_ids = [row["manager_id"] for row in personal if row["selected"]]
         filters["tracked_manager_ids"] = selected_ids
+        filters["personal_departments"] = department_mapping(personal)
         use_personal = filters.pop("use_personal_departments", True) and not filters["department_names"] and not filters["manager_ids"]
         option_filters = dict(filters)
         if use_personal:

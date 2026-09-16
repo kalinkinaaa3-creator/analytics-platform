@@ -31,7 +31,7 @@ def manager_options(user, *, with_data_only=False):
             "manager_name": row["manager_name"],
             "active": row["active"],
             "crm_department_name": row["department_name"],
-            "filter_department_name": row["department_name"],
+            "filter_department_name": stored.get("display_name") or row["department_name"],
             "display_name": stored.get("display_name") or row["department_name"],
             "selected": bool(stored.get("selected", row["active"])),
         })
