@@ -165,12 +165,6 @@ def export_response(rows, section, filters):
             duration_days * 86400 if duration_days is not None else None
         )
         sheet.append([cell(row.get(key)) for key, _ in columns])
-    info = book.create_sheet("Условия")
-    info.append(["Раздел", section])
-    for key, value in filters.items():
-        if key not in ("tracked_manager_ids", "personal_departments"):
-            info.append([key, str(value)])
-    info.append(["Период", "Дата создания сделки"])
     stream = BytesIO()
     book.save(stream)
     stream.seek(0)
@@ -209,8 +203,8 @@ class DealReportView(APIView):
             if part in ("rows", "export"):
                 query = DealDashboardQuery(mart)
                 if part == "export":
-                    selected = set(selected_ids)
-                    rows = ({**row, "department_name": row["department_name"] if row["manager_id"] in selected else UNTRACKED_DEPARTMENT_NAME}
+                    names = dict(filters["personal_departments"])
+                    rows = ({**row, "department_name": names.get(row["manager_id"], UNTRACKED_DEPARTMENT_NAME)}
                             for row in query.export_rows(filters))
                     response = export_response(rows, section, filters)
                     mart.check()

@@ -20,6 +20,7 @@ HEADERS = (
     "Название лида",
     "Повторное обращение",
     "Менеджер",
+    "Подразделение",
     "Стадия",
     "Источник",
     "Мероприятия",
@@ -162,6 +163,7 @@ def export_leads_xlsx(filters: LeadDashboardFilters, *, rows=None, **query_optio
 
     if rows is None:
         rows = filtered_lead_analytics_queryset(filters, **query_options).iterator(chunk_size=1000)
+    names = dict(filters.personal_departments) if filters.personal_departments is not None else None
     count = 0
     for item in rows:
         sheet.append(
@@ -173,6 +175,8 @@ def export_leads_xlsx(filters: LeadDashboardFilters, *, rows=None, **query_optio
                     else ("Новый" if item.is_return_customer is False else "Не определён")
                 ),
                 item.manager_name,
+                (names.get(item.manager_id, UNTRACKED_DEPARTMENT_NAME)
+                 if names is not None else item.department_name),
                 item.status_name or item.status_id,
                 item.source_name or item.source_id,
                 item.activity_name,
