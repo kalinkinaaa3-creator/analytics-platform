@@ -16,10 +16,12 @@ DASHBOARD_MENU_CONFIG = {
         (
             "Projects",
             "Проекты",
+            "projects",
         ),
         (
             "Revenue",
             "Динамика выручки",
+            "revenue",
         ),
     ],
 
@@ -27,18 +29,22 @@ DASHBOARD_MENU_CONFIG = {
         (
             "Wordstat",
             "Тренды и сезонность",
+            "trends",
         ),
         (
             "SEO-аналитика",
             "SEO-аналитика",
+            "search",
         ),
         (
             "Контекстная реклама",
             "Контекстная реклама",
+            "advertising",
         ),
         (
             "Лидогенерация",
             "Лидогенерация",
+            "leads",
         ),
     ],
 
@@ -46,14 +52,17 @@ DASHBOARD_MENU_CONFIG = {
         (
             "Purchases",
             "Сырье",
+            "purchases",
         ),
         (
             "Accreceiv",
             "ДЗ",
+            "receivables",
         ),
         (
             "Turnover",
             "Остатки",
+            "stock",
         ),
     ],
 
@@ -61,10 +70,12 @@ DASHBOARD_MENU_CONFIG = {
         (
             "PlannedSales",
             "План/Факт продаж",
+            "sales",
         ),
         (
             "CRM Analytics",
             "Аналитика CRM",
+            "crm",
         ),
     ],
 }
@@ -126,6 +137,7 @@ class DashboardMenuView(APIView):
             for (
                 dashboard_name,
                 display_name,
+                icon,
             ) in items:
                 dashboard = dashboards.get(
                     dashboard_name
@@ -142,7 +154,7 @@ class DashboardMenuView(APIView):
                         f"/dashboards/"
                         f"{dashboard.slug}"
                     ),
-                    "icon": "🗁",
+                    "icon": icon,
                 })
 
             if section_items:
