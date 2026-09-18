@@ -45,7 +45,7 @@ export function RefreshInfoTooltip({ children, lastUpdated, averageSeconds, aver
 const DASHBOARD_INFO = [
   [".context-dashboard", { schedule: "ежедневно, включая субботу и воскресенье, в 06:50 МСК", endpoint: "/v1/context/refresh/state/", averageText: "ориентировочно 1–3 мин" }],
   [".seo-dashboard:not([data-dashboard-type])", { schedule: "ежедневно, включая субботу и воскресенье, в 06:40 МСК", endpoint: "/v1/seo/refresh/state/", averageText: "ориентировочно 1–3 мин" }],
-  [".crm-dashboard", { schedule: "пн–сб в 03:10 и 15:10 МСК; вс в 10:00 — дополнительная сверка лидов за последние 14 дней", endpoint: "/v1/bitrix24/dashboard/refresh/", averageText: "ориентировочно 5–7 мин" }],
+  [".crm-dashboard", { schedule: "пн–сб в 03:10 и 15:10 МСК; вс в 10:00 — дополнительная сверка за последние 14 дней", endpoint: "/v1/bitrix24/dashboard/refresh/", averageText: "ориентировочно 5–7 мин" }],
   [".planned-sales-dashboard", { schedule: "ежедневно, включая субботу и воскресенье, в 07:30 МСК", averageText: "ориентировочно 2–5 мин" }],
   [".revenue-dashboard", { schedule: "ежедневно, включая субботу и воскресенье, в 07:30 МСК", averageText: "ориентировочно 2–5 мин" }],
   [".purchases", { schedule: "ежедневно, включая субботу и воскресенье, в 06:00 МСК", averageText: "ориентировочно 2–5 мин" }],
