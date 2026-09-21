@@ -35,5 +35,7 @@ test('only Tara HTTPS origins and safe session references', () => {
 test('404 stays distinct from access denial', () => {
   assert.equal(denied(404, 'product not found'), false);
   assert.equal(denied(403, 'Forbidden'), true);
+  assert.equal(denied(502, 'Bad gateway'), true);
+  assert.equal(denied(503, 'Service unavailable'), false);
   assert.equal(denied(200, 'Доступ к сайту spb.tara.ru запрещен'), true);
 });

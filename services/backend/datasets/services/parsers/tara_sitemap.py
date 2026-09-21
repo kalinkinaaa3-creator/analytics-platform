@@ -141,7 +141,7 @@ def fetch_sitemap_xml(session=None):
         from .tara_jobs import browser_post
         from .tara_product_parser import BrowserBlockedError, BrowserServiceError
         payload = browser_post('/fetch', {'url': TARA_SITEMAP_URL, 'session': session}, timeout=180)
-        if payload.get('status') in (401, 403) or payload.get('blocked'):
+        if payload.get('status') in (401, 403, 502) or payload.get('blocked'):
             raise BrowserBlockedError('Sitemap access blocked')
         if payload.get('status') != 200:
             raise BrowserServiceError('Sitemap unavailable')
@@ -158,7 +158,7 @@ def fetch_sitemap_xml(session=None):
         },
     )
 
-    if response.status_code in (401, 403):
+    if response.status_code in (401, 403, 502):
         from .tara_product_parser import BrowserBlockedError
         raise BrowserBlockedError('Sitemap access blocked')
     response.raise_for_status()

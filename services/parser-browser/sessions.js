@@ -51,5 +51,5 @@ export function workerPath(version, id) {
 }
 
 export function denied(status, html) {
-  return [401, 403].includes(status) || /access denied|request blocked|403\s*(?:error|forbidden)|доступ к сайту[\s\S]{0,200}запрещен/i.test(html);
+  return [401, 403, 502].includes(status) || /access denied|request blocked|403\s*(?:error|forbidden)|доступ к сайту[\s\S]{0,200}запрещен/i.test(html);
 }

@@ -131,6 +131,9 @@ def fetch_html_via_browser(url: str, session: str | None = None) -> str:
     if status == 429:
         raise BrowserServiceError("HTTP 429: request rate limited")
 
+    if status == 502:
+        raise BrowserBlockedError('HTTP 502: blocked by Tara')
+
     if not has_product_content and (status in (401, 403) or blocked or
             re.search(r"forbidden|доступ к сайту[\s\S]{0,200}запрещен", lower_html)):
         raise BrowserBlockedError(f"Blocked by Tara, status={status}")

@@ -277,9 +277,14 @@ def check_session(candidate):
         valid = result.get('valid') is True and run.status == 'waiting_session' and run.wait_until and run.wait_until > timezone.now()
         current.status = 'valid' if valid else 'rejected'
         current.error = '' if valid else 'Доступ не подтверждён. Проверьте файл, доступность сайта и срок ожидания.'
+        if not valid and result.get('reason') == 'blocked':
+            current.error = 'Тара ограничивает доступ с загруженной сессией (HTTP 401/403/502 или страница блокировки).'
         current.checked_at = timezone.now()
         current.save()
         if valid:
+            # Recover failures recorded by the previous 502 handling, in this run only.
+            run.items.filter(status='error', error__startswith='HTTP 502:').update(
+                status='pending', error='', finished_at=None)
             run.session, run.status, run.error = current, 'queued', ''
             run.wait_until = None
             run.save()

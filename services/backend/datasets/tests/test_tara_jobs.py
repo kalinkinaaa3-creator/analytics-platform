@@ -88,6 +88,32 @@ class TaraJobsTests(TestCase):
         self.assertEqual(run.wait_until, deadline)
         self.assertFalse((Path(self.tmp.name) / candidate.filename).exists())
 
+    def test_valid_session_requeues_legacy_502_only_in_current_run(self):
+        run = self.run_job()
+        item = TaraItem.objects.create(run=run, product=self.product, status='error', error='HTTP 502: server error')
+        other = TaraRun.objects.create(request_key='old', status='failed')
+        old_item = TaraItem.objects.create(run=other, product=self.product, status='error', error='HTTP 502: server error')
+        jobs.set_waiting(run, 'blocked')
+        candidate = jobs.upload(run.pk, json.dumps(state()).encode(), None)
+        candidate.status = 'checking'; candidate.save()
+        with patch.object(jobs, 'browser_post', return_value={'valid': True}):
+            jobs.check_session(candidate)
+        item.refresh_from_db(); old_item.refresh_from_db()
+        self.assertEqual(item.status, 'pending')
+        self.assertEqual(old_item.status, 'error')
+
+    def test_502_item_stays_pending_without_overwriting_product_error(self):
+        run = self.run_job()
+        item = TaraItem.objects.create(run=run, product=self.product, status='running')
+        response = Mock()
+        response.json.return_value = {'status': 502, 'html': '<body>Bad gateway</body>', 'blocked': False}
+        with patch('datasets.services.parsers.tara_product_parser.requests.post', return_value=response):
+            self.assertEqual(jobs.process_item(item.pk, run.pk, run.lease, 'file'), 'blocked')
+        item.refresh_from_db(); self.product.refresh_from_db()
+        self.assertEqual(item.status, 'pending')
+        self.assertFalse(self.product.last_error)
+        self.assertFalse(TaraProductPrice.objects.exists())
+
     def test_expiry_finishes_parent_and_rejects_late_upload(self):
         parent = ParserMasterPipelineRun.objects.create(status='waiting_session')
         run = self.run_job(master=parent)
@@ -145,6 +171,8 @@ class TaraJobsTests(TestCase):
         for status, html, exception in [
             (404, '<body>Not found</body>', ProductNotFoundError),
             (403, '<body>Forbidden</body>', BrowserBlockedError),
+            (502, '<body>Bad gateway</body>', BrowserBlockedError),
+            (503, '<body>Service unavailable</body>', BrowserServiceError),
             (200, '<body>Something else</body>', BrowserServiceError),
         ]:
             response = Mock(); response.json.return_value = {'status': status, 'html': html}
