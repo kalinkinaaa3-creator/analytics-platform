@@ -1,7 +1,6 @@
 # Сессия Тары: Chromium на Windows
 
-Файл содержит cookies и localStorage сайта. Не отправляйте его в переписку,
-не публикуйте и не добавляйте в Git. Загружайте только через форму iPrice.
+Файл содержит cookies и localStorage сайта. Загружайте только через форму iPrice.
 
 1. Установите Node.js версии 22 или новее. Скачайте export-session.mjs
    из формы iPrice в отдельную папку, например C:\TaraSession.
