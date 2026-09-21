@@ -1,6 +1,7 @@
 from django.db import models
 from django.db.models import Q
 from django.conf import settings
+from .tara_models import TaraCoordinator, TaraItem, TaraRun, TaraSession
 
 
 
@@ -2357,12 +2358,18 @@ class ParserMasterPipelineRun(models.Model):
     STATUS_RUNNING = "running"
     STATUS_SUCCESS = "success"
     STATUS_FAILED = "failed"
+    STATUS_WAITING_TARA = "waiting_tara"
+    STATUS_WAITING_SESSION = "waiting_session"
+    STATUS_CANCELLED = "cancelled"
 
     STATUS_CHOICES = [
         (STATUS_QUEUED, "Queued"),
         (STATUS_RUNNING, "Running"),
         (STATUS_SUCCESS, "Success"),
         (STATUS_FAILED, "Failed"),
+        (STATUS_WAITING_TARA, "Waiting for Tara"),
+        (STATUS_WAITING_SESSION, "Waiting for session"),
+        (STATUS_CANCELLED, "Cancelled"),
     ]
 
     status = models.CharField(

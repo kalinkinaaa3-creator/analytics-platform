@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from django.core.management import call_command
 from django.utils import timezone
+from datasets.services.parsers.tara_jobs import TaraPending
 
 from analytics.services.bitrix_notify import (
     send_bitrix_message,
@@ -135,6 +136,21 @@ def _run_command(
     """
 
     command_options = command_options or {}
+    completed = list(run.result.get('completed_steps', []))
+    if step_name in completed:
+        return
+    if command_name == 'load_tara_products':
+        command_options = {**command_options, 'master_run_id': run.pk, 'step_key': step_name}
+    if command_name == 'report_tara_parser_result':
+        from datasets.models import TaraRun
+        # Report both passes separately so the retry subset never appears to be
+        # the whole classified selection.
+        for child in TaraRun.objects.filter(master=run).order_by('id'):
+            call_command(command_name, **command_options, tara_run_id=child.pk)
+        completed.append(step_name)
+        run.result = {**run.result, 'completed_steps': completed}
+        run.save(update_fields=['result'])
+        return
 
     _update_run(
         run,
@@ -157,6 +173,9 @@ def _run_command(
         command_name,
         **command_options,
     )
+    completed.append(step_name)
+    run.result = {**run.result, 'completed_steps': completed}
+    run.save(update_fields=['result'])
 
 
 def run_parser_master_pipeline(
@@ -187,7 +206,9 @@ def run_parser_master_pipeline(
             )
         ) from exc
 
-    started_at = timezone.now()
+    if run.status in ('success', 'failed', 'cancelled'):
+        return {'run_id': run.pk, 'status': run.status}
+    started_at = run.started_at or timezone.now()
 
     # started_at задаём явно, чтобы это же значение
     # использовалось при вычислении длительности.
@@ -198,7 +219,7 @@ def run_parser_master_pipeline(
     run.finished_at = None
     run.current_step = "starting"
     run.error = ""
-    run.result = {}
+    run.result = run.result or {}
 
     run.save(
         update_fields=[
@@ -440,6 +461,18 @@ def run_parser_master_pipeline(
 
         return result
 
+    except TaraPending:
+        from datasets.models import TaraRun
+        run.refresh_from_db()
+        if run.status in ('failed', 'cancelled', 'success'):
+            return {'run_id': run.pk, 'status': run.status}
+        child = TaraRun.objects.filter(master=run).order_by('-id').first()
+        run.status = 'waiting_session' if child and child.status == 'waiting_session' else 'waiting_tara'
+        run.finished_at = None
+        run.error = ''
+        run.save(update_fields=['status', 'finished_at', 'error'])
+        _publish_run_event(run, change_type='parser_progress')
+        return {'run_id': run.pk, 'status': run.status}
     except Exception as exc:
         # =====================================================
         # Завершение с ошибкой

@@ -1,21 +1,12 @@
-import time
-
 from django.core.management.base import BaseCommand
-
-from datasets.services.parsers.product_key_selector import (
-    get_active_classified_product_keys,
-)
-
-from datasets.services.parsers.tara_product_parser import parse_tara_products
-from datasets.services.parsers.product_image_sync import (
-    sync_parser_source_images,
-)
 
 
 class Command(BaseCommand):
     help = "Parse Tara product cards through Playwright browser service"
 
     def add_arguments(self, parser):
+        parser.add_argument("--master-run-id", type=int)
+        parser.add_argument("--step-key", default="tara_parser")
         parser.add_argument("--limit", type=int, default=None)
         parser.add_argument("--workers", type=int, default=None)
         parser.add_argument("--retry-failed", action="store_true")
@@ -48,111 +39,25 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        limit = options["limit"]
-        workers = options["workers"]
-        retry_failed = options["retry_failed"]
-
-        product_keys = None
-
-        if options["classified_only"]:
-            product_keys = (
-                get_active_classified_product_keys(
-                    source="tara",
-                )
-            )
-
-            self.stdout.write(
-                (
-                    "Tara classified product keys selected: "
-                    f"{len(product_keys)}"
-                )
-            )
-
-        self.stdout.write(
-            (
-                "Tara products parsing started: "
-                f"limit={limit}, "
-                f"workers={workers}, "
-                f"retry_failed={retry_failed}, "
-                f"classified_only={options['classified_only']}"
-            )
-        )
-
-        result = parse_tara_products(
-            limit=limit,
-            workers=workers,
-            retry_failed=retry_failed,
-            blocked_only=False,
-            product_keys=product_keys,
-        )
-
-        self.stdout.write(
-            self.style.SUCCESS(
-                "Tara products parsing finished: "
-                f"total={result['total']}, "
-                f"success={result['success']}, "
-                f"failed={result['failed']}, "
-                f"not_found={result['not_found']}, "
-                f"blocked={result['blocked']}, "
-                f"properties={result['properties']}, "
-                f"prices={result['prices']}"
-            )
-        )
-
-        if not options["retry_blocked"]:
-            self.stdout.write(
-                f"Tara image sync: {sync_parser_source_images('tara')}"
-            )
+        import uuid
+        from django.core.management.base import CommandError
+        from datasets.services.parsers.tara_jobs import create_run, kick, TaraPending
+        master = options.get("master_run_id")
+        key = f"master:{master}:{options['step_key']}" if master else f"cli:{uuid.uuid4().hex}"
+        try:
+            run = create_run(request_key=key, origin="master" if master else "cli", master_id=master,
+                             options={k: options[k] for k in ("limit", "workers", "classified_only", "retry_failed")})
+        except TaraPending:
+            if master:
+                raise
+            raise CommandError("Another Tara run is active. See iPrice for progress.") from None
+        if run.status in ("failed", "cancelled"):
+            raise CommandError(run.error or "Tara run stopped")
+        if run.status == "success":
             return
-
-        if result.get("blocked", 0) <= 0:
-            self.stdout.write(
-                "No blocked Tara products to retry"
-            )
-            self.stdout.write(
-                f"Tara image sync: {sync_parser_source_images('tara')}"
-            )
-            return
-
-        delay = options["retry_blocked_delay"]
-        rounds = options["retry_blocked_rounds"]
-
-        for round_number in range(1, rounds + 1):
-            self.stdout.write(
-                (
-                    f"Tara blocked retry round "
-                    f"{round_number}/{rounds} "
-                    f"will start after {delay} seconds"
-                )
-            )
-
-            time.sleep(delay)
-
-            retry_result = parse_tara_products(
-                limit=None,
-                workers=workers,
-                retry_failed=False,
-                blocked_only=True,
-                product_keys=product_keys,
-            )
-
-            self.stdout.write(
-                self.style.SUCCESS(
-                    "Tara blocked retry finished: "
-                    f"round={round_number}, "
-                    f"total={retry_result['total']}, "
-                    f"success={retry_result['success']}, "
-                    f"failed={retry_result['failed']}, "
-                    f"not_found={retry_result['not_found']}, "
-                    f"blocked={retry_result['blocked']}, "
-                    f"properties={retry_result['properties']}, "
-                    f"prices={retry_result['prices']}"
-                )
-            )
-
-            if retry_result.get("blocked", 0) <= 0:
-                break
-
-        self.stdout.write(
-            f"Tara image sync: {sync_parser_source_images('tara')}"
-        )
+        kick()
+        if master:
+            raise TaraPending(f"Tara #{run.pk}: {run.status}")
+        self.stdout.write(f"Tara #{run.pk}: {run.status}. Background job; progress/session upload in iPrice.")
+        if options["retry_blocked"]:
+            self.stdout.write("Blocked requests now wait for a new session (4 hours); blind retries are disabled.")

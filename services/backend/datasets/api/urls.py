@@ -1,5 +1,6 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
+from .tara_views import TaraStatusView, TaraSessionUploadView, TaraCancelView, TaraInternalRunView
 
 
 
@@ -111,6 +112,10 @@ router.register(
 
 
 urlpatterns = [
+    path('parsers/tara/status/', TaraStatusView.as_view()),
+    path('parsers/tara/<int:run_id>/session/', TaraSessionUploadView.as_view()),
+    path('parsers/tara/<int:run_id>/cancel/', TaraCancelView.as_view()),
+    path('parsers/tara/internal/run/', TaraInternalRunView.as_view()),
     path(
         "fb-project/upload/",
         FbProjectUploadView.as_view(),

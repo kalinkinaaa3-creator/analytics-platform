@@ -291,6 +291,11 @@ TARA_BROWSER_SERVICE_URL = os.getenv(
 )
 
 TARA_PARSER_WORKERS = int(os.getenv("TARA_PARSER_WORKERS", "3"))
+TARA_SESSION_DIR = Path(os.getenv("TARA_SESSION_DIR", str(BASE_DIR / "private" / "tara-sessions")))
+TARA_SESSION_WAIT_HOURS = 4
+TARA_SESSION_RETENTION_DAYS = 7
+TARA_DASHBOARD_URL = os.getenv("TARA_DASHBOARD_URL", "/dashboards/iprice")
+TARA_SERVICE_KEY = os.getenv("TARA_SERVICE_KEY", os.getenv("INTERNAL_API_KEY", ""))
 TARA_PARSER_BATCH_SIZE = int(os.getenv("TARA_PARSER_BATCH_SIZE", "30"))
 
 

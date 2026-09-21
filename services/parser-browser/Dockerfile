@@ -15,6 +15,7 @@ COPY package.json package-lock.json* ./
 RUN npm install --prefer-online
 
 COPY server.js ./
+COPY sessions.js ./
 
 EXPOSE 3000
 

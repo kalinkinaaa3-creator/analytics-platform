@@ -18,6 +18,20 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        # A resumed master must never run twice after a dispatcher/upload race.
+        import fcntl
+        from pathlib import Path
+        from django.conf import settings
+        lock_dir = Path(settings.BASE_DIR) / 'private' / 'parser-locks'
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        with (lock_dir / f"master-{options['run_id']}.lock").open('a') as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return
+            return self._run(options)
+
+    def _run(self, options):
         run_id = options["run_id"]
 
         if not ParserMasterPipelineRun.objects.filter(

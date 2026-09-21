@@ -8,7 +8,10 @@ from analytics.services.bitrix_notify import send_bitrix_message
 
 
 logger = logging.getLogger("maintenance.process_kill")
-EXEMPT_MANAGEMENT_COMMANDS = frozenset({"load_yd_wordstat_api"})
+EXEMPT_MANAGEMENT_COMMANDS = frozenset({
+    "load_yd_wordstat_api", "run_parser_master_pipeline", "load_tara_products",
+    "load_ps_products", "load_tt_products", "run_tara_job",
+})
 
 
 class Command(BaseCommand):

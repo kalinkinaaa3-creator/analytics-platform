@@ -2,6 +2,8 @@ import express from "express";
 import { addExtra } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import playwright from "playwright";
+import fs from 'node:fs/promises';
+import { sessionPath, validTaraUrl, internalAccess, saveState, workerState, workerPath, denied } from './sessions.js';
 
 console.log("server.js loaded");
 
@@ -44,6 +46,7 @@ class Worker {
     this.context = null;
     this.requests = 0;
     this.busy = false;
+    this.version = null;
   }
 
   async init() {
@@ -63,6 +66,7 @@ class Worker {
       locale: "ru-RU",
       userAgent:
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+      ...(this.version ? { storageState: await workerState(this.version, this.id) } : {}),
     });
 
     this.requests = 0;
@@ -85,12 +89,16 @@ class Worker {
     await this.init();
   }
 
-  async fetch(url) {
+  async fetch(url, version) {
     this.busy = true;
 
     let page = null;
 
     try {
+      if (this.version !== version) {
+        this.version = version;
+        await this.restart();
+      }
       if (!this.browser || !this.context) {
         await this.init();
       }
@@ -117,7 +125,10 @@ class Worker {
       await page.waitForTimeout(PAGE_WAIT_MS);
 
       const html = await page.content();
-      const blocked = status === 401 || isBlockedContent(html);
+      const blocked = denied(status, html) || isBlockedContent(html);
+      if (status === 200 && !blocked && this.version && /topic__heading|price_matrix_block|props_block__wrapper/.test(html)) {
+        await saveState(workerPath(this.version, this.id), await this.context.storageState());
+      }
 
       console.log(
         `[W${this.id}] OK status=${status} blocked=${blocked} html=${html.length} url=${url}`
@@ -127,6 +138,7 @@ class Worker {
         status,
         html,
         blocked,
+        final_url: page.url(),
       };
     } catch (error) {
       console.log(`[W${this.id}] ERROR`, error.message);
@@ -185,20 +197,23 @@ async function initWorkers() {
 }
 
 async function getFreeWorker() {
+  const deadline = Date.now() + 10000;
   while (true) {
     const free = workers.find((worker) => !worker.busy);
 
     if (free) {
+      free.busy = true;
       return free;
     }
+    if (Date.now() > deadline) throw new Error('Browser workers busy');
 
     await sleep(50);
   }
 }
 
 app.get("/health", (req, res) => {
-  res.json({
-    ok: true,
+  res.status(workers.length === WORKERS_COUNT ? 200 : 503).json({
+    ok: workers.length === WORKERS_COUNT,
     workers: workers.length,
     busy: workers.filter((worker) => worker.busy).length,
     config: {
@@ -213,10 +228,10 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.post("/fetch", async (req, res) => {
-  const { url } = req.body || {};
+app.post("/fetch", internalAccess, async (req, res) => {
+  const { url, session: version } = req.body || {};
 
-  if (!url) {
+  if (!validTaraUrl(url)) {
     return res.status(400).json({
       error: "No URL provided",
     });
@@ -225,8 +240,9 @@ app.post("/fetch", async (req, res) => {
   console.log("\n[REQUEST]", url);
 
   try {
+    sessionPath(version);
     const worker = await getFreeWorker();
-    const result = await worker.fetch(url);
+    const result = await worker.fetch(url, version);
 
     return res.json(result);
   } catch (error) {
@@ -236,7 +252,45 @@ app.post("/fetch", async (req, res) => {
   }
 });
 
-app.post("/shutdown", async (req, res) => {
+app.post('/session/check', internalAccess, async (req, res) => {
+  let browser;
+  try {
+    const filename = sessionPath(req.body?.session);
+    const urls = req.body?.urls;
+    if (!Array.isArray(urls) || !urls.length || urls.length > 3 || !urls.every(validTaraUrl)) {
+      return res.status(400).json({ error: 'Invalid validation URLs' });
+    }
+    browser = await chromium.launch({ headless: false, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+    const context = await browser.newContext({
+      storageState: JSON.parse(await fs.readFile(filename, 'utf8')), locale: 'ru-RU',
+      viewport: { width: 1920, height: 1080 },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
+    });
+    const page = await context.newPage();
+    let missing = 0;
+    for (const url of urls) {
+      const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: FETCH_TIMEOUT_MS });
+      await page.waitForTimeout(5000);
+      const html = new URL(url).pathname.endsWith('.xml') && response
+        ? await response.text() : await page.content();
+      const status = response?.status();
+      if (status === 404) { missing++; continue; }
+      if (denied(status, html)) return res.json({ valid: false, reason: 'blocked' });
+      if (status === 200 && /topic__heading|props_block__wrapper/.test(html) && validTaraUrl(page.url())) {
+        await saveState(filename, await context.storageState());
+        return res.json({ valid: true });
+      }
+      return res.json({ valid: false, reason: 'unavailable' });
+    }
+    // Real 404s are handled by the parser, never request a new session for them.
+    return res.json({ valid: missing === urls.length, reason: 'not_found' });
+  } catch (error) {
+    console.error('Session check failed:', error.name);
+    return res.status(503).json({ valid: false, reason: 'service_unavailable' });
+  } finally { await browser?.close().catch(() => {}); }
+});
+
+app.post("/shutdown", internalAccess, async (req, res) => {
   console.log("Shutdown requested");
 
   try {

@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from urllib.parse import urlsplit, parse_qs
 
 import requests
 from bs4 import BeautifulSoup
@@ -32,6 +33,10 @@ class ProductNotFoundError(Exception):
 
 
 class BrowserServiceError(Exception):
+    pass
+
+
+class BrowserTransportError(BrowserServiceError):
     pass
 
 
@@ -80,18 +85,21 @@ def html_has_product_content(html: str) -> bool:
     )
 
 
-def fetch_html_via_browser(url: str) -> str:
+def fetch_html_via_browser(url: str, session: str | None = None) -> str:
     logger.info("Browser request URL: %s", url)
 
     browser_url = settings.TARA_BROWSER_SERVICE_URL.rstrip("/")
 
-    response = requests.post(
-        f"{browser_url}/fetch",
-        json={"url": url},
-        timeout=90,
-    )
-
-    response.raise_for_status()
+    try:
+        response = requests.post(
+            f"{browser_url}/fetch",
+            json={"url": url, "session": session},
+            headers={"X-Tara-Service-Key": settings.TARA_SERVICE_KEY},
+            timeout=180,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise BrowserTransportError('Browser service unavailable') from exc
 
     payload = response.json()
 
@@ -109,7 +117,7 @@ def fetch_html_via_browser(url: str) -> str:
     )
 
     if error:
-        raise BrowserServiceError(error)
+        raise BrowserTransportError('Browser service could not complete the request')
 
     if status is not None:
         status = int(status)
@@ -119,6 +127,13 @@ def fetch_html_via_browser(url: str) -> str:
 
     if status == 404:
         raise ProductNotFoundError("HTTP 404: product page not found")
+
+    if status == 429:
+        raise BrowserServiceError("HTTP 429: request rate limited")
+
+    if not has_product_content and (status in (401, 403) or blocked or
+            re.search(r"forbidden|доступ к сайту[\s\S]{0,200}запрещен", lower_html)):
+        raise BrowserBlockedError(f"Blocked by Tara, status={status}")
 
     if status == 401 and not has_product_content:
         raise BrowserBlockedError("HTTP 401: blocked by Tara")
@@ -149,6 +164,14 @@ def fetch_html_via_browser(url: str) -> str:
 
     if "<body" not in lower_html:
         raise BrowserServiceError("Empty or invalid html")
+
+    if not has_product_content:
+        raise BrowserServiceError("Product card content not found; existing data preserved")
+    if payload.get('final_url'):
+        requested, final = urlsplit(url), urlsplit(payload['final_url'])
+        oid = parse_qs(requested.query).get('oid')
+        if requested.hostname != final.hostname or (oid and parse_qs(final.query).get('oid') != oid):
+            raise BrowserServiceError('Unexpected product/region redirect; existing data preserved')
 
     return html
 

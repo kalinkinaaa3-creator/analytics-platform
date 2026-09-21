@@ -27,8 +27,26 @@ class Command(BaseCommand):
             help="How many problem URLs to include in message",
         )
         parser.add_argument("--skip-bitrix", action="store_true")
+        parser.add_argument('--tara-run-id', type=int)
 
     def handle(self, *args, **options):
+        if options.get('tara_run_id'):
+            from datasets.models import TaraRun
+            from datasets.services.parsers.tara_jobs import progress
+            run = TaraRun.objects.get(pk=options['tara_run_id'])
+            counts = progress(run)['counts']
+            message = (
+                f'Tara run #{run.pk}: {run.status}\n'
+                f'Origin: {run.origin}; classified_only={bool(run.options.get("classified_only"))}\n'
+                f'Total: {sum(counts.values())}; success: {counts.get("success", 0)}; '
+                f'404: {counts.get("not_found", 0)}; errors: {counts.get("error", 0)}; '
+                f'pending: {counts.get("pending", 0)}'
+            )
+            logger.info(message)
+            self.stdout.write(message)
+            if not options['skip_bitrix']:
+                send_bitrix_message(message, logger_name='parsers.tara')
+            return
         limit = options["limit"]
 
         total = ParserProductUrl.objects.filter(source="tara").count()

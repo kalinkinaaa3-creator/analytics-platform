@@ -7756,3 +7756,10 @@ th.iprice-sticky-column {
   font-weight: 700;
   line-height: 1.4;
 }
+
+.tara-session-panel { margin-bottom: 16px; }
+.tara-session-panel form { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+.tara-session-panel label { display: flex; flex-direction: column; gap: 6px; }
+.tara-session-panel input { max-width: 100%; }
+.tara-session-panel details { margin-top: 12px; }
+.tara-session-panel li { margin: 8px 0; }

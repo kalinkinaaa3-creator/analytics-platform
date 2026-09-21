@@ -73,8 +73,12 @@ services:
       - .env
     environment:
       TZ: Europe/Moscow
+      TARA_SESSION_DIR: /sessions
+      TARA_SERVICE_KEY: ${TARA_SERVICE_KEY:-${INTERNAL_API_KEY}}
     volumes:
       - ./services/backend:/app
+      - ./services/parser-browser/tara-session:/sessions
+    # Private session storage is shared only by backend and browser service.
     ports:
       - "18000:8000"
     depends_on:
@@ -224,6 +228,10 @@ services:
       JITTER_MIN_MS: 3000
       JITTER_MAX_MS: 8000
       WORKER_STARTUP_DELAY_MS: 3000
+      TARA_SESSION_DIR: /sessions
+      TARA_SERVICE_KEY: ${TARA_SERVICE_KEY:-${INTERNAL_API_KEY}}
+    volumes:
+      - ./services/parser-browser/tara-session:/sessions
     ports:
       - "3000:3000"
     restart: unless-stopped

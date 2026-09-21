@@ -1606,6 +1606,8 @@ class ParserMasterPipelineRunView(APIView):
                         ParserMasterPipelineRun
                         .STATUS_RUNNING
                     ),
+                    ParserMasterPipelineRun.STATUS_WAITING_TARA,
+                    ParserMasterPipelineRun.STATUS_WAITING_SESSION,
                 ],
             )
             .select_related(
@@ -1700,6 +1702,8 @@ class ParserMasterPipelineRunView(APIView):
             )
         )
 
+        stale_runs = stale_runs.exclude(current_step__startswith="tara_")
+
         stale_runs.update(
             status=ParserMasterPipelineRun.STATUS_FAILED,
             current_step="stale",
@@ -1716,6 +1720,8 @@ class ParserMasterPipelineRunView(APIView):
                 status__in=[
                     ParserMasterPipelineRun.STATUS_QUEUED,
                     ParserMasterPipelineRun.STATUS_RUNNING,
+                    ParserMasterPipelineRun.STATUS_WAITING_TARA,
+                    ParserMasterPipelineRun.STATUS_WAITING_SESSION,
                 ]
             )
             .select_related("started_by")
