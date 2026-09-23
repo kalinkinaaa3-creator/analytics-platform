@@ -54,8 +54,22 @@ def ensure_browser(report, stop, selected=''):
     return executable
 
 
-def start_browser(executable, environment, product, report, stop):
-    profile = data_dir() / environment / 'profile'
+def resolve_profile(environment, selected=''):
+    if not selected:
+        return data_dir() / environment / 'profile', None
+    path = Path(os.path.expandvars(selected.strip())).expanduser()
+    if not path.is_absolute() or not path.is_dir():
+        raise ValueError('Выберите существующую папку профиля Chromium по полному пути.')
+    path = path.resolve()
+    if (path / 'Local State').is_file():
+        return path, None
+    if (path.parent / 'Local State').is_file() and (path / 'Preferences').is_file():
+        return path.parent, path.name
+    raise ValueError('В выбранной папке не найден профиль Chromium. Выберите каталог с Local State или папку профиля из chrome://version.')
+
+
+def start_browser(executable, environment, product, report, stop, selected_profile=''):
+    profile, profile_name = resolve_profile(environment, selected_profile)
     profile.mkdir(parents=True, exist_ok=True)
     active = profile / 'DevToolsActivePort'
     if active.exists():
@@ -67,12 +81,16 @@ def start_browser(executable, environment, product, report, stop):
                 response = client.get(endpoint + '/json/version', timeout=2)
                 response.raise_for_status()
             return endpoint
-        except (ValueError, OSError, requests.RequestException):
+        except (ValueError, IndexError, OSError, requests.RequestException):
             active.unlink(missing_ok=True)
     report('Открывается отдельный Chromium. Дождитесь карточки товара в его окне.')
-    subprocess.Popen([str(executable), f'--user-data-dir={profile}',
+    args = [str(executable), f'--user-data-dir={profile}',
                       '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
-                      '--no-first-run', '--no-default-browser-check', product],
+                      '--no-first-run', '--no-default-browser-check']
+    if profile_name:
+        args.append(f'--profile-directory={profile_name}')
+    args.append(product)
+    child = subprocess.Popen(args,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      creationflags=subprocess.CREATE_NO_WINDOW)
     for _ in range(120):
@@ -84,5 +102,7 @@ def start_browser(executable, environment, product, report, stop):
                 return f'http://127.0.0.1:{port}'
             except (ValueError, IndexError, OSError):
                 pass
+        if child.poll() is not None:
+            raise RuntimeError('Chromium не открыл подключение. Закройте все его окна с выбранным профилем (и старый worker.py), затем повторите. Профиль не удалён.')
         time.sleep(.25)
     raise RuntimeError('Chromium не открыл порт подключения. Закройте его служебное окно и повторите.')

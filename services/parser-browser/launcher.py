@@ -9,7 +9,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 import uuid
 import sys
 
-from browser_manager import PRODUCT, ensure_browser, start_browser
+from browser_manager import PRODUCT, ensure_browser, start_browser, resolve_profile
 from settings_store import data_dir, environment_id, get_key, load, normalize_api, save
 import worker
 
@@ -61,7 +61,7 @@ class App:
         self.thread = None
         self.closing = False
         root.title('Исполнитель Тары')
-        root.geometry('780x640')
+        root.geometry('780x720')
         frame = ttk.Frame(root, padding=16)
         frame.pack(fill='both', expand=True)
         ttk.Label(frame, text='Подтвердите адрес API перед каждым подключением:').pack(anchor='w')
@@ -86,6 +86,15 @@ class App:
         self.browser_entry.pack(side='left', fill='x', expand=True)
         self.browser_button = ttk.Button(browser_row, text='Выбрать…', command=self.choose_browser)
         self.browser_button.pack(side='left', padx=8)
+        ttk.Label(frame, text='Профиль Chromium: пусто — отдельный; для прежней сессии выберите существующий.').pack(anchor='w')
+        profile_row = ttk.Frame(frame)
+        profile_row.pack(fill='x', pady=8)
+        self.profile_path = tk.StringVar(value=config.get('profiles', {}).get(self.api.get(), ''))
+        self.profile_entry = ttk.Entry(profile_row, textvariable=self.profile_path)
+        self.profile_entry.pack(side='left', fill='x', expand=True)
+        self.profile_button = ttk.Button(profile_row, text='Выбрать…', command=self.choose_profile)
+        self.profile_button.pack(side='left', padx=8)
+        ttk.Label(frame, text='Перед использованием прежнего профиля закройте работающий с ним Chromium и старый воркер.').pack(anchor='w')
         ttk.Label(frame, text='Для рабочего сервера включите VPN. Запуск обхода — на дашборде или в Airflow.').pack(anchor='w')
         buttons = ttk.Frame(frame)
         buttons.pack(fill='x', pady=12)
@@ -117,11 +126,17 @@ class App:
         if path:
             self.browser_path.set(path)
 
+    def choose_profile(self):
+        path = filedialog.askdirectory(title='Папка профиля Chromium (с Local State или Preferences)')
+        if path:
+            self.profile_path.set(path)
+
     def load_product(self, event=None):
         try:
             api = normalize_api(self.api.get())
             if api != getattr(self, '_product_api', None):
                 self.product.set(load().get('products', {}).get(api, PRODUCT))
+                self.profile_path.set(load().get('profiles', {}).get(api, ''))
                 self._product_api = api
         except (ValueError, OSError):
             pass
@@ -144,7 +159,9 @@ class App:
             if key is None:
                 return
             browser_path = self.browser_path.get().strip()
-            save(api, key, product, browser_path)
+            profile_path = self.profile_path.get().strip()
+            resolve_profile(environment_id(api), profile_path)
+            save(api, key, product, browser_path, profile_path)
         except Exception as exc:
             messagebox.showerror('Настройки', str(exc))
             return
@@ -155,19 +172,21 @@ class App:
         self.product_entry.configure(state='disabled')
         self.browser_entry.configure(state='disabled')
         self.browser_button.configure(state='disabled')
+        self.profile_entry.configure(state='disabled')
+        self.profile_button.configure(state='disabled')
         self.stop_button.configure(state='normal')
         self.state.set('Подготовка подключения…')
-        self.thread = threading.Thread(target=self.execute, args=(api, key, product, browser_path), daemon=False)
+        self.thread = threading.Thread(target=self.execute, args=(api, key, product, browser_path, profile_path), daemon=False)
         self.thread.start()
 
-    def execute(self, api, key, product, browser_path):
+    def execute(self, api, key, product, browser_path, profile_path):
         report = lambda text: self.messages.put(('log', text))
         try:
             environment = environment_id(api)
             executable = ensure_browser(report, self.stop, browser_path)
             if self.stop.is_set():
                 return
-            endpoint = start_browser(executable, environment, product, report, self.stop)
+            endpoint = start_browser(executable, environment, product, report, self.stop, profile_path)
             worker.BASE, worker.KEY, worker.CDP = api, key, endpoint
             worker.OWNER = uuid.uuid4().hex
             worker.OUTBOX = data_dir() / environment / 'outbox'
@@ -214,6 +233,8 @@ class App:
                     self.product_entry.configure(state='normal')
                     self.browser_entry.configure(state='normal')
                     self.browser_button.configure(state='normal')
+                    self.profile_entry.configure(state='normal')
+                    self.profile_button.configure(state='normal')
                     self.stop_button.configure(state='disabled')
                     if self.closing:
                         self.root.destroy()

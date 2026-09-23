@@ -62,7 +62,7 @@ def get_key(config, api):
     return crypt(base64.b64decode(value), decrypt=True).decode() if value else ''
 
 
-def save(api, key, product=None, browser=None):
+def save(api, key, product=None, browser=None, profile=None):
     api = normalize_api(api)
     config = load()
     config.setdefault('keys', {})[api] = base64.b64encode(crypt(key.encode())).decode()
@@ -71,6 +71,8 @@ def save(api, key, product=None, browser=None):
         config.setdefault('products', {})[api] = product
     if browser is not None:
         config['browser'] = browser
+    if profile is not None:
+        config.setdefault('profiles', {})[api] = profile
     root = data_dir()
     root.mkdir(parents=True, exist_ok=True)
     temporary = root / 'settings.tmp'
