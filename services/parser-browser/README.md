@@ -111,7 +111,7 @@ docker exec analytics-django python manage.py load_tara_products --limit 5 --wor
 
 
 
-########
+################################################ устаревший запуск
 Ниже порядок **для тестового окружения на Windows**. Все команды выполняйте в **PowerShell**, копируя каждый блок отдельно.
 
 **1. Откройте PowerShell и перейдите в папку исполнителя**
@@ -212,3 +212,62 @@ $env:TARA_WORKER_KEY = $taraCredential.GetNetworkCredential().Password
 На время работы оставьте включёнными компьютер, Chromium, PowerShell и подключение к тестовому API. Компьютер не должен переходить в спящий режим.
 
 **При следующем запуске** повторяйте шаги **1 и 3–7**. Если исполнитель уже работает, повторно запускать его не нужно. Для остановки используйте **Ctrl+C** в его окне PowerShell.
+
+
+
+
+
+
+
+
+
+################################################ копия профиля
+**Старые команды запуска не нужны.** Нужно один раз скопировать профиль, затем выбрать копию в приложении.
+
+**1. Остановите исполнитель и закройте все окна Chromium.**
+
+Дождитесь завершения процессов Chromium, чтобы скопировать согласованные файлы cookies и настроек.
+
+**2. Откройте PowerShell и выполните блок:**
+
+```powershell
+$taraSource = 'C:\files\userMK\Chromium\profile'
+$taraCopy = Join-Path $env:LOCALAPPDATA (
+    'AnalyticsPlatform\TaraProfiles\profile-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+)
+
+if (-not (Test-Path -LiteralPath "$taraSource\Local State")) {
+    throw 'Не найден исходный профиль Chromium'
+}
+
+New-Item -ItemType Directory -Path $taraCopy -Force | Out-Null
+
+robocopy "$taraSource" "$taraCopy" /E /XJ /R:1 /W:1 `
+    /XF DevToolsActivePort SingletonLock SingletonCookie SingletonSocket LOCK `
+    /XD Cache Code Cache GPUCache ShaderCache GrShaderCache
+
+if ($LASTEXITCODE -ge 8) {
+    throw "Ошибка копирования: robocopy завершился с кодом $LASTEXITCODE"
+}
+
+Write-Host "Профиль скопирован в: $taraCopy"
+```
+
+Копируется **весь каталог `profile`**, включая `Local State` и `Default`. Исходник не изменяется.
+
+**3. В приложении исполнителя:**
+
+- Chromium: `C:\files\userMK\Chromium\bin\chrome.exe`;
+- **Профиль Chromium:** путь, напечатанный после «Профиль скопирован в»;
+- **не добавляйте `\Default`** в конец;
+- нажмите **«Подключить исполнитель»**.
+
+**4. Проверьте `chrome://version` открывшегося окна.**
+
+Профиль должен находиться в новой папке:
+
+```text
+...\AnalyticsPlatform\TaraProfiles\profile-...\Default
+```
+
+После этого обычный Chromium можно открыть для своей работы — профили будут раздельными. Копия содержит ваши браузерные данные, поэтому не передавайте её другим. **После переноса ненужные вкладки в скопированном профиле можно удалить**
