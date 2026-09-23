@@ -134,38 +134,15 @@ def is_product_url(url):
     return not any(part in path for part in ignored_parts)
 
 
-def fetch_sitemap_xml(session=None):
-    logger.info("Tara sitemap fetch started: %s", TARA_SITEMAP_URL)
-
-    if session:
-        from .tara_jobs import browser_post
-        from .tara_product_parser import BrowserBlockedError, BrowserServiceError
-        payload = browser_post('/fetch', {'url': TARA_SITEMAP_URL, 'session': session}, timeout=180)
-        if payload.get('status') in (401, 403, 502) or payload.get('blocked'):
-            raise BrowserBlockedError('Sitemap access blocked')
-        if payload.get('status') != 200:
-            raise BrowserServiceError('Sitemap unavailable')
-        return (payload.get('html') or '').encode('utf8')
-
-    response = requests.get(
-        TARA_SITEMAP_URL,
-        timeout=60,
-        headers={
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 Chrome/120 Safari/537.36"
-            ),
-        },
-    )
-
-    if response.status_code in (401, 403, 502):
-        from .tara_product_parser import BrowserBlockedError
-        raise BrowserBlockedError('Sitemap access blocked')
-    response.raise_for_status()
-
-    logger.info("Tara sitemap fetched: bytes=%s", len(response.content))
-
-    return response.content
+def fetch_sitemap_xml():
+    from .tara_remote import fetch
+    from .tara_product_parser import BrowserBlockedError, BrowserServiceError
+    payload = fetch(TARA_SITEMAP_URL)
+    if payload.get('status') in (401,403,429,502) or payload.get('blocked') or payload.get('error'):
+        raise BrowserBlockedError('Windows sitemap access unavailable')
+    if payload.get('status') != 200:
+        raise BrowserServiceError('Sitemap unavailable')
+    return payload.get('html', '').encode('utf-8')
 
 
 def extract_urls_from_sitemap(xml_content):
@@ -206,8 +183,8 @@ def extract_urls_from_sitemap(xml_content):
     return result
 
 
-def sync_tara_sitemap_to_product_urls(session=None):
-    xml_content = fetch_sitemap_xml(session=session)
+def sync_tara_sitemap_to_product_urls():
+    xml_content = fetch_sitemap_xml()
     sitemap_items = extract_urls_from_sitemap(xml_content)
     if not sitemap_items:
         raise RuntimeError('Sitemap contains no product URLs; existing links preserved')

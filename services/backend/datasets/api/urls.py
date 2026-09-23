@@ -1,6 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from .tara_views import TaraStatusView, TaraSessionUploadView, TaraCancelView, TaraInternalRunView
+from .tara_views import TaraStatusView, TaraCancelView, TaraInternalRunView
+from .tara_worker_views import TaraWorkerClaimView, TaraWorkerResultView
 
 
 
@@ -112,8 +113,9 @@ router.register(
 
 
 urlpatterns = [
+    path('parsers/tara/worker/claim/', TaraWorkerClaimView.as_view()),
+    path('parsers/tara/worker/tasks/<int:task_id>/result/', TaraWorkerResultView.as_view()),
     path('parsers/tara/status/', TaraStatusView.as_view()),
-    path('parsers/tara/<int:run_id>/session/', TaraSessionUploadView.as_view()),
     path('parsers/tara/<int:run_id>/cancel/', TaraCancelView.as_view()),
     path('parsers/tara/internal/run/', TaraInternalRunView.as_view()),
     path(

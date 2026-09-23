@@ -8,7 +8,7 @@ import {
   getParserMasterRunStatus,
   runParserMasterPipeline,
 } from "../api/ipriceApi";
-import { TaraSessionPanel } from './TaraSessionPanel';
+import { TaraWorkerPanel } from './TaraWorkerPanel';
 
 
 const ACTIVE_STATUSES = new Set([
@@ -21,7 +21,7 @@ const ACTIVE_STATUSES = new Set([
 
 const STATUS_LABELS = {
   waiting_tara: 'Выполняется этап Тары',
-  waiting_session: 'Ожидается сессия Тары',
+  waiting_session: 'Ожидается Windows-исполнитель Тары',
   cancelled: 'Отменён',
   queued: "В очереди",
   running: "Выполняется",
@@ -324,7 +324,7 @@ export function IPriceParsersSection({
 
   return (
     <section className="iprice-parsers">
-      <TaraSessionPanel canEdit={canEdit} />
+      <TaraWorkerPanel canEdit={canEdit} />
       <div className="iprice-data-section-header">
         <div>
           <p>

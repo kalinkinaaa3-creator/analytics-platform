@@ -1,23 +1,16 @@
-from django.core.management.base import BaseCommand
-
-from datasets.services.parsers.tara_sitemap import sync_tara_sitemap_to_product_urls
+import uuid
+from django.core.management.base import BaseCommand, CommandError
+from datasets.services.parsers.tara_jobs import create_run, kick, TaraPending
 
 
 class Command(BaseCommand):
-    help = "Load Tara sitemap and sync parser product URLs"
+    help = 'Queue Tara sitemap synchronization through the Windows executor'
 
     def handle(self, *args, **options):
-        result = sync_tara_sitemap_to_product_urls()
-
-        self.stdout.write(
-            self.style.SUCCESS(
-                "Tara sitemap sync finished: "
-                f"source_urls={result['source_urls']}, "
-                f"prefixes={result['prefixes']}, "
-                f"active_urls={result['active_urls']}, "
-                f"created={result['created']}, "
-                f"updated={result['updated']}, "
-                f"inactivated={result['inactivated']}, "
-                f"skipped={result['skipped']}"
-            )
-        )
+        try:
+            run = create_run(request_key='sitemap:'+uuid.uuid4().hex, origin='cli',
+                             options={'sitemap': True, 'sitemap_only': True})
+        except TaraPending as exc:
+            raise CommandError('Another Tara run is active') from exc
+        kick()
+        self.stdout.write(f'Tara sitemap #{run.pk}: queued. Progress in iPrice.')

@@ -1,4 +1,4 @@
-"""Short maintenance ticks; waiting for a user never occupies an Airflow slot."""
+"""Windows executor maintenance. Historical DAG id is kept for Airflow continuity."""
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator

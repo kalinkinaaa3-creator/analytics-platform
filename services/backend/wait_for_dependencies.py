@@ -37,16 +37,12 @@ def check_clickhouse():
         return response.status == 200 and response.read().strip() == b"1"
 
 
-def check_parser_browser():
-    with urllib.request.urlopen("http://parser-browser:3000/health", timeout=5) as response:
-        return 200 <= response.status < 300
 
 
 CHECKS = {
     "PostgreSQL": check_postgres,
     "Redis": check_redis,
     "ClickHouse": check_clickhouse,
-    "Parser Browser": check_parser_browser,
 }
 
 

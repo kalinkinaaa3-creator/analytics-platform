@@ -85,24 +85,14 @@ def html_has_product_content(html: str) -> bool:
     )
 
 
-def fetch_html_via_browser(url: str, session: str | None = None) -> str:
+def fetch_html_via_browser(url: str) -> str:
     logger.info("Browser request URL: %s", url)
 
-    browser_url = settings.TARA_BROWSER_SERVICE_URL.rstrip("/")
+    from .tara_remote import fetch
+    return validate_payload(url, fetch(url))
 
-    try:
-        response = requests.post(
-            f"{browser_url}/fetch",
-            json={"url": url, "session": session},
-            headers={"X-Tara-Service-Key": settings.TARA_SERVICE_KEY},
-            timeout=180,
-        )
-        response.raise_for_status()
-    except requests.RequestException as exc:
-        raise BrowserTransportError('Browser service unavailable') from exc
 
-    payload = response.json()
-
+def validate_payload(url, payload):
     status = payload.get("status")
     html = payload.get("html") or ""
     blocked = bool(payload.get("blocked"))
@@ -129,7 +119,7 @@ def fetch_html_via_browser(url: str, session: str | None = None) -> str:
         raise ProductNotFoundError("HTTP 404: product page not found")
 
     if status == 429:
-        raise BrowserServiceError("HTTP 429: request rate limited")
+        raise BrowserBlockedError('HTTP 429: Windows executor paused')
 
     if status == 502:
         raise BrowserBlockedError('HTTP 502: blocked by Tara')

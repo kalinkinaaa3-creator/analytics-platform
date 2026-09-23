@@ -1,7 +1,7 @@
 from django.db import models
 from django.db.models import Q
 from django.conf import settings
-from .tara_models import TaraCoordinator, TaraItem, TaraRun, TaraSession
+from .tara_models import TaraCoordinator, TaraItem, TaraRun, TaraFetch, TaraWorker
 
 
 

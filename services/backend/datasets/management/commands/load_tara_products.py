@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = "Parse Tara product cards through Playwright browser service"
+    help = "Parse Tara product cards through the Windows executor"
 
     def add_arguments(self, parser):
         parser.add_argument("--master-run-id", type=int)
@@ -58,6 +58,6 @@ class Command(BaseCommand):
         kick()
         if master:
             raise TaraPending(f"Tara #{run.pk}: {run.status}")
-        self.stdout.write(f"Tara #{run.pk}: {run.status}. Background job; progress/session upload in iPrice.")
+        self.stdout.write(f"Tara #{run.pk}: {run.status}. Background job; progress in iPrice.")
         if options["retry_blocked"]:
-            self.stdout.write("Blocked requests now wait for a new session (4 hours); blind retries are disabled.")
+            self.stdout.write("Blocked requests wait for the Windows executor (4 hours); blind retries are disabled.")

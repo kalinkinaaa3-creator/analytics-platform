@@ -73,19 +73,14 @@ services:
       - .env
     environment:
       TZ: Europe/Moscow
-      TARA_SESSION_DIR: /sessions
-      TARA_SERVICE_KEY: ${TARA_SERVICE_KEY:-${INTERNAL_API_KEY}}
     volumes:
       - ./services/backend:/app
-      - ./services/parser-browser/tara-session:/sessions
-    # Private session storage is shared only by backend and browser service.
     ports:
       - "18000:8000"
     depends_on:
       - postgres
       - redis
       - clickhouse
-      - parser-browser
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=5)\""]
       interval: 10s
@@ -208,39 +203,6 @@ services:
     depends_on:
       - django
 
-
-  parser-browser:
-    build: ./services/parser-browser
-    container_name: analytics-parser-browser
-
-    ulimits:
-      nofile:
-        soft: 65535
-        hard: 65535
-
-    environment:
-      WORKERS_COUNT: 5
-      MAX_REQUESTS_PER_WORKER: 30
-      FETCH_TIMEOUT_MS: 60000
-      PAGE_WAIT_MS: 1000
-      FETCH_ATTEMPTS: 1
-      TZ: Europe/Moscow
-      JITTER_MIN_MS: 3000
-      JITTER_MAX_MS: 8000
-      WORKER_STARTUP_DELAY_MS: 3000
-      TARA_SESSION_DIR: /sessions
-      TARA_SERVICE_KEY: ${TARA_SERVICE_KEY:-${INTERNAL_API_KEY}}
-    volumes:
-      - ./services/parser-browser/tara-session:/sessions
-    ports:
-      - "3000:3000"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 15s
 
 
   pgadmin:
