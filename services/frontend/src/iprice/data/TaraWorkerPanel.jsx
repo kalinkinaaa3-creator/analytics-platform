@@ -64,7 +64,7 @@ export function TaraWorkerPanel({ canEdit }) {
   }
   const counts = run?.counts || {};
   return <section className="iprice-parser-status tara-worker-panel" aria-live="polite">
-    <p><button type="button" disabled={downloading} onClick={downloadWorker}>
+    <p><button type="button" className="iprice-action-button" disabled={downloading} onClick={downloadWorker}>
       {downloading ? 'Скачивание установщика…' : 'Скачать исполнитель для Windows'}
     </button></p>
     <p>Установите приложение, откройте ярлык Tara Worker, укажите API этого сервера и служебную карточку Тары. При первом подключении потребуется ключ исполнителя от администратора.</p>
