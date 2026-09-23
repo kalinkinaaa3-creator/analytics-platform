@@ -105,3 +105,102 @@ docker exec analytics-django python manage.py load_tara_products --limit 5 --wor
 пять 401, одно обновление служебной вкладки, пять повторов 200 примерно за
 2,4 секунды на группу повторов. Это проверка загрузки страниц, не полного
 сохранения через новый API. Каталог старой диагностики удалён.
+
+
+
+
+########
+Ниже порядок **для тестового окружения на Windows**. Все команды выполняйте в **PowerShell**, копируя каждый блок отдельно.
+
+**1. Откройте PowerShell и перейдите в папку исполнителя**
+
+```powershell
+Set-Location -LiteralPath 'C:\Users\adminMK\Desktop\ВСЁ\! projects django second\django\analytics-platform\services\parser-browser'
+```
+
+**2. Только при первой установке — создайте окружение и установите зависимости**
+
+При обычном запуске **пропускайте этот шаг**.
+
+```powershell
+python -m venv .venv
+& .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+**3. Запустите отдельный Chromium**
+
+Если Chromium для Тары уже открыт с портом `9223`, второй экземпляр запускать не нужно.
+
+```powershell
+& "C:\files\userMK\Chromium\bin\chrome.exe" --user-data-dir="$env:TEMP\tara-service-tab-check" --remote-debugging-address=127.0.0.1 --remote-debugging-port=9223 "https://moskva.tara.ru/catalog/nalivnaya_tara/plastikovaya_yemkost_200_litrov/?oid=241441"
+```
+
+В открывшемся окне:
+
+- дождитесь отображения карточки товара;
+- оставьте **одну вкладку Тары** с карточкой;
+- не закрывайте это окно во время загрузки.
+
+**4. Проверьте подключение к Chromium**
+
+В PowerShell выполните:
+
+```powershell
+(Invoke-RestMethod -Uri 'http://127.0.0.1:9223/json/version').Browser
+```
+
+Должна появиться версия браузера, например:
+
+```text
+Chrome/146.0.7680.246
+```
+
+Если команда сообщает об ошибке подключения, к запуску исполнителя пока не переходите.
+
+**5. Укажите адрес API и порт браузера**
+
+В том же окне PowerShell:
+
+```powershell
+$env:TARA_WORKER_API = 'http://127.0.0.1:18000/api'
+$env:TARA_WORKER_CDP = 'http://127.0.0.1:9223'
+```
+
+Это адрес вашего уже проверенного тестового подключения. Если для него используется проброс портов, он должен оставаться работающим.
+
+**6. Введите ключ исполнителя**
+
+Сначала выполните:
+
+```powershell
+$taraSecret = Read-Host 'Введите TARA_WORKER_KEY тестового сервера' -AsSecureString
+```
+
+Когда появится приглашение, вставьте **значение `TARA_WORKER_KEY` из настроек тестового сервера** и нажмите Enter. Ввод будет скрыт.
+
+Затем выполните обе строки:
+
+```powershell
+$taraCredential = New-Object System.Management.Automation.PSCredential('worker', $taraSecret)
+$env:TARA_WORKER_KEY = $taraCredential.GetNetworkCredential().Password
+```
+
+**7. Запустите исполнитель**
+
+```powershell
+& .\.venv\Scripts\python.exe .\worker.py
+```
+
+Оставьте PowerShell открытым. Исполнитель будет ждать задания — само его включение не запускает новый обход.
+
+**8. Запустите мастер на фронте**
+
+Откройте iPrice. В блоке Тары должно отображаться:
+
+**Windows-исполнитель: подключён.**
+
+Нажмите **«Запустить парсеры»**. Если мастер уже запущен, повторно нажимать не нужно: исполнитель получит задания, когда очередь дойдёт до Тары.
+
+На время работы оставьте включёнными компьютер, Chromium, PowerShell и подключение к тестовому API. Компьютер не должен переходить в спящий режим.
+
+**При следующем запуске** повторяйте шаги **1 и 3–7**. Если исполнитель уже работает, повторно запускать его не нужно. Для остановки используйте **Ctrl+C** в его окне PowerShell.
