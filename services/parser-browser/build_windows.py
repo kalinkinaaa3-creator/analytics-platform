@@ -14,7 +14,7 @@ def main():
     if os.name != 'nt':
         raise SystemExit('Build on Windows')
     os.chdir(ROOT)
-    subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--windowed',
+    subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--console', '--hide-console', 'hide-early',
                     '--onedir', '--name', 'TaraWorker', '--collect-all', 'playwright', 'launcher.py'], check=True)
     payload = ROOT / 'build' / 'installer_payload'
     app = payload / 'app'
@@ -27,7 +27,7 @@ def main():
     manifest = {p.relative_to(app).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in sorted(app.rglob('*')) if p.is_file()}
     (payload / 'manifest.json').write_text(json.dumps(manifest, sort_keys=True), encoding='utf-8')
-    subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--windowed',
+    subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--console', '--hide-console', 'hide-early',
                     '--onefile', '--name', 'TaraWorkerSetup', '--add-data',
                     str(payload) + ';installer_payload', 'setup_windows.py'], check=True)
     print(ROOT / 'dist' / 'TaraWorkerSetup.exe')
