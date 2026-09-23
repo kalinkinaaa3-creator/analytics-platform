@@ -1,3 +1,5 @@
+[Windows application and installer](WINDOWS_APP.md)
+
 # Windows-исполнитель Тары: тестовое окружение
 
 Исполнитель забирает до пяти заданий через API и отправляет HTML серверу.

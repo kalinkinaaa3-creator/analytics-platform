@@ -3,3 +3,9 @@ outbox/
 __pycache__/
 .env
 .test-deps/
+.build-venv/
+build/
+dist/*
+!dist/TaraWorkerSetup.exe
+*.spec
+build-last.log

@@ -1,4 +1,7 @@
 from rest_framework.views import APIView
+from pathlib import Path
+from django.conf import settings
+from django.http import FileResponse
 from rest_framework.response import Response
 from dashboards.api.permissions import CanEditIPriceDashboard, CanViewIPriceDashboard
 from datasets.api.permissions import HasInternalApiKey
@@ -6,6 +9,21 @@ from datasets.models import TaraRun
 from datasets.services.parsers.tara_jobs import (
     progress, create_run, kick, finish, TaraPending,
 )
+
+
+class TaraWorkerDownloadView(APIView):
+    permission_classes = [CanViewIPriceDashboard]
+
+    def get(self, request):
+        try:
+            stream = Path(settings.TARA_WORKER_INSTALLER_PATH).open('rb')
+        except FileNotFoundError:
+            return Response({'message': 'Установщик пока не размещён на сервере. Обратитесь к администратору.'}, status=404)
+        response = FileResponse(stream, as_attachment=True, filename='TaraWorkerSetup.exe',
+                                content_type='application/octet-stream')
+        response['Cache-Control'] = 'private, no-store'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
 
 
 class TaraStatusView(APIView):

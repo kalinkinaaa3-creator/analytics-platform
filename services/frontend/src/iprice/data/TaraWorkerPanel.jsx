@@ -13,6 +13,27 @@ export function TaraWorkerPanel({ canEdit }) {
   const [run, setRun] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
+  async function downloadWorker() {
+    setDownloading(true);
+    setDownloadError('');
+    try {
+      const response = await api.get(`${base}/worker/download/`, { responseType: 'blob' });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'TaraWorkerSetup.exe';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      setDownloadError(e.response?.status === 404
+        ? 'Установщик пока не размещён на сервере. Обратитесь к администратору.'
+        : 'Не удалось скачать установщик. Проверьте подключение и повторите попытку.');
+    } finally { setDownloading(false); }
+  }
   const load = useCallback(async (signal) => {
     try {
       const response = await api.get(`${base}/status/`, { signal });
@@ -43,6 +64,11 @@ export function TaraWorkerPanel({ canEdit }) {
   }
   const counts = run?.counts || {};
   return <section className="iprice-parser-status tara-worker-panel" aria-live="polite">
+    <p><button type="button" disabled={downloading} onClick={downloadWorker}>
+      {downloading ? 'Скачивание установщика…' : 'Скачать исполнитель для Windows'}
+    </button></p>
+    <p>Установите приложение, откройте ярлык Tara Worker, укажите API этого сервера и служебную карточку Тары. При первом подключении потребуется ключ исполнителя от администратора.</p>
+    {downloadError && <p className="iprice-data-operation-error">{downloadError}</p>}
     <h3>Парсер Тары</h3>
     {run ? <>
       <p><b>{labels[run.status] || run.status}</b> · Запуск #{run.id} · {run.origin === 'master' ? 'Мастер: категоризированные товары' : run.origin === 'dag' ? 'Airflow: все категории' : 'Команда'}</p>

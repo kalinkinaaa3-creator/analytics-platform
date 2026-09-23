@@ -288,6 +288,10 @@ BITRIX24_API_MAX_RETRIES = int(os.getenv("BITRIX24_API_MAX_RETRIES", "3"))
 TARA_PARSER_WORKERS = int(os.getenv("TARA_PARSER_WORKERS", "5"))
 TARA_WORKER_KEY = os.getenv('TARA_WORKER_KEY', '')
 TARA_WORKER_WAIT_HOURS = 4
+TARA_WORKER_INSTALLER_PATH = os.getenv(
+    'TARA_WORKER_INSTALLER_PATH',
+    str(BASE_DIR.parent / 'parser-browser' / 'dist' / 'TaraWorkerSetup.exe'),
+)
 TARA_DASHBOARD_URL = os.getenv("TARA_DASHBOARD_URL", "/dashboards/iprice")
 TARA_PARSER_BATCH_SIZE = int(os.getenv("TARA_PARSER_BATCH_SIZE", "30"))
 

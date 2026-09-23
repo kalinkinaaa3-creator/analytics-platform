@@ -137,7 +137,15 @@ async def refresh(page):
         page.remove_listener('response',capture)
 
 
-async def main():
+async def main(stop_event=None):
+    def stopping():
+        return stop_event is not None and stop_event.is_set()
+
+    async def pause(seconds):
+        for _ in range(seconds):
+            if stopping():
+                return
+            await asyncio.sleep(1)
     endpoint=urlsplit(BASE)
     if not KEY or (endpoint.scheme!='https' and not (endpoint.scheme=='http' and endpoint.hostname in ('localhost','127.0.0.1'))):
         raise ValueError('Set a worker key and HTTPS API (HTTP allowed for loopback only)')
@@ -158,9 +166,10 @@ async def main():
                 except requests.RequestException:
                     print('API heartbeat unavailable; results will remain in outbox.',flush=True)
         await asyncio.to_thread(api,'claim/',{'owner':OWNER,'ready':True,'pull':False})
+        print('Windows executor connected; waiting for server tasks.', flush=True)
         pulse=asyncio.create_task(heartbeat())
         try:
-            while True:
+            while not stopping():
                 if pulse.done():
                     await pulse
                 try:
@@ -168,11 +177,11 @@ async def main():
                     data=await asyncio.to_thread(api,'claim/',{'owner':OWNER,'ready':True})
                 except requests.RequestException:
                     print('API unavailable; waiting 10 seconds.',flush=True)
-                    await asyncio.sleep(10)
+                    await pause(10)
                     continue
                 tasks=data['tasks']
                 if not tasks:
-                    await asyncio.sleep(3)
+                    await pause(3)
                     continue
                 cookies=await context.cookies()
                 payloads=await asyncio.gather(*(fetch_with_retries(t,cookies,headers) for t in tasks))
@@ -205,7 +214,7 @@ async def main():
                     return
                 if batch_network_failure(payloads):
                     print('Network/server failures in most of the batch; waiting 30 seconds before the next batch. Heartbeat remains active.',flush=True)
-                    await asyncio.sleep(30)
+                    await pause(30)
         finally:
             pulse.cancel()
             await asyncio.gather(pulse,return_exceptions=True)
