@@ -105,6 +105,8 @@ def complete(task_id, token, payload):
     if final != task.url:
         raise ValueError('Unexpected redirect')
     task.payload = {'status': payload['status'], 'html': html, 'final_url': final,
-                    'blocked': payload.get('blocked') is True, 'error': 'transport' if payload.get('error') else None}
+                    'blocked': payload.get('blocked') is True,
+                    'error': ('request_exhausted' if payload.get('error') == 'request_exhausted'
+                              else 'transport' if payload.get('error') else None)}
     task.status = 'done'
     task.save(update_fields=['payload','status'])

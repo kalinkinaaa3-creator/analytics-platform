@@ -57,19 +57,48 @@ def get_page(task, cookies, headers):
                     continue
                 client.cookies.set(c['name'],c['value'],domain=c['domain'],path=c['path'],
                                    secure=c.get('secure',False),expires=int(c['expires']) if c.get('expires',-1)>0 else None)
-            with client.get(url, timeout=(10,45),allow_redirects=False,stream=True) as response:
+            with client.get(url, timeout=(10,20),allow_redirects=False,stream=True) as response:
                 chunks=[]; size=0; started=time.monotonic()
                 for chunk in response.iter_content(65536):
                     size+=len(chunk)
-                    if size>8*1024*1024 or time.monotonic()-started>60:
+                    if size>8*1024*1024 or time.monotonic()-started>30:
                         raise ValueError('Page exceeds diagnostic transport limits')
                     chunks.append(chunk)
                 raw=b''.join(chunks)
                 html=raw.decode(response.encoding if response.encoding and response.encoding.lower()!='iso-8859-1' else 'utf-8',errors='replace')
                 blocked=response.status_code in BLOCKS or (response.status_code!=404 and not card(html) and ('forbidden' in html.lower() or '/__qrator/qauth.js' in html.lower()))
                 return {'status':response.status_code,'html':html,'final_url':url,'blocked':blocked,'error':None}
-    except (requests.RequestException, ValueError):
-        return {'status':503,'html':'','final_url':url,'blocked':False,'error':'network'}
+    except (requests.RequestException, ValueError) as exc:
+        # No cookie/header values in diagnostics.
+        reason = type(exc).__name__
+        if isinstance(exc, ValueError):
+            reason = 'ResponseSizeOrTimeLimit'
+        return {'status':503,'html':'','final_url':url,'blocked':False,'error':'network','reason':reason}
+
+
+def transient(payload):
+    return not payload['blocked'] and (bool(payload.get('error')) or payload['status'] in (500,503,504))
+
+
+async def fetch_with_retries(task, cookies, headers):
+    started = time.monotonic()
+    for attempt in range(1, 4):
+        payload = await asyncio.to_thread(get_page, task, cookies, headers)
+        payload['attempts'] = attempt
+        if not transient(payload):
+            return payload
+        print(json.dumps({'task':task['id'], 'url':task['url'], 'attempt':attempt,
+                          'status':payload['status'], 'reason':payload.get('reason') or 'HTTP server error'}), flush=True)
+        # Bound retries within the server's six-minute task lease, including recovery.
+        if attempt == 3 or time.monotonic() - started >= 120:
+            if payload.get('error'):
+                payload['error'] = 'request_exhausted'
+            return payload
+        await asyncio.sleep(attempt * 2)
+
+
+def batch_network_failure(payloads):
+    return sum(transient(p) for p in payloads) * 2 >= len(payloads)
 
 
 def spool(task, payload):
@@ -146,7 +175,7 @@ async def main():
                     await asyncio.sleep(3)
                     continue
                 cookies=await context.cookies()
-                payloads=await asyncio.gather(*(asyncio.to_thread(get_page,t,cookies,headers) for t in tasks))
+                payloads=await asyncio.gather(*(fetch_with_retries(t,cookies,headers) for t in tasks))
                 blocked=[i for i,p in enumerate(payloads) if p['blocked']]
                 recovered=True
                 if blocked:
@@ -157,18 +186,26 @@ async def main():
                     if recovered:
                         cookies=await context.cookies()
                         retried=await asyncio.gather(*(asyncio.to_thread(get_page,tasks[i],cookies,headers) for i in blocked))
+                        for p in retried:
+                            if p.get('error'):
+                                p['error'] = 'request_exhausted'
                         for i,p in zip(blocked,retried): payloads[i]=p
                         recovered=not any(p['blocked'] for p in payloads)
                 for task,payload in zip(tasks,payloads):
                     spool(task,payload)
-                    print(json.dumps({'task':task['id'],'status':payload['status'],'blocked':payload['blocked']}),flush=True)
+                    print(json.dumps({'task':task['id'],'url':task['url'],'status':payload['status'],
+                                      'blocked':payload['blocked'],'error':payload.get('error'),
+                                      'reason':payload.get('reason'),'attempts':payload.get('attempts')}),flush=True)
                 try:
                     await flush()
                 except requests.RequestException:
                     print('Results saved locally; API upload will be retried.',flush=True)
-                if not recovered or any(p.get('error') for p in payloads):
+                if not recovered:
                     print('Paused: check the service tab/network, then restart the executor.',flush=True)
                     return
+                if batch_network_failure(payloads):
+                    print('Network/server failures in most of the batch; waiting 30 seconds before the next batch. Heartbeat remains active.',flush=True)
+                    await asyncio.sleep(30)
         finally:
             pulse.cancel()
             await asyncio.gather(pulse,return_exceptions=True)

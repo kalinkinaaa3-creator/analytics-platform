@@ -2,11 +2,33 @@ import asyncio
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, AsyncMock
 import worker
 
 
 class WorkerTests(unittest.TestCase):
+    def test_transient_failure_retries_then_succeeds(self):
+        failed = {'status':503, 'blocked':False, 'error':'network', 'reason':'ReadTimeout'}
+        ok = {'status':200, 'blocked':False, 'error':None}
+        with patch.object(worker, 'get_page', side_effect=[failed, ok]) as fetch, patch.object(worker.asyncio, 'sleep', new_callable=AsyncMock):
+            result = asyncio.run(worker.fetch_with_retries({'id':1,'url':'https://tara.ru/'}, [], {}))
+        self.assertEqual(result['status'], 200)
+        self.assertEqual(fetch.call_count, 2)
+
+    def test_network_retries_are_bounded(self):
+        with patch.object(worker, 'get_page', side_effect=lambda *args: {'status':503,'blocked':False,'error':'network'}) as fetch, patch.object(worker.asyncio, 'sleep', new_callable=AsyncMock):
+            result = asyncio.run(worker.fetch_with_retries({'id':1,'url':'https://tara.ru/'}, [], {}))
+        self.assertEqual(fetch.call_count, 3)
+        self.assertEqual(result['error'], 'request_exhausted')
+        self.assertFalse(worker.batch_network_failure([result, {'status':200,'blocked':False}, {'status':200,'blocked':False}]))
+        self.assertTrue(worker.batch_network_failure([result, result]))
+
+    def test_missing_and_blocked_pages_are_not_network_retried(self):
+        for status, blocked in [(404,False), (401,True), (502,True)]:
+            with patch.object(worker, 'get_page', return_value={'status':status,'blocked':blocked,'error':None}) as fetch:
+                asyncio.run(worker.fetch_with_retries({'id':1,'url':'https://tara.ru/'}, [], {}))
+            self.assertEqual(fetch.call_count, 1)
+
     def test_url_scope(self):
         self.assertTrue(worker.allowed('https://moskva.tara.ru/catalog/a/?oid=1'))
         for url in ['http://tara.ru/', 'https://tara.ru.evil.test/', 'https://u@tara.ru/', 'https://tara.ru:123/']:

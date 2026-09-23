@@ -106,6 +106,8 @@ def validate_payload(url, payload):
         error,
     )
 
+    if error == 'request_exhausted':
+        raise RuntimeError('Windows executor: request failed after bounded network retries')
     if error:
         raise BrowserTransportError('Browser service could not complete the request')
 
