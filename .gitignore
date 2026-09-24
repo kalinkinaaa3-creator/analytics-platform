@@ -29,10 +29,9 @@ redis_data/
 
 # OS
 .DS_Store
-Thumbs.dbairflow/logs/
+Thumbs.db
 
 # airflow
 airflow/logs/
 
-# parser
-services/parser-browser/tara-session/
+
