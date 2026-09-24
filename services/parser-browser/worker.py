@@ -16,6 +16,7 @@ CDP = os.environ.get('TARA_WORKER_CDP', 'http://127.0.0.1:9223')
 OUTBOX = Path(__file__).with_name('outbox')
 OWNER = uuid.uuid4().hex
 BLOCKS = (401,403,429,502)
+API_VERIFY_TLS = True
 
 
 def allowed(url):
@@ -34,7 +35,8 @@ def api(path, data):
     with requests.Session() as client:
         client.trust_env = False
         response = client.post(BASE+'/v1/datasets/parsers/tara/worker/'+path,
-                              json=data, headers={'X-Tara-Worker-Key':KEY}, timeout=(10,30), allow_redirects=False)
+                              json=data, headers={'X-Tara-Worker-Key':KEY}, timeout=(10,30),
+                              allow_redirects=False, verify=API_VERIFY_TLS)
         if response.status_code in (401,403):
             raise PermissionError('Windows executor key rejected')
         if response.status_code in (404,409) and path.startswith('tasks/'):

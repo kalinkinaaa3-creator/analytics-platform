@@ -93,6 +93,13 @@ class App:
         self.api = tk.StringVar(value=config.get('last_api', 'http://127.0.0.1:18000/api'))
         self.address = ttk.Entry(frame, textvariable=self.api)
         self.address.pack(fill='x', pady=8)
+        self.tls_api = self.api.get()
+        self.insecure_api = tk.BooleanVar(value=config.get('insecure_api', {}).get(self.tls_api, False) is True)
+        self.tls_checkbox = ttk.Checkbutton(frame, text='Временно не проверять HTTPS-сертификат этого API (небезопасно)', variable=self.insecure_api)
+        self.tls_checkbox.pack(anchor='w')
+        ttk.Label(frame, text='Без проверки подлинность сервера не подтверждается: ключ и данные могут попасть третьей стороне.',
+                  foreground='#a33', wraplength=730).pack(anchor='w')
+        self.api.trace_add('write', self.update_tls_api)
         ttk.Label(frame, text='Служебная карточка Тары (ссылка сохраняется для выбранного API):').pack(anchor='w')
         self.product = tk.StringVar(value=config.get('products', {}).get(self.api.get(), PRODUCT))
         self.product_entry = ttk.Entry(frame, textvariable=self.product)
@@ -173,6 +180,16 @@ class App:
         save(api, value)
         return value
 
+    def update_tls_api(self, *args):
+        try:
+            api = normalize_api(self.api.get())
+            if api != self.tls_api:
+                self.insecure_api.set(load().get('insecure_api', {}).get(api, False) is True)
+                self.tls_api = api
+        except (ValueError, OSError):
+            self.insecure_api.set(False)
+            self.tls_api = None
+
     def choose_browser(self):
         path = filedialog.askopenfilename(title='Выберите chrome.exe Chromium', filetypes=[('Chromium', 'chrome.exe')])
         if path:
@@ -213,7 +230,8 @@ class App:
             browser_path = self.browser_path.get().strip()
             profile_path = self.profile_path.get().strip()
             resolve_profile(environment_id(api), profile_path)
-            save(api, key, product, browser_path, profile_path)
+            insecure_api = self.insecure_api.get()
+            save(api, key, product, browser_path, profile_path, insecure_api)
         except Exception as exc:
             messagebox.showerror('Настройки', str(exc))
             return
@@ -221,6 +239,7 @@ class App:
         self.start_button.configure(state='disabled')
         self.key_button.configure(state='disabled')
         self.address.configure(state='disabled')
+        self.tls_checkbox.configure(state='disabled')
         self.product_entry.configure(state='disabled')
         self.browser_entry.configure(state='disabled')
         self.browser_button.configure(state='disabled')
@@ -228,10 +247,10 @@ class App:
         self.profile_button.configure(state='disabled')
         self.stop_button.configure(state='normal')
         self.state.set('Подготовка подключения…')
-        self.thread = threading.Thread(target=self.execute, args=(api, key, product, browser_path, profile_path), daemon=False)
+        self.thread = threading.Thread(target=self.execute, args=(api, key, product, browser_path, profile_path, insecure_api), daemon=False)
         self.thread.start()
 
-    def execute(self, api, key, product, browser_path, profile_path):
+    def execute(self, api, key, product, browser_path, profile_path, insecure_api=False):
         report = lambda text: self.messages.put(('log', text))
         try:
             environment = environment_id(api)
@@ -241,6 +260,9 @@ class App:
                 return
             endpoint = start_browser(executable, environment, product, report, self.stop, profile_path)
             worker.BASE, worker.KEY, worker.CDP = api, key, endpoint
+            worker.API_VERIFY_TLS = not insecure_api
+            if insecure_api:
+                report(f'ВНИМАНИЕ: проверка HTTPS-сертификата отключена только для API {api}.')
             worker.OWNER = uuid.uuid4().hex
             worker.OUTBOX = data_dir() / environment / 'outbox'
             with contextlib.redirect_stdout(Output(self.messages)):
@@ -251,6 +273,7 @@ class App:
             report(f'Не удалось продолжить: {type(exc).__name__}: {detail}')
         finally:
             worker.KEY = ''
+            worker.API_VERIFY_TLS = True
             self.messages.put(('done', 'Исполнитель остановлен. Chromium оставлен открытым.'))
 
     def request_stop(self):
@@ -287,6 +310,7 @@ class App:
                     self.start_button.configure(state='normal')
                     self.key_button.configure(state='normal')
                     self.address.configure(state='normal')
+                    self.tls_checkbox.configure(state='normal')
                     self.product_entry.configure(state='normal')
                     self.browser_entry.configure(state='normal')
                     self.browser_button.configure(state='normal')
