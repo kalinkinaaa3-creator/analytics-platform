@@ -118,8 +118,9 @@ API должен иметь доверенный HTTPS-сертификат (HTT
 ### Automatic recovery after a blocked service tab
 
 If normal service-tab refresh fails, the application tries one browser recovery
-for that batch (at most three recoveries per executor launch). It requires exactly
-one Tara tab and refuses to close a browser containing other tabs.
+for that batch (at most three recoveries per executor launch). It selects the configured service URL and closes extra Tara tabs at startup and
+after recovery. Tabs from other sites are preserved; full browser recovery is
+refused if such tabs exist, so personal tabs are never closed automatically.
 
 The application closes the service browser normally, opens the same executable,
 profile and product URL without debugging flags, and waits 30 seconds without a

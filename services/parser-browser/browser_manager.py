@@ -151,14 +151,42 @@ def _plain_profile_visit(executable, profile, profile_name, product, report, sto
     return True
 
 
+async def select_service_tab(browser, product, report, navigate=True):
+    """Keep the requested Tara tab; never close tabs belonging to other sites."""
+    from worker import allowed
+    if not allowed(product):
+        raise ValueError('Invalid service card URL')
+    pages = [(c, p) for c in browser.contexts for p in c.pages if allowed(p.url)]
+    selected = next(((c, p) for c, p in pages if p.url == product), None)
+    if selected is None:
+        if pages:
+            selected = pages[0]
+        else:
+            context = browser.contexts[0]
+            selected = context, await context.new_page()
+        if navigate or not pages:
+            await selected[1].goto(product, wait_until='domcontentloaded', timeout=45000)
+    # Re-enumerate: Chromium may have restored additional tabs during navigation.
+    closed = 0
+    for context in browser.contexts:
+        for page in list(context.pages):
+            if page is not selected[1] and allowed(page.url):
+                await page.close()
+                closed += 1
+    if closed:
+        report(f'Service tab: closed {closed} extra Tara tab(s); other sites left unchanged.')
+    return selected
+
+
 async def recover_service_browser(pw, browser, executable, environment, product, report, stop, selected_profile=''):
     import asyncio
     from worker import allowed, card
     # Refuse to close a browser containing personal/non-service tabs.
     pages = [p for context in browser.contexts for p in context.pages]
-    if len(pages) != 1 or not allowed(pages[0].url):
+    if not pages or any(not allowed(p.url) for p in pages):
         report('Recovery requires exactly one Tara service tab; browser left open.')
         return None
+    await select_service_tab(browser, product, report)
     profile, profile_name = resolve_profile(environment, selected_profile)
     report('Recovery: closing service Chromium before ordinary launch.')
     session = await browser.new_browser_cdp_session()
@@ -186,18 +214,17 @@ async def recover_service_browser(pw, browser, executable, environment, product,
     report('Recovery: restarting Chromium with debugging and checking the service card.')
     endpoint = await asyncio.to_thread(start_browser, executable, environment, product, report, stop, selected_profile)
     replacement = await pw.chromium.connect_over_cdp(endpoint, timeout=15000)
+    context, page = await select_service_tab(replacement, product, report)
     for _ in range(30):
         if stop.is_set():
             return None
-        pages = [(c, p) for c in replacement.contexts for p in c.pages if allowed(p.url)]
-        if len(pages) == 1:
-            context, page = pages[0]
-            try:
-                if card(await page.content()):
-                    report('Recovery: service card found. Reading cookies and retrying blocked tasks.')
-                    return replacement, context, page
-            except Exception:
-                pass  # Document may be navigating.
+        context, page = await select_service_tab(replacement, product, report, navigate=False)
+        try:
+            if card(await page.content()):
+                report('Recovery: service card found. Reading cookies and retrying blocked tasks.')
+                return replacement, context, page
+        except Exception:
+            pass  # Document may be navigating.
         await asyncio.sleep(1)
     report('Recovery did not restore the service card. Browser left open; executor will stop.')
     return None

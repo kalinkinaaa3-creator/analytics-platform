@@ -10,7 +10,7 @@ import uuid
 import sys
 from pathlib import Path
 
-from browser_manager import PRODUCT, ensure_browser, start_browser, resolve_profile, recover_service_browser
+from browser_manager import PRODUCT, ensure_browser, start_browser, resolve_profile, recover_service_browser, select_service_tab
 from settings_store import data_dir, environment_id, get_key, load, normalize_api, save
 import worker
 
@@ -49,23 +49,17 @@ async def run_executor(endpoint, product, stop, report, recovery=None):
     # User can complete site checks in the visible browser before any jobs are claimed.
     async with worker.async_playwright() as pw:
         browser = await pw.chromium.connect_over_cdp(endpoint, timeout=15000)
-        pages = [p for c in browser.contexts for p in c.pages if worker.allowed(p.url)]
-        if not pages:
-            page = await browser.contexts[0].new_page()
-            await page.goto(product, wait_until='domcontentloaded', timeout=45000)
-        elif len(pages) == 1 and pages[0].url != product:
-            await pages[0].goto(product, wait_until='domcontentloaded', timeout=45000)
+        await select_service_tab(browser, product, report)
         report('Проверка служебной вкладки. Если сайт требует действия — выполните его в Chromium.')
         for _ in range(240):
             if stop.is_set():
                 return
-            pages = [p for c in browser.contexts for p in c.pages if worker.allowed(p.url)]
-            if len(pages) == 1:
-                try:
-                    if worker.card(await pages[0].content()):
-                        break
-                except Exception:
-                    pass  # Navigation can replace the document during the check.
+            context, page = await select_service_tab(browser, product, report, navigate=False)
+            try:
+                if worker.card(await page.content()):
+                    break
+            except Exception:
+                pass  # Navigation can replace the document during the check.
             await asyncio.sleep(1)
         else:
             raise RuntimeError('Карточка не открылась. Оставьте одну вкладку Тары и повторите подключение.')
