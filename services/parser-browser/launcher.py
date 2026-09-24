@@ -10,7 +10,7 @@ import uuid
 import sys
 from pathlib import Path
 
-from browser_manager import PRODUCT, ensure_browser, start_browser, resolve_profile
+from browser_manager import PRODUCT, ensure_browser, start_browser, resolve_profile, recover_service_browser
 from settings_store import data_dir, environment_id, get_key, load, normalize_api, save
 import worker
 
@@ -45,7 +45,7 @@ class Output:
         pass
 
 
-async def run_executor(endpoint, product, stop, report):
+async def run_executor(endpoint, product, stop, report, recovery=None):
     # User can complete site checks in the visible browser before any jobs are claimed.
     async with worker.async_playwright() as pw:
         browser = await pw.chromium.connect_over_cdp(endpoint, timeout=15000)
@@ -69,7 +69,7 @@ async def run_executor(endpoint, product, stop, report):
             await asyncio.sleep(1)
         else:
             raise RuntimeError('Карточка не открылась. Оставьте одну вкладку Тары и повторите подключение.')
-    await worker.main(stop)
+    await worker.main(stop, recover_browser=recovery)
 
 
 class App:
@@ -265,8 +265,17 @@ class App:
                 report(f'ВНИМАНИЕ: проверка HTTPS-сертификата отключена только для API {api}.')
             worker.OWNER = uuid.uuid4().hex
             worker.OUTBOX = data_dir() / environment / 'outbox'
+            recovery_count = 0
+            async def recovery(pw, browser):
+                nonlocal recovery_count
+                if recovery_count >= 3:
+                    report('Automatic recovery limit reached (3). Executor will stop.')
+                    return None
+                recovery_count += 1
+                return await recover_service_browser(pw, browser, executable, environment,
+                                                     product, report, self.stop, profile_path)
             with contextlib.redirect_stdout(Output(self.messages)):
-                asyncio.run(run_executor(endpoint, product, self.stop, report))
+                asyncio.run(run_executor(endpoint, product, self.stop, report, recovery))
         except Exception as exc:
             # Never display headers, stored settings or a supplied secret.
             detail = str(exc).replace(key, '[скрыто]')

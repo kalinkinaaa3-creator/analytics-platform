@@ -139,7 +139,7 @@ async def refresh(page):
         page.remove_listener('response',capture)
 
 
-async def main(stop_event=None):
+async def main(stop_event=None, recover_browser=None):
     def stopping():
         return stop_event is not None and stop_event.is_set()
 
@@ -202,6 +202,21 @@ async def main(stop_event=None):
                                 p['error'] = 'request_exhausted'
                         for i,p in zip(blocked,retried): payloads[i]=p
                         recovered=not any(p['blocked'] for p in payloads)
+                if not recovered and recover_browser is not None and not stopping():
+                    try:
+                        replacement = await recover_browser(pw, browser)
+                        if replacement is not None:
+                            browser, context, page = replacement
+                            headers['User-Agent'] = await page.evaluate('navigator.userAgent')
+                            cookies = await context.cookies()
+                            retried = await asyncio.gather(*(asyncio.to_thread(get_page, tasks[i], cookies, headers) for i in blocked))
+                            for i, payload in zip(blocked, retried):
+                                if payload.get('error'):
+                                    payload['error'] = 'request_exhausted'
+                                payloads[i] = payload
+                            recovered = not any(p['blocked'] for p in payloads)
+                    except Exception as exc:
+                        print('Automatic browser recovery failed: ' + type(exc).__name__, flush=True)
                 for task,payload in zip(tasks,payloads):
                     spool(task,payload)
                     print(json.dumps({'task':task['id'],'url':task['url'],'status':payload['status'],

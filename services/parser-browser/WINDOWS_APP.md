@@ -113,3 +113,25 @@ API должен иметь доверенный HTTPS-сертификат (HTT
 примените обновлённый Compose для Django и обновите сборку фронта.
 При замене EXE используйте временное имя, затем переименование готового файла.
 Пересобирать фронт при последующих обновлениях только установщика не требуется.
+
+
+### Automatic recovery after a blocked service tab
+
+If normal service-tab refresh fails, the application tries one browser recovery
+for that batch (at most three recoveries per executor launch). It requires exactly
+one Tara tab and refuses to close a browser containing other tabs.
+
+The application closes the service browser normally, opens the same executable,
+profile and product URL without debugging flags, and waits 30 seconds without a
+confirmation dialog. Page status cannot be inspected during this ordinary launch.
+It then requests a normal window close for that process only, waits for it to exit,
+relaunches with CDP, and checks the card for up to 30 seconds. If successful, it
+reads cookies and retries only blocked tasks. Other batch results are retained.
+If recovery fails, results follow the existing outbox flow and the executor stops.
+It never force-kills all Chromium processes. Stop during the ordinary launch leaves
+that browser open. No shell or PowerShell window is needed: arguments are passed
+directly to Chromium, matching the displayed manual command.
+
+This behavior belongs to the packaged application; direct worker.py keeps its
+existing behavior. Successful recovery from Qrator must be verified on the user's
+connection; a timed ordinary launch does not guarantee new cookies.
