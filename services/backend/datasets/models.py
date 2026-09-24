@@ -3624,3 +3624,21 @@ class IPriceSnapshotApproval(models.Model):
 
 # ============================================================
 # Analytics product directory and automatic analysis
+
+
+class NomenclatureStock(models.Model):
+    date = models.DateField(db_index=True)
+    warehouse = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    nom_code = models.IntegerField(db_index=True)
+    nomenclature = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    quantity = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
+    stock = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
+    dev_maximum = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
+    date_add = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "nomenclature_stock"
+        indexes = [
+            models.Index(fields=["date", "nom_code"], name="nom_stock_date_code_idx"),
+            models.Index(fields=["date", "warehouse"], name="nom_stock_date_wh_idx"),
+        ]

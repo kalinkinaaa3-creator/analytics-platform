@@ -60,6 +60,7 @@ from .views import (
 
     NomenclatureApiLoadView,
     NomenclaturePriceApiLoadView,
+    NomenclatureStockApiLoadView,
 
     TransportCostUploadView,
     ProductCostUploadView,
@@ -248,6 +249,11 @@ urlpatterns = [
 
 
     path("nomenclature/load-from-api/", NomenclatureApiLoadView.as_view()),
+
+    path(
+        "nomenclature-stock/load-from-api/",
+        NomenclatureStockApiLoadView.as_view(),
+    ),
 
     path(
         "nomenclature-price/load-from-api/",

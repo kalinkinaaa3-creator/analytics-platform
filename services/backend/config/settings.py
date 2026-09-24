@@ -334,6 +334,11 @@ NOMENCLATURE_API_TIMEOUT = int(
     os.getenv("NOMENCLATURE_API_TIMEOUT", "1800")
 )
 
+STOCK_API_URL = os.getenv("STOCK_API_URL", "")
+STOCK_API_USERNAME = os.getenv("STOCK_API_USERNAME", "")
+STOCK_API_PASSWORD = os.getenv("STOCK_API_PASSWORD", "")
+STOCK_API_TIMEOUT = int(os.getenv("STOCK_API_TIMEOUT", "1800"))
+
 PRICE_API_URL = os.getenv("PRICE_API_URL", "")
 PRICE_API_USERNAME = os.getenv("PRICE_API_USERNAME", "")
 PRICE_API_PASSWORD = os.getenv("PRICE_API_PASSWORD", "")
@@ -514,6 +519,14 @@ LOGGING = {
             "formatter": "standard",
             "encoding": "utf-8",
         },
+        "stock_api_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "stock_api.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "standard",
+            "encoding": "utf-8",
+        },
 
 
         "parser_master_file": {
@@ -660,6 +673,11 @@ LOGGING = {
 
         "external_api.price": {
             "handlers": ["console", "price_api_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "external_api.stock": {
+            "handlers": ["console", "stock_api_file"],
             "level": "INFO",
             "propagate": False,
         },

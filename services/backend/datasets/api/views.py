@@ -189,6 +189,9 @@ from datasets.services.external_api.nomenclature_api_loader import (
 from datasets.services.external_api.price_api_loader import (
     load_prices_from_api,
 )
+from datasets.services.external_api.stock_api_loader import (
+    load_stocks_from_api,
+)
 
 from datasets.services.transport_cost_loader import (
     load_transport_cost_from_excel,
@@ -2060,6 +2063,14 @@ class NomenclatureApiLoadView(APIView):
         result = load_nomenclature_from_api()
 
         return Response(result)
+
+
+class NomenclatureStockApiLoadView(APIView):
+    authentication_classes = []
+    permission_classes = [HasInternalApiKey]
+
+    def post(self, request):
+        return Response(load_stocks_from_api())
 
 
 class NomenclaturePriceApiLoadView(APIView):
