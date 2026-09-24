@@ -8,10 +8,29 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 import uuid
 import sys
+from pathlib import Path
 
 from browser_manager import PRODUCT, ensure_browser, start_browser, resolve_profile
 from settings_store import data_dir, environment_id, get_key, load, normalize_api, save
 import worker
+
+
+def recovery_command(executable, api, product, profile):
+    if not executable or not Path(executable).is_file():
+        raise ValueError('Выберите Chromium или подключитесь один раз, чтобы определить его путь.')
+    if not worker.allowed(product):
+        raise ValueError('Укажите HTTPS-ссылку на карточку Тары.')
+    root, name = resolve_profile(environment_id(normalize_api(api)), profile)
+    def quote(value):
+        value = str(value)
+        if any(c in value for c in '\r\n\x00'):
+            raise ValueError('Путь или ссылка содержит недопустимый перенос строки.')
+        return "'" + value.replace("'", "''") + "'"
+    args = [str(Path(executable).resolve()), f'--user-data-dir={root}']
+    if name:
+        args.append(f'--profile-directory={name}')
+    args.append(product)
+    return '& ' + ' '.join(quote(arg) for arg in args)
 
 
 class Output:
@@ -60,6 +79,7 @@ class App:
         self.stop = threading.Event()
         self.thread = None
         self.closing = False
+        self.detected_browser = ''
         root.title('Исполнитель Тары')
         root.geometry('780x720')
         frame = ttk.Frame(root, padding=16)
@@ -96,6 +116,16 @@ class App:
         self.profile_button.pack(side='left', padx=8)
         ttk.Label(frame, text='Перед использованием прежнего профиля закройте работающий с ним Chromium и старый воркер.').pack(anchor='w')
         ttk.Label(frame, text='Для рабочего сервера включите VPN. Запуск обхода — на дашборде или в Airflow.').pack(anchor='w')
+        recovery = ttk.LabelFrame(frame, text='Если после перерыва Тара не открывается (403)', padding=8)
+        recovery.pack(fill='x', pady=8)
+        ttk.Label(recovery, wraplength=720, text='Остановите исполнитель и закройте Chromium с выбранным профилем. Выполните команду в PowerShell и дождитесь карточки. Затем закройте это окно Chromium и снова подключите исполнитель.').pack(anchor='w')
+        self.recovery_text = tk.Text(recovery, height=3, wrap='word', state='disabled')
+        self.recovery_text.pack(fill='x', pady=4)
+        self.copy_button = ttk.Button(recovery, text='Скопировать команду', command=self.copy_recovery)
+        self.copy_button.pack(anchor='w')
+        for variable in (self.api, self.product, self.profile_path, self.browser_path):
+            variable.trace_add('write', self.update_recovery)
+        self.update_recovery()
         buttons = ttk.Frame(frame)
         buttons.pack(fill='x', pady=12)
         self.start_button = ttk.Button(buttons, text='Подключить исполнитель', command=self.start)
@@ -110,6 +140,28 @@ class App:
         self.log.pack(fill='both', expand=True)
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.after(150, self.poll)
+
+    def update_recovery(self, *args):
+        try:
+            self.command = recovery_command(self.browser_path.get().strip() or self.detected_browser,
+                                            self.api.get(), self.product.get().strip(), self.profile_path.get().strip())
+            text = self.command
+            self.copy_button.configure(state='normal', text='Скопировать команду')
+        except (ValueError, OSError) as exc:
+            self.command = ''
+            text = str(exc)
+            self.copy_button.configure(state='disabled')
+        self.recovery_text.configure(state='normal')
+        self.recovery_text.delete('1.0', 'end')
+        self.recovery_text.insert('1.0', text)
+        self.recovery_text.configure(state='disabled')
+
+    def copy_recovery(self):
+        self.update_recovery()
+        if self.command:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(self.command)
+            self.copy_button.configure(text='Скопировано')
 
     def ask_key(self, api):
         value = simpledialog.askstring('Ключ исполнителя', f'TARA_WORKER_KEY для\n{api}', show='*', parent=self.root)
@@ -184,6 +236,7 @@ class App:
         try:
             environment = environment_id(api)
             executable = ensure_browser(report, self.stop, browser_path)
+            self.messages.put(('browser', str(executable)))
             if self.stop.is_set():
                 return
             endpoint = start_browser(executable, environment, product, report, self.stop, profile_path)
@@ -217,6 +270,10 @@ class App:
         try:
             while True:
                 kind, text = self.messages.get_nowait()
+                if kind == 'browser':
+                    self.detected_browser = text
+                    self.update_recovery()
+                    continue
                 self.log.configure(state='normal')
                 self.log.insert('end', text + '\n')
                 if int(self.log.index('end-1c').split('.')[0]) > 1000:
