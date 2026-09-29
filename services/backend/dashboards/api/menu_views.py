@@ -67,6 +67,7 @@ DASHBOARD_MENU_CONFIG = {
     ],
 
     "Продажи": [
+        ("Commercial Price", "Коммерческий прайс", "sales"),
         (
             "PlannedSales",
             "План/Факт продаж",

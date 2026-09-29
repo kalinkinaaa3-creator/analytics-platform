@@ -551,6 +551,8 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
             widget_data["data"] = {}
         elif widget.type == "context_analytics_dashboard":
             widget_data["data"] = {}
+        elif widget.type == "sales_calculator_dashboard":
+            widget_data["data"] = {}
         elif widget.type == "lead_generation_dashboard":
             widget_data["data"] = {}
 

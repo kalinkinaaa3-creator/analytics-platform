@@ -51,6 +51,7 @@ class DashboardWidget(models.Model):
         ("seo_analytics_dashboard", "SEO Analytics Dashboard"),
         ("context_analytics_dashboard", "Context Analytics Dashboard"),
         ("lead_generation_dashboard", "Lead Generation Dashboard"),
+        ("sales_calculator_dashboard", "Commercial Price Dashboard"),
     )
 
     dashboard = models.ForeignKey(

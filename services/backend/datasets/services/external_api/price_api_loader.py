@@ -332,6 +332,8 @@ def load_prices_from_api(
             total_deleted,
         )
 
+        from sales_calculator.refresh import source_updated
+        source_updated("price")
         return result
     except Exception:
         logger.exception("Nomenclature prices API load failed")

@@ -17,3 +17,5 @@ psutil
 django-cors-headers
 beautifulsoup4
 scikit-learn
+reportlab>=4.4,<5
+Pillow>=11,<13

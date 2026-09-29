@@ -322,6 +322,8 @@ def load_stocks_from_api(
             total_deleted,
         )
 
+        from sales_calculator.refresh import source_updated
+        source_updated("stock")
         return result
     except Exception:
         logger.exception("Nomenclature stocks API load failed")

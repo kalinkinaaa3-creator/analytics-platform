@@ -23,6 +23,7 @@ urlpatterns = [
     path("api/v1/seo/", include("seo_analytics.api.urls")),
     path("api/v1/context/", include("context_analytics.api.urls")),
     path("api/v1/lead-generation/", include("lead_generation.api.urls")),
+    path("api/v1/sales-calculator/", include("sales_calculator.urls")),
     
     path("api/v1/dashboards/", include("dashboards.api.urls")),
 ]

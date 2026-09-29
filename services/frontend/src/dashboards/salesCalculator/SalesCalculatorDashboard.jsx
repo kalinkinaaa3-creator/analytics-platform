@@ -1,0 +1,199 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { api } from "../../api/client";
+import { DashboardMultiSelect } from "../../components/DashboardMultiSelect";
+import { RefreshInfoTooltip } from "../../components/RefreshInfoTooltip";
+import "../seoAnalytics/seo_analytics.css";
+import "./sales_calculator.css";
+
+const ROOT = "/v1/sales-calculator/";
+const TYPES = { auto: "Автоматически", retail: "Розница", small: "Мелкий опт", medium: "Средний опт", large: "Крупный опт" };
+const money = value => value == null ? "—" : Number(value).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const count = value => value == null ? "—" : Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 3 });
+const date = value => value ? new Date(value).toLocaleString("ru-RU") : "Нет данных";
+const errorText = error => typeof error.response?.data?.detail === "string" ? error.response.data.detail : Array.isArray(error.response?.data) ? error.response.data.join(". ") : "Не удалось выполнить действие. Попробуйте ещё раз.";
+const FILTERS = { name_1c: "Наименование 1С", nom_view: "Вид", nom_category: "Категория", nom_group: "Группа продукции 1С", color: "Цвет", sam: "САМ" };
+
+function Modal({ title, children, onClose, wide = false }) {
+  const root = useRef(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
+  useEffect(() => {
+    const previous = document.activeElement;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    root.current?.querySelector("button, input, select")?.focus();
+    const key = event => {
+      if (event.key === "Escape") closeRef.current();
+      if (event.key !== "Tab") return;
+      const nodes = [...root.current.querySelectorAll("button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex='0']")].filter(n => n.offsetParent !== null);
+      if (!nodes.length) return;
+      if (event.shiftKey && document.activeElement === nodes[0]) { event.preventDefault(); nodes.at(-1).focus(); }
+      else if (!event.shiftKey && document.activeElement === nodes.at(-1)) { event.preventDefault(); nodes[0].focus(); }
+    };
+    document.addEventListener("keydown", key);
+    return () => { document.body.style.overflow = overflow; document.removeEventListener("keydown", key); previous?.focus(); };
+  }, []);
+  return createPortal(<div className="sc-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}><section ref={root} role="dialog" aria-modal="true" aria-label={title} className={`sc-modal ${wide ? "sc-modal--wide" : ""}`}><header><h2>{title}</h2><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>{children}</section></div>, document.body);
+}
+
+function Details({ row, field, config, labels }) {
+  const entries = config[field].filter(k => row[field]?.[k] != null);
+  if (!entries.length) return <span className="sc-muted">—</span>;
+  return <details><summary>{entries.slice(0, 2).map(k => `${labels[k]}: ${row[field][k]}`).join(" · ")}<span className="sc-more">Подробнее</span></summary><dl>{entries.map(k => <div key={k}><dt>{labels[k]}</dt><dd>{row[field][k]}</dd></div>)}</dl></details>;
+}
+
+function PreferenceSelect({ label, field, choices, draft, setDraft }) {
+  const labels = typeof choices[0] === "string" ? Object.fromEntries(choices.map(x => [x, x])) : choices;
+  const reverse = Object.fromEntries(Object.entries(labels).map(([key, value]) => [value, key]));
+  return <DashboardMultiSelect label={label} options={Object.values(labels)} selected={draft[field].map(k => labels[k]).filter(Boolean)} onApply={values => setDraft({ ...draft, [field]: values.map(v => reverse[v]) })} emptyLabel="Не выбрано" />;
+}
+
+function Settings({ metadata, config, regions, onSave, onClose }) {
+  const [draft, setDraft] = useState(config);
+  const [tab, setTab] = useState("simple");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const field = (name, value) => setDraft({ ...draft, [name]: value });
+  async function save() {
+    setBusy(true); setError("");
+    try { const { data } = await api.put(ROOT + "settings/", draft); onSave(data); }
+    catch (e) { setError(errorText(e)); }
+    finally { setBusy(false); }
+  }
+  return <Modal title="Настройки калькулятора" onClose={onClose}><div className="sc-modal-body">
+    {error && <div role="alert" className="sc-notice sc-error">{error}</div>}
+    <section><h3>Основные настройки</h3><div className="sc-settings-grid">
+      <label>Регион продажи<select value={draft.region} onChange={e => field("region", e.target.value)}><option value="">Выберите регион</option>{regions.map(r => <option key={r}>{r}</option>)}</select></label>
+      <label>НДС<select value={draft.vat} onChange={e => field("vat", Number(e.target.value))}><option value={22}>22%</option><option value={0}>0%</option></select></label>
+      <label>Округление цен<select value={draft.rounding} onChange={e => field("rounding", e.target.value)}><option value="none">Без округления</option><option value="half_up">До целого (математическое)</option><option value="ceil">До целого вверх</option><option value="floor">До целого вниз</option></select></label>
+    </div></section>
+    <section><h3>Характеристики и логистика</h3><p className="sc-muted">Выбранный набор используется на экране и в Excel / PDF.</p><div className="sc-settings-grid"><PreferenceSelect label="Характеристики" field="characteristics" choices={metadata.characteristics} draft={draft} setDraft={setDraft} /><PreferenceSelect label="Логистика" field="logistics" choices={metadata.logistics} draft={draft} setDraft={setDraft} /></div></section>
+    <section><h3>Склады для остатков</h3><p className="sc-muted">Остатки отображаются справочно по каждому складу.</p><PreferenceSelect label="Склады" field="warehouses" choices={metadata.warehouses} draft={draft} setDraft={setDraft} /></section>
+    <section><h3>Пороги типов цен · без НДС</h3><div className="sc-settings-grid">{["Розница → Мелкий опт", "Мелкий → Средний опт", "Средний → Крупный опт"].map((label, i) => <label key={label}>{label}, ₽<input type="number" min="0" value={draft.thresholds[i]} onChange={e => field("thresholds", draft.thresholds.map((x, j) => i === j ? e.target.value : x))} /></label>)}<label>Порог предупреждения, ₽<input type="number" value={draft.warning_threshold} onChange={e => field("warning_threshold", e.target.value)} /></label></div><p className="sc-muted">Переход только при строгом превышении. Выше порога предупреждения сохраняется крупный опт.</p></section>
+    <section><h3>Столбцы таблицы и выгрузки</h3><div className="sc-tabs"><button className={tab === "simple" ? "is-active" : ""} onClick={() => setTab("simple")}>Прайс</button><button className={tab === "full" ? "is-active" : ""} onClick={() => setTab("full")}>Калькулятор</button></div><PreferenceSelect label="Столбцы" field={tab + "_columns"} choices={metadata[tab + "_columns"]} draft={draft} setDraft={setDraft} /></section>
+  </div><footer><button onClick={onClose} disabled={busy}>Отмена</button><button className="sc-primary" onClick={save} disabled={busy}>{busy ? "Сохранение…" : "Сохранить"}</button></footer></Modal>;
+}
+
+function ProductPicker({ products, items, config, onAdd, onClose }) {
+  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState({});
+  const [selected, setSelected] = useState(() => new Set(items.map(x => String(x.product_key))));
+  const [sort, setSort] = useState("name");
+  const [limit, setLimit] = useState(60);
+  const normalized = query.trim().toLocaleLowerCase("ru");
+  const visible = useMemo(() => products.filter(p => (!normalized || [p.code, p.name_1c, p.name, p.price_list].some(x => String(x || "").toLocaleLowerCase("ru").includes(normalized))) && Object.entries(filters).every(([k, values]) => !values.length || values.includes(p[k]))).sort((a, b) => sort === "code" ? a.code - b.code : String(a.name || a.name_1c || "").localeCompare(String(b.name || b.name_1c || ""), "ru")), [products, normalized, filters, sort]);
+  const toggle = key => setSelected(old => { const next = new Set(old); if (next.has(key)) next.delete(key); else next.add(key); return next; });
+  return <Modal title="Выбор товаров" onClose={onClose} wide><div className="sc-modal-body"><input className="sc-search" placeholder="Поиск по коду 1С, наименованию 1С, наименованию на сайте или номенклатуре прайс-листа" aria-label="Поиск товаров" value={query} onChange={e => { setQuery(e.target.value); setLimit(60); }} /><div className="sc-picker-filters">{Object.entries(FILTERS).map(([key, label]) => <DashboardMultiSelect key={key} label={label} options={[...new Set(products.map(p => p[key]).filter(Boolean))].sort()} selected={filters[key] || []} onApply={value => { setFilters({ ...filters, [key]: value }); setLimit(60); }} />)}</div>
+    <div className="sc-toolbar"><span>Найдено: {visible.length}</span><button onClick={() => { setFilters({}); setQuery(""); }}>Сбросить фильтры</button><label><input type="checkbox" checked={!!visible.length && visible.every(p => selected.has(String(p.product_key)))} onChange={e => setSelected(old => { const next = new Set(old); visible.forEach(p => e.target.checked ? next.add(String(p.product_key)) : next.delete(String(p.product_key))); return next; })} /> Выбрать найденные</label><select value={sort} onChange={e => setSort(e.target.value)} aria-label="Сортировка"><option value="name">По наименованию</option><option value="code">По коду 1С</option></select></div>
+    <div className="sc-products">{visible.slice(0, limit).map(p => <article key={p.product_key} className={selected.has(String(p.product_key)) ? "is-selected" : ""}><label className="sc-product-check"><input aria-label={`Выбрать ${p.name || p.code}`} type="checkbox" checked={selected.has(String(p.product_key))} onChange={() => toggle(String(p.product_key))} /></label>{p.image ? <img src={p.image} alt="" loading="lazy" /> : <div className="sc-no-photo">Нет фото</div>}<h3>{p.name || p.name_1c}</h3><div className="sc-muted">Код 1С: {p.code}</div><div className="sc-muted">{p.characteristics?.dimensions} {p.characteristics?.weight ? ` · ${p.characteristics.weight} кг` : ""}</div>{p.stocks == null ? <p className="sc-muted">Остатки временно недоступны</p> : <details><summary>Остатки по складам</summary><dl>{config.warehouses.map(w => <div key={w}><dt>{w}</dt><dd>{p.stocks[w] == null ? "Нет данных" : `${count(p.stocks[w])} шт.`}</dd></div>)}{!config.warehouses.length && <p>Склады не выбраны</p>}</dl></details>}<button className={selected.has(String(p.product_key)) ? "sc-primary" : ""} onClick={() => toggle(String(p.product_key))}>{selected.has(String(p.product_key)) ? "✓ Выбрано" : "Добавить"}</button></article>)}</div>
+    {visible.length > limit && <button onClick={() => setLimit(limit + 60)}>Показать ещё</button>}
+  </div><footer><span>Выбрано: {selected.size}</span><button onClick={onClose}>Отмена</button><button className="sc-primary" onClick={() => onAdd([...selected])}>Добавить выбранные</button></footer></Modal>;
+}
+
+export function SalesCalculatorDashboard() {
+  const [metadata, setMetadata] = useState(null);
+  const [config, setConfig] = useState(null);
+  const [catalog, setCatalog] = useState({ products: [], regions: [], region: "" });
+  const [state, setState] = useState({});
+  const [items, setItems] = useState([]);
+  const [mode, setMode] = useState("simple");
+  const [modal, setModal] = useState(null);
+  const [result, setResult] = useState(null);
+  const [resultIdentity, setResultIdentity] = useState("");
+  const [message, setMessage] = useState("");
+  const [calcError, setCalcError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+  const [bulkType, setBulkType] = useState("auto");
+  const catalogSequence = useRef(0);
+  const wasRunning = useRef(false);
+  const publishedAt = useRef(null);
+  const regionRef = useRef("");
+  const calculationIdentity = JSON.stringify([items, config, catalog]);
+  const calculating = busy || resultIdentity !== calculationIdentity;
+  async function loadCatalog(region = "") {
+    const sequence = ++catalogSequence.current;
+    const { data } = await api.get(ROOT + "products/", { params: { region } });
+    if (sequence !== catalogSequence.current) return;
+    setCatalog(data); regionRef.current = data.region; setState(data.state);
+    publishedAt.current = data.state.finished_at || null;
+  }
+  useEffect(() => {
+    let active = true;
+    api.get(ROOT + "settings/").then(({ data }) => { if (active) { setMetadata(data); setConfig(data.config); loadCatalog(data.config.region).catch(e => setMessage(errorText(e))); } }).catch(e => setMessage(errorText(e)));
+    return () => { active = false; catalogSequence.current = -1; };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    const timer = setInterval(async () => {
+      try {
+        const { data } = await api.get(ROOT + "refresh/");
+        if (!active) return;
+        setState(data);
+        if (!data.running && (wasRunning.current || (data.finished_at && data.finished_at !== publishedAt.current))) {
+          setMessage(data.status === "success" ? (data.error || "Коммерческий прайс обновлён") : data.error);
+          await loadCatalog(regionRef.current);
+        }
+        wasRunning.current = data.running;
+      } catch { /* Existing report remains visible during a short network outage. */ }
+    }, 3000);
+    return () => { active = false; clearInterval(timer); };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    if (!config || !catalog.region) return;
+    const timer = setTimeout(async () => {
+      setBusy(true); setCalcError("");
+      try {
+        const { data } = await api.post(ROOT + "calculate/", { items, region: catalog.region });
+        if (active) { setResult(data); setResultIdentity(calculationIdentity); }
+      } catch (e) { if (active) { setCalcError(errorText(e)); setResult(null); } }
+      finally { if (active) setBusy(false); }
+    }, 200);
+    return () => { active = false; clearTimeout(timer); };
+  }, [items, config, catalog, calculationIdentity]);
+  const productsByKey = useMemo(() => new Map(catalog.products.map(p => [String(p.product_key), p])), [catalog.products]);
+  const resultsByKey = useMemo(() => new Map((result?.rows || []).map(p => [String(p.product_key), p])), [result]);
+  function updateItem(key, changes) { setItems(old => old.map(i => String(i.product_key) === String(key) ? { ...i, ...changes } : i)); }
+  function add(keys) {
+    setItems(old => { const have = new Set(old.map(i => String(i.product_key))); return [...old, ...keys.filter(k => !have.has(k)).map(k => ({ product_key: k, quantity: 1, price_type: "auto" }))]; });
+    setModal(null);
+  }
+  async function refresh() {
+    try { const { data } = await api.post(ROOT + "refresh/"); wasRunning.current = true; setState(data); setMessage("Обновляем прайс 1С и остатки…"); }
+    catch (e) { if (e.response?.status === 409) { setState(e.response.data); wasRunning.current = true; setMessage("Обновление уже выполняется"); } else setMessage(errorText(e)); }
+  }
+  async function exportFile(format) {
+    setExporting(true);
+    try {
+      const { data } = await api.post(ROOT + "export/", { items, region: catalog.region, mode, format }, { responseType: "blob", timeout: 600000 });
+      const url = URL.createObjectURL(data); const link = document.createElement("a"); link.href = url; link.download = `Коммерческий прайс.${format}`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { setMessage("Не удалось подготовить выгрузку. Проверьте выбранные товары и повторите."); }
+    finally { setExporting(false); }
+  }
+  const columns = config?.[mode + "_columns"] || [];
+  function cell(key, item, row, calculated) {
+    if (key === "image") return row.image ? <img className="sc-table-image" src={row.image} alt="" loading="lazy" /> : "—";
+    if (key === "quantity") return <input className="sc-quantity" aria-label={`Количество ${row.name}`} type="number" min="0.001" step="any" value={item.quantity} onChange={e => updateItem(item.product_key, { quantity: e.target.value })} />;
+    if (key === "price_type") return <select aria-label={`Тип цены ${row.name}`} value={item.price_type} onChange={e => updateItem(item.product_key, { price_type: e.target.value })}>{Object.entries(TYPES).map(([value, label]) => <option key={value} value={value}>{label}{value === "auto" && result ? ` · ${TYPES[result.automatic_type]}` : ""}</option>)}</select>;
+    if (key === "characteristics" || key === "logistics") return <Details row={row} field={key} config={config} labels={metadata[key]} />;
+    if (key === "url") return row.url ? <a href={row.url} target="_blank" rel="noreferrer">Посмотреть</a> : "—";
+    if (key.startsWith("unit_") || key.startsWith("sum_") || key.endsWith("_net") || key.endsWith("_gross")) return money(calculated?.[key]);
+    return row[key] || "—";
+  }
+  return <div className="seo-dashboard sc-dashboard" data-dashboard-type="commercial-price"><header className="seo-topbar"><div><h1>Коммерческий прайс</h1></div><nav><button onClick={() => setModal("settings")} disabled={!config}>⚙ Настройки</button><RefreshInfoTooltip sections={[{ title: "Прайс 1С", content: date(state.price_updated_at) }, { title: "Остатки", content: date(state.stock_updated_at) }]}><button onClick={refresh} disabled={state.running || !catalog.can_refresh}>{state.running ? "Обновление…" : "↻ Обновить"}</button></RefreshInfoTooltip></nav></header>
+    {message && <div className="seo-toast-stack"><div className="seo-toast" role="status"><span>{message}</span><button aria-label="Закрыть уведомление" onClick={() => setMessage("")}>×</button></div></div>}
+    {catalog.stale && <div className="sc-notice">Показан последний доступный прайс. Данные за сегодня ещё не обновлены.</div>}
+    <div className="sc-toolbar"><div className="sc-tabs"><button className={mode === "simple" ? "is-active" : ""} onClick={() => setMode("simple")}>Прайс</button><button className={mode === "full" ? "is-active" : ""} onClick={() => setMode("full")}>Калькулятор</button></div><span className="sc-muted">Регион: {catalog.region || "не выбран"} · НДС {config?.vat ?? 22}%</span></div>
+    {!config ? <p>Загрузка настроек…</p> : <div className="sc-workspace"><section className="sc-panel"><h2>Состав расчёта</h2><div className="sc-toolbar"><button className="sc-primary" onClick={() => setModal("products")} disabled={!catalog.products.length}>＋ Добавить товар</button><button onClick={() => { setItems([]); setSelected(new Set()); }} disabled={!items.length}>Очистить</button>{mode === "full" && <button onClick={() => { setSelectionMode(!selectionMode); setSelected(new Set()); }}>{selectionMode ? "Завершить выбор" : "Выбрать позиции"}</button>}{mode === "full" && selectionMode && <><select aria-label="Тип цены для выбранных" value={bulkType} onChange={e => setBulkType(e.target.value)}>{Object.entries(TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><button disabled={!selected.size} onClick={() => setItems(old => old.map(i => selected.has(String(i.product_key)) ? { ...i, price_type: bulkType } : i))}>Применить к выбранным</button></>}</div>
+      {calcError && <div className="sc-notice sc-error" role="alert">{calcError}</div>}
+      {calculating && items.length > 0 && !calcError && <p className="sc-muted" role="status">Пересчитываем заказ…</p>}
+      {!items.length ? <div className="sc-empty"><h3>Добавьте товары в расчёт</h3><p>Выберите продукцию, чтобы посмотреть цены или рассчитать заказ.</p>{!catalog.products.length && <p>Витрина пока пуста. Обновите прайс или обратитесь к администратору.</p>}</div> : <div className="sc-table-scroll" aria-busy={calculating}><table className="sc-table"><thead><tr>{mode === "full" && selectionMode && <th><input type="checkbox" aria-label="Выбрать все позиции" checked={!!items.length && items.every(i => selected.has(String(i.product_key)))} onChange={e => setSelected(e.target.checked ? new Set(items.map(i => String(i.product_key))) : new Set())} /></th>}{columns.map(k => <th key={k}>{metadata[mode + "_columns"][k]}</th>)}<th aria-label="Удаление" /></tr></thead><tbody>{items.map(item => { const key = String(item.product_key); const row = productsByKey.get(key); const calculated = resultsByKey.get(key); return <tr key={key}>{mode === "full" && selectionMode && <td><input type="checkbox" aria-label={`Выбрать ${row?.name || key}`} checked={selected.has(key)} onChange={() => setSelected(old => { const next = new Set(old); if (next.has(key)) next.delete(key); else next.add(key); return next; })} /></td>}{row ? columns.map(k => <td key={k}>{cell(k, item, row, calculated)}</td>) : <td colSpan={columns.length}>Товар {key} недоступен в этом регионе</td>}<td><button aria-label="Удалить товар" onClick={() => setItems(old => old.filter(i => String(i.product_key) !== key))}>×</button></td></tr>; })}</tbody></table></div>}
+    </section><aside className="sc-panel sc-summary"><h2>{mode === "full" ? "Итоги расчёта" : "Выбранные товары"}</h2><div className="sc-counts"><div>Позиций<strong>{items.length}</strong>товаров</div><div>Количество<strong>{result ? count(result.quantity) : "—"}</strong>шт.</div></div>{mode === "full" && result && <><dl><div><dt>Сумма без НДС</dt><dd>{money(result.net)} ₽</dd></div><div><dt>НДС ({config.vat}%)</dt><dd>{money(result.vat)} ₽</dd></div><div className="sc-total"><dt>Итого с НДС</dt><dd>{money(result.gross)} ₽</dd></div></dl><section><h3>Ценовой уровень</h3><strong>{result.manual ? "Ручной режим" : TYPES[result.automatic_type]}</strong>{result.manual && <p>Расчётный тип: {TYPES[result.automatic_type]}</p>}{result.next_type && <p className="sc-muted">До уровня «{TYPES[result.next_type]}»: {money(result.next_gap)} ₽{Number(result.next_gap) === 0 ? " — переход при превышении порога" : ""}</p>}</section><section><h3>Логистика — итого</h3><dl><div><dt>Общий вес, кг</dt><dd>{count(result.logistics.weight)}</dd></div><div><dt>Паллето-мест</dt><dd>{count(result.logistics.pallets)}</dd></div></dl></section>{result.warning && <div className="sc-notice">Сумма превышает стандартный диапазон прайс-листа {money(config.warning_threshold)} ₽. Типы цен сохранены.</div>}</>}<section><h3>Экспорт</h3><div className="sc-toolbar"><button className="sc-primary" disabled={exporting || calculating || !result?.rows.length || !columns.length} onClick={() => exportFile("xlsx")}>Excel</button><button disabled={exporting || calculating || !result?.rows.length || !columns.length} onClick={() => exportFile("pdf")}>PDF</button></div>{exporting && <p role="status">Готовим документ и фотографии…</p>}</section></aside></div>}
+    {modal === "settings" && <Settings metadata={metadata} config={{ ...config, region: catalog.region || config.region }} regions={catalog.regions} onClose={() => setModal(null)} onSave={data => { setConfig(data); setModal(null); loadCatalog(data.region).catch(e => setMessage(errorText(e))); }} />}
+    {modal === "products" && <ProductPicker products={catalog.products} items={items} config={config} onAdd={add} onClose={() => setModal(null)} />}
+  </div>;
+}

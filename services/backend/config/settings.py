@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "seo_analytics.apps.SeoAnalyticsConfig",
     "context_analytics.apps.ContextAnalyticsConfig",
     "lead_generation.apps.LeadGenerationConfig",
+    "sales_calculator.apps.SalesCalculatorConfig",
     "datasets.apps.DatasetsConfig",
     "analytics",
     "dashboards",
@@ -563,6 +564,11 @@ LOGGING = {
     },
 
     "loggers": {
+        "sales_calculator": {
+            "handlers": ["console", "app_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "django": {
             "handlers": ["console", "app_file"],
             "level": "INFO",

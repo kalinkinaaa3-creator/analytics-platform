@@ -183,6 +183,8 @@ def load_nomenclature_from_api() -> dict:
             result,
         )
 
+        from sales_calculator.refresh import source_updated
+        source_updated()
         return result
     except Exception:
         logger.exception("Nomenclature API load failed")

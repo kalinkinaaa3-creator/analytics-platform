@@ -1,3 +1,4 @@
+import { SalesCalculatorDashboard } from "./salesCalculator/SalesCalculatorDashboard";
 import { PlannedSalesDashboard } from "./plannedSales/PlannedSalesDashboard";
 import { ProjectGanttDashboard } from "./projects/ProjectGanttDashboard";
 import { WordstatDashboard } from "./wordstat/WordstatDashboard";
@@ -136,6 +137,9 @@ export function DashboardRenderer({
         }
         if (widget.type === "context_analytics_dashboard") {
           return <ContextAnalyticsDashboard key={widget.id} dashboard={data.dashboard} />;
+        }
+        if (widget.type === "sales_calculator_dashboard") {
+          return <SalesCalculatorDashboard key={widget.id} />;
         }
         if (widget.type === "lead_generation_dashboard") {
           return <LeadGenerationDashboard key={widget.id} dashboard={data.dashboard} />;

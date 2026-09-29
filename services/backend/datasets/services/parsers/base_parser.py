@@ -389,4 +389,6 @@ def load_base_products(limit: int | None = None) -> dict:
 
     logger.info("Base products load finished: %s", result)
 
+    from sales_calculator.refresh import source_updated
+    source_updated()
     return result
