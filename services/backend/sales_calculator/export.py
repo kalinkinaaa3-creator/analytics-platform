@@ -110,7 +110,6 @@ def _xlsx(result, config, mode, labels, columns, images):
     wb = Workbook()
     ws = wb.active
     title = "Прайс" if mode == "simple" else "Предложение"
-    ws.title = title
     ws.append([title])
     ws.append([f"{timezone.localdate():%d.%m.%Y} · Регион: {result['rows'][0]['region']} · НДС {config['vat']}%"])
     ws.append([labels[k] for k in columns])

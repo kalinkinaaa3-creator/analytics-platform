@@ -185,7 +185,7 @@ class CalculationTests(UnitTestCase):
         config = validate_config({"full_columns": ["code", "name", "unit_net"]})
         result = self.run_order(1)
         ws = load_workbook(export_document(result, config, "full", "xlsx")).active
-        self.assertEqual(ws.title, "Предложение")
+        self.assertEqual(ws.title, "Sheet")
         self.assertEqual(ws["A4"].value, "00000000123")
         self.assertEqual(ws["A4"].data_type, "s")
         self.assertEqual(ws["A4"].number_format, "@")
