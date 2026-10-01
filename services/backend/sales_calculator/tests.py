@@ -142,6 +142,19 @@ class CalculationTests(UnitTestCase):
         pdf = export_document(result, validate_config({}), "full", "pdf")
         self.assertEqual(pdf.read(4), b"%PDF")
 
+    def test_price_display_precision_follows_rounding(self):
+        from openpyxl import load_workbook
+        from .export import price_text
+        for mode in ("none", "half_up", "ceil", "floor"):
+            config = validate_config({"rounding": mode, "full_columns": ["unit_net", "unit_gross", "sum_gross"]})
+            result = calculate({"1": product(retail="100.25")}, [{"product_key": 1}], config)
+            ws = load_workbook(export_document(result, config, "full", "xlsx")).active
+            expected = '#,##0.00' if mode == "none" else '#,##0'
+            self.assertEqual(ws["A4"].number_format, expected)
+            self.assertEqual(ws["B4"].number_format, expected)
+            self.assertEqual(ws["C4"].number_format, '#,##0.00')
+            self.assertEqual(price_text(Decimal("123.22"), config), "123,22" if mode == "none" else "123")
+
 
 class PublicationTests(UnitTestCase):
     def publish_with_client(self, client, rows=None):

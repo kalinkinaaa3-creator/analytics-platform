@@ -2,6 +2,7 @@ import hashlib
 import io
 import logging
 import os
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from urllib.parse import urlsplit
 from xml.sax.saxutils import escape
@@ -13,6 +14,13 @@ from django.utils import timezone
 from .configuration import CHARACTERISTICS, LOGISTICS, FULL_COLUMNS, SIMPLE_COLUMNS, PRICE_LABELS
 
 logger = logging.getLogger("sales_calculator")
+PRICE_COLUMNS = {"unit_net", "unit_gross", *[f"{tier}_{tax}" for tier in PRICE_LABELS for tax in ("net", "gross")]}
+
+
+def price_text(value, config):
+    digits = 2 if config["rounding"] == "none" else 0
+    value = Decimal(str(value)).quantize(Decimal("0.01") if digits else Decimal(1), rounding=ROUND_HALF_UP)
+    return f"{value:,.{digits}f}".replace(",", " ").replace(".", ",")
 
 
 def image_bytes(url):
@@ -127,7 +135,7 @@ def _xlsx(result, config, mode, labels, columns, images):
                     if key == "code":
                         cell.number_format = "@"
                 else:
-                    cell.number_format = '#,##0.00'
+                    cell.number_format = '#,##0' if key in PRICE_COLUMNS and config["rounding"] != "none" else '#,##0.00'
                 if key == "url" and urlsplit(row.get("url") or "").scheme in ("http", "https"):
                     cell.hyperlink = row["url"]
                     cell.font = Font(color="385C36", underline="single")
@@ -180,6 +188,8 @@ def _pdf(result, config, mode, labels, columns, images):
                     cells.append([Paragraph(labels[key], style), Paragraph("Фото недоступно", style)])
                 continue
             value = display(row, key, config)
+            if key in PRICE_COLUMNS and value != "":
+                value = price_text(value, config)
             text = escape(str(value)).replace('\n', '<br/>')
             if key == 'url' and urlsplit(row.get('url') or '').scheme in ('https', 'http'):
                 text = f'<link href="{escape(row["url"], {chr(34): "&quot;"})}">{text}</link>'

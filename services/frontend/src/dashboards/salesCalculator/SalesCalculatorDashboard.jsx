@@ -7,7 +7,7 @@ import "./sales_calculator.css";
 
 const ROOT = "/v1/sales-calculator/";
 const TYPES = { auto: "Автоматически", retail: "Розница", small: "Мелкий опт", medium: "Средний опт", large: "Крупный опт" };
-const money = value => value == null ? "—" : Number(value).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (value, digits = 2) => value == null ? "—" : Number(value).toLocaleString("ru-RU", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 const count = value => value == null ? "—" : Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 3 });
 const date = value => value ? new Date(value).toLocaleString("ru-RU") : "Нет данных";
 const errorText = error => typeof error.response?.data?.detail === "string" ? error.response.data.detail : Array.isArray(error.response?.data) ? error.response.data.join(". ") : "Не удалось выполнить действие. Попробуйте ещё раз.";
@@ -220,7 +220,8 @@ export function SalesCalculatorDashboard() {
     if (key === "price_type") return <select aria-label={`Тип цены ${row.name}`} value={item.price_type} onChange={e => updateItem(item.product_key, { price_type: e.target.value })}>{Object.entries(TYPES).map(([value, label]) => <option key={value} value={value}>{label}{value === "auto" && result ? ` · ${TYPES[result.automatic_type]}` : ""}</option>)}</select>;
     if (key === "characteristics" || key === "logistics") return <Details row={row} field={key} config={config} labels={metadata[key]} />;
     if (key === "url") return row.url ? <a href={row.url} target="_blank" rel="noreferrer">Посмотреть</a> : "—";
-    if (key.startsWith("unit_") || key.startsWith("sum_") || key.endsWith("_net") || key.endsWith("_gross")) return money(calculated?.[key]);
+    if (key.startsWith("sum_")) return money(calculated?.[key]);
+    if (key.startsWith("unit_") || key.endsWith("_net") || key.endsWith("_gross")) return money(calculated?.[key], config.rounding === "none" ? 2 : 0);
     return row[key] || "—";
   }
   return <div ref={dashboardRef} className="sc-dashboard" data-dashboard-type="commercial-price"><header className="sc-topbar"><div><h1>Коммерческий прайс</h1></div><nav><button onClick={() => setModal("settings")} disabled={!config}>Настройки</button><RefreshInfoTooltip sections={[{ title: "Прайс 1С", content: date(state.price_updated_at) }, { title: "Остатки", content: date(state.stock_updated_at) }]}><button onClick={refresh} disabled={state.running || !catalog.can_refresh}>{state.running ? "Обновление…" : "Обновить"}</button></RefreshInfoTooltip></nav></header>

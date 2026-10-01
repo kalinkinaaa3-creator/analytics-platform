@@ -83,12 +83,12 @@ def build_rows(day, stock_available):
             ), n AS (
                 SELECT DISTINCT ON (nom_code) * FROM nomenclature ORDER BY nom_code, date_add DESC, id DESC
             ), p AS (
-                SELECT DISTINCT ON (code, shipp_region) * FROM nomenclature_price
+                SELECT DISTINCT ON (code, shipp_region) * FROM public.nomenclature_price
                 WHERE date=%s AND NULLIF(BTRIM(shipp_region),'') IS NOT NULL
                 ORDER BY code, shipp_region, id DESC
             )
             SELECT b.product_key, b.code_1c AS code, p.shipp_region AS region,
-                p.retail, p.small, p.medium, p.large, p.distr, p.distr_1, p.price_list,
+                p.retail, p.small, p.medium, p.large, p.distr, p.distr_1, p.price_list AS price_list,
                 b.url, b.color, b.image, b.name, n.nom AS name_1c,
                 n.nom_view, n.nom_category, n.nom_group, n.nom_cn_fea, n.quantity_eurotruck
             FROM b JOIN p ON p.code=b.code_1c LEFT JOIN n ON n.nom_code=b.code_1c
