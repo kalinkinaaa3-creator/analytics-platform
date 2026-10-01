@@ -73,7 +73,7 @@
 .sc-modal--wide { width:min(1450px,100%); }
 .sc-modal>header { display:flex; flex-shrink:0; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid #e4e7df; }
 .sc-modal>header button { width:36px; height:36px; min-width:36px; min-height:36px; flex:0 0 36px; padding:0; font-size:20px; display:grid; place-items:center; }
-.sc-modal-body { overflow:auto; padding:20px 24px; min-height:0; flex:1; overscroll-behavior:contain; }
+.sc-modal-body { overflow:auto; scrollbar-gutter:stable; padding:20px 24px; min-height:0; flex:1; overscroll-behavior:contain; }
 .sc-modal-body>section { padding:18px; border:1px solid #e5e9e0; border-radius:8px; margin-bottom:15px; }
 .sc-modal footer { display:flex; flex-shrink:0; gap:12px; align-items:center; justify-content:flex-end; padding:16px 24px; border-top:1px solid #e4e7df; }
 .sc-modal footer>span { margin-right:auto; }
@@ -103,7 +103,13 @@
 .sc-toolbar-right > label { white-space:nowrap; }
 .sc-table .sc-numeric-cell,.sc-table .sc-quantity { text-align:right; font-variant-numeric:tabular-nums; }
 .sc-table .sc-name-cell { width:280px; min-width:280px; max-width:280px; overflow-wrap:anywhere; }
-.sc-logistics-title { cursor:help; }
+.sc-logistics-title { display:flex; align-items:center; gap:6px; }
+.sc-personal-eyebrow { display:block; margin-bottom:5px; color:#778274; font-size:10px; font-weight:800; text-transform:uppercase; }
+.sc-personal-description { margin:9px 0 0; color:#687066; font-size:12px; line-height:1.4; }
+.sc-info-icon { display:inline-flex; flex:0 0 18px; width:18px; height:18px; color:#778274; cursor:help; }
+.sc-info-icon svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.4; stroke-linecap:round; }
+.sc-info-icon:focus-visible { outline:2px solid #506f4e; outline-offset:2px; border-radius:50%; }
+.sc-info-tooltip { position:fixed; z-index:10040; width:320px; max-width:calc(100vw - 24px); box-sizing:border-box; padding:12px 14px; border-radius:8px; background:#374033; color:#fff; box-shadow:0 6px 20px #0003; font:12px/1.5 Helvetica,Arial,sans-serif; pointer-events:none; }
 .sc-product-link { font-size:12px; color:#46623c; width:fit-content; }
 .sc-product-image-trigger { display:inline-block; cursor:zoom-in; }
 .sc-products .sc-product-image-trigger { display:block; width:100%; }
