@@ -2,7 +2,7 @@ import hashlib
 import io
 import logging
 import os
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlsplit
 from xml.sax.saxutils import escape
@@ -15,11 +15,12 @@ from .configuration import CHARACTERISTICS, LOGISTICS, FULL_COLUMNS, SIMPLE_COLU
 
 logger = logging.getLogger("sales_calculator")
 PRICE_COLUMNS = {"unit_net", "unit_gross", *[f"{tier}_{tax}" for tier in PRICE_LABELS for tax in ("net", "gross")]}
+NUMERIC_COLUMNS = PRICE_COLUMNS | {"quantity", "sum_net", "sum_gross", "code"}
 
 
-def price_text(value, config):
-    digits = 2 if config["rounding"] == "none" else 0
-    value = Decimal(str(value)).quantize(Decimal("0.01") if digits else Decimal(1), rounding=ROUND_HALF_UP)
+def price_text(value):
+    value = Decimal(str(value))
+    digits = max(0, -value.normalize().as_tuple().exponent)
     return f"{value:,.{digits}f}".replace(",", " ").replace(".", ",")
 
 
@@ -65,6 +66,8 @@ def image_bytes(url):
 
 
 def display(row, key, config):
+    if key == "name":
+        return row.get("price_list_name") or row.get("name") or ""
     if key == "code":
         return str(row.get("code") or "").zfill(11) if row.get("code") is not None else ""
     if key in ("characteristics", "logistics"):
@@ -83,9 +86,9 @@ def export_document(result, config, mode, kind):
     if mode == "simple":
         bounds = ["0", *config["thresholds"]]
         for index, (tier, label) in enumerate(PRICE_LABELS.items()):
-            band = f"{bounds[index]}–{bounds[index + 1]} ₽" if index < 3 else f"свыше {bounds[index]} ₽"
+            band = f"{bounds[index]}–{bounds[index + 1]} руб." if index < 3 else f"свыше {bounds[index]} руб."
             for tax in ("net", "gross"):
-                labels[f"{tier}_{tax}"] = f"{label} ({band}), {'без НДС' if tax == 'net' else 'с НДС'}"
+                labels[f"{tier}_{tax}"] = f"{label} руб. {'без НДС' if tax == 'net' else 'с НДС'} ({band})"
     columns = config[mode + "_columns"]
     if not columns:
         raise ValueError("Выберите столбцы для выгрузки")
@@ -114,7 +117,7 @@ def _xlsx(result, config, mode, labels, columns, images):
     for cell in ws[3]:
         cell.font = Font(color="FFFFFF", bold=True)
         cell.fill = PatternFill("solid", fgColor="4F6347")
-        cell.alignment = Alignment(wrap_text=True, vertical="center")
+        cell.alignment = Alignment(wrap_text=True, vertical="center", horizontal="center")
     for index, row in enumerate(result["rows"], 4):
         for column, key in enumerate(columns, 1):
             cell = ws.cell(index, column)
@@ -135,16 +138,17 @@ def _xlsx(result, config, mode, labels, columns, images):
                     if key == "code":
                         cell.number_format = "@"
                 else:
-                    cell.number_format = '#,##0' if key in PRICE_COLUMNS and config["rounding"] != "none" else '#,##0.00'
+                    digits = max(0, -Decimal(str(value)).normalize().as_tuple().exponent)
+                    cell.number_format = '#,##0' + ('.' + '0' * digits if digits else '')
                 if key == "url" and urlsplit(row.get("url") or "").scheme in ("http", "https"):
                     cell.hyperlink = row["url"]
                     cell.font = Font(color="385C36", underline="single")
-            cell.alignment = Alignment(wrap_text=True, vertical="center")
+            cell.alignment = Alignment(wrap_text=True, vertical="center", horizontal="right" if key in NUMERIC_COLUMNS else "left")
             if index % 2 == 0:
                 cell.fill = PatternFill("solid", fgColor="F3F6F1")
         ws.row_dimensions[index].height = max(80, 14 * max((str(display(row, k, config)).count("\n") + 1 for k in columns if k != "image"), default=1))
     for index, key in enumerate(columns, 1):
-        ws.column_dimensions[get_column_letter(index)].width = 45 if key in ("characteristics", "logistics", "name", "price_list") else 19
+        ws.column_dimensions[get_column_letter(index)].width = 45 if key in ("characteristics", "logistics", "name", "name_1c") else 19
     ws.freeze_panes = "A4"
     ws.auto_filter.ref = f"A3:{get_column_letter(len(columns))}{len(result['rows'])+3}"
     ws.print_title_rows = "1:3"
@@ -169,6 +173,7 @@ def _pdf(result, config, mode, labels, columns, images):
     if 'CommercialPrice' not in pdfmetrics.getRegisteredFontNames():
         pdfmetrics.registerFont(TTFont('CommercialPrice', str(font)))
     style = ParagraphStyle('Body', fontName='CommercialPrice', fontSize=8, leading=11)
+    numeric_style = ParagraphStyle('Numeric', parent=style, alignment=2)
     title = ParagraphStyle('Title', parent=style, fontSize=18, leading=24, spaceAfter=12)
     output = io.BytesIO()
     doc = SimpleDocTemplate(output, pagesize=landscape(A4), leftMargin=25, rightMargin=25, topMargin=25, bottomMargin=25)
@@ -188,12 +193,12 @@ def _pdf(result, config, mode, labels, columns, images):
                     cells.append([Paragraph(labels[key], style), Paragraph("Фото недоступно", style)])
                 continue
             value = display(row, key, config)
-            if key in PRICE_COLUMNS and value != "":
-                value = price_text(value, config)
+            if key in NUMERIC_COLUMNS - {"code"} and value != "":
+                value = price_text(value)
             text = escape(str(value)).replace('\n', '<br/>')
             if key == 'url' and urlsplit(row.get('url') or '').scheme in ('https', 'http'):
                 text = f'<link href="{escape(row["url"], {chr(34): "&quot;"})}">{text}</link>'
-            cells.append([Paragraph(escape(labels[key]), style), Paragraph(text, style)])
+            cells.append([Paragraph(escape(labels[key]), style), Paragraph(text, numeric_style if key in NUMERIC_COLUMNS else style)])
         # A single long characteristic must also be splittable across pages.
         table = Table(cells, colWidths=[160, doc.width - 172], hAlign='LEFT', splitByRow=1, splitInRow=1)
         table.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F3F6F1')), ('VALIGN',(0,0),(-1,-1),'TOP'), ('BOTTOMPADDING',(0,0),(-1,-1),5)]))

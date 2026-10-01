@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from analytics.clickhouse.client import get_clickhouse_client
 from .configuration import CHARACTERISTICS, LOGISTICS
+from .properties import SOURCE_NAMES, VALUE_LABELS, normalized
 
 logger = logging.getLogger("sales_calculator")
 TABLE = "default.sales_calculator_product"
@@ -38,10 +39,11 @@ def _number(value):
 
 
 def decorate(row, properties):
+    normalized_properties = {normalized(key): value for key, value in properties.items()}
     def prop(*names):
         for name in names:
-            value = properties.get(name)
-            if value is not None and str(value).strip():
+            value = properties[name] if name in properties else normalized_properties.get(normalized(name))
+            if value is not None and str(value).strip() not in ("", "-", "—"):
                 return str(value).strip()
         return None
     dimensions = [prop("Длина (Глубина), мм", "Длина, мм"), prop("Ширина, мм"), prop("Высота, мм")]
@@ -49,15 +51,19 @@ def decorate(row, properties):
         "dimensions": " × ".join(dimensions) if all(dimensions) else None,
         "color": row.get("color"), "bottom": prop("Тип дна"), "walls": prop("Тип стенок"),
         "perforation": "перфорированные" if (prop("Перфорация стенок") or "").casefold() == "да" else None,
-        "lid": prop("Тип крышки"), "equipment": prop("Комплектация с пояснениями"),
+        "lid": prop("Тип крышки"), "equipment": prop("Комплектация", "Комплектация с пояснениями"),
         "loading": prop("Максимальная загрузка, кг"), "load": prop("Максимальная нагрузка, кг"),
         "dynamic_load": prop("Максимальная динамическая нагрузка, кг"),
         "shelf_load": prop("Максимальная нагрузка на полку, кг"),
         "volume": prop("Объём, л", "Объем, л"), "weight": prop("Вес, кг"),
     }
+    for key, source in SOURCE_NAMES.items():
+        value = prop(source)
+        chars[key] = VALUE_LABELS[key].get(normalized(value)) if key in VALUE_LABELS else value
     packing = prop("Способ сложения (коробка)")
     logistics = {
-        "pallet": prop("Складирование"), "truck": row.get("quantity_eurotruck"),
+        "pallet": prop("Количество на паллетоместе (для прайса)", "Количество на паллете, шт."), "truck": row.get("quantity_eurotruck"),
+        "truck82_no_pallet": prop("Количество в еврофуре 82 м3, шт. (отгрузка без паллеты)"),
         "truck82": prop("Количество в еврофуре 82 м3, шт.", "Количество в еврофуре 82 м³, шт."),
         "pallet_size": prop("Размер паллето-места, мм"),
         "packing": f"по {packing} шт./короб" if packing and _number(packing) else packing,
@@ -70,6 +76,7 @@ def decorate(row, properties):
     row["sam"] = prop("Статус ассортиментной матрицы", "Статус ассортиментной матрицы (САМ)", "САМ") or ""
     row["our_offers"] = prop("Наши предложения") or ""
     row["material"] = prop("Материал") or ""
+    row["price_list_name"] = prop("Номенклатура прайс-листа") or row.get("name")
     return row
 
 

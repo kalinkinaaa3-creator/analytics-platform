@@ -1,4 +1,4 @@
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_CEILING, ROUND_FLOOR
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_CEILING
 
 from .configuration import PRICE_TYPES, validate_config
 
@@ -13,12 +13,6 @@ def number(value):
         return result
     except (InvalidOperation, TypeError, ValueError):
         raise ValueError("Отсутствует цена или указано некорректное число")
-
-
-def rounded(value, mode):
-    if mode == "none":
-        return value
-    return value.quantize(Decimal(1), rounding={"half_up": ROUND_HALF_UP, "ceil": ROUND_CEILING, "floor": ROUND_FLOOR}[mode])
 
 
 def calculate(products, items, config):
@@ -39,7 +33,7 @@ def calculate(products, items, config):
             raise ValueError("Некорректный тип цены")
         rows.append({**products[key], "quantity": quantity, "override": override})
     def price(row, tier):
-        return rounded(number(row[tier]), config["rounding"])
+        return number(row[tier])
     def total(tier):
         return sum(((price(r, tier) * r["quantity"]).quantize(CENT, rounding=ROUND_HALF_UP) for r in rows), Decimal(0))
     tier_index = 0

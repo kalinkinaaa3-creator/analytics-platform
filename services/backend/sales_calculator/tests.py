@@ -28,6 +28,61 @@ def product(**changes):
 
 
 class CalculationTests(UnitTestCase):
+    def test_optional_properties_and_defaults(self):
+        from .properties import SOURCE_NAMES, VALUE_LABELS
+        config = validate_config({})
+        self.assertFalse(set(SOURCE_NAMES) & set(config["characteristics"]))
+        self.assertNotIn("truck82_no_pallet", config["logistics"])
+        self.assertIn("pallet", config["logistics"])
+        self.assertEqual(validate_config({"characteristics": list(SOURCE_NAMES)})["characteristics"], list(SOURCE_NAMES))
+        for key, source in SOURCE_NAMES.items():
+            if key in VALUE_LABELS:
+                for value, label in VALUE_LABELS[key].items():
+                    row = decorate(product(), {source: value.upper()})
+                    self.assertEqual(row["characteristics"][key], label)
+                self.assertNotIn(key, decorate(product(), {source: None})["characteristics"])
+            else:
+                self.assertEqual(decorate(product(), {source: "-20"})["characteristics"][key], "-20")
+        for source in ("Возможность вкладывания", "Возможность штабелирования"):
+            self.assertFalse(decorate(product(), {source: "Нет"})["characteristics"].get("nestable"))
+
+    def test_price_name_and_pallet_source_fallbacks(self):
+        from .export import display
+        for blank in (None, "", "   ", "—"):
+            row = decorate(product(), {"Номенклатура прайс-листа": blank,
+                "Количество на паллетоместе (для прайса)": blank,
+                "Количество на паллете, шт.": "12", "Складирование": "99"})
+            self.assertEqual(display(row, "name", {}), product()["name"])
+            self.assertEqual(row["pallet_value"], "12")
+            self.assertEqual(row["characteristics"]["storage"], "99")
+        row = decorate(product(), {"Номенклатура прайс-листа": "Имя для прайса",
+            "Количество на паллетоместе (для прайса)": "8", "Количество на паллете, шт.": "12"})
+        self.assertEqual(display(row, "name", {}), "Имя для прайса")
+        self.assertEqual(row["name"], product()["name"])
+        self.assertEqual(calculate({"1": row}, [{"product_key": 1, "quantity": 17}], {})["logistics"]["pallets"], 3)
+        self.assertIsNone(decorate(product(), {"Складирование": "99"})["pallet_value"])
+
+    def test_property_spelling_and_export_selection(self):
+        from openpyxl import load_workbook
+        row = decorate(product(), {"Количество   колёс": "4", "Тип опоры": "Колёса",
+            "Количество в еврофуре 82 м³, шт. (отгрузка без паллеты)": "500",
+            "Комплектация": "Крышка", "Комплектация с пояснениями": "Старое описание",
+            "Номенклатура прайс-листа": "Название из свойств", "Влагостойкость": "Нет"})
+        self.assertEqual(row["characteristics"]["wheels"], "4")
+        self.assertEqual(row["characteristics"]["support"], "На колесах")
+        self.assertEqual(row["characteristics"]["equipment"], "Крышка")
+        self.assertEqual(row["logistics"]["truck82_no_pallet"], "500")
+        result = calculate({"1": row}, [{"product_key": 1}], {})
+        for mode in ("simple", "full"):
+            config = validate_config({mode + "_columns": ["name", "characteristics", "logistics"],
+                                      "characteristics": ["moisture"], "logistics": ["truck82_no_pallet"]})
+            ws = load_workbook(export_document(result, config, mode, "xlsx")).active
+            self.assertEqual(ws["A3"].value, "Номенклатура прайс-листа")
+            self.assertEqual(ws["A4"].value, "Название из свойств")
+            self.assertIn("Невлагостойкий", ws["B4"].value)
+            self.assertIn("500", ws["C4"].value)
+            self.assertEqual(export_document(result, config, mode, "pdf").read(4), b"%PDF")
+
     def run_order(self, quantity, **changes):
         return calculate({"1": product(**changes)}, [{"product_key": 1, "quantity": quantity}], {})
 
@@ -51,9 +106,9 @@ class CalculationTests(UnitTestCase):
         self.assertEqual(result["gross"], Decimal("58560"))
 
     def test_vat_rounding_and_warning(self):
-        for mode, expected in (("none", "100.5"), ("half_up", "101"), ("floor", "100"), ("ceil", "101")):
+        for mode in ("none", "half_up", "floor", "ceil"):
             result = calculate({"1": product(retail="100.5")}, [{"product_key": 1, "quantity": 1}], {"rounding": mode, "vat": 0})
-            self.assertEqual(result["net"], Decimal(expected))
+            self.assertEqual(result["net"], Decimal("100.5"))
             self.assertEqual(result["vat"], 0)
         result = self.run_order(40000)
         self.assertTrue(result["warning"])
@@ -142,18 +197,23 @@ class CalculationTests(UnitTestCase):
         pdf = export_document(result, validate_config({}), "full", "pdf")
         self.assertEqual(pdf.read(4), b"%PDF")
 
-    def test_price_display_precision_follows_rounding(self):
+    def test_source_precision_and_legacy_preferences_in_exports(self):
         from openpyxl import load_workbook
         from .export import price_text
-        for mode in ("none", "half_up", "ceil", "floor"):
-            config = validate_config({"rounding": mode, "full_columns": ["unit_net", "unit_gross", "sum_gross"]})
-            result = calculate({"1": product(retail="100.25")}, [{"product_key": 1}], config)
+        for source in ("100", "100.25", "100.1234"):
+            config = validate_config({"rounding": "ceil", "full_columns": ["unit_net", "unit_gross", "price_list"]})
+            self.assertNotIn("rounding", config)
+            self.assertEqual(config["full_columns"][-1], "name_1c")
+            result = calculate({"1": product(retail=source)}, [{"product_key": 1}], config)
+            self.assertEqual(result["rows"][0]["unit_net"], Decimal(source))
             ws = load_workbook(export_document(result, config, "full", "xlsx")).active
-            expected = '#,##0.00' if mode == "none" else '#,##0'
-            self.assertEqual(ws["A4"].number_format, expected)
-            self.assertEqual(ws["B4"].number_format, expected)
-            self.assertEqual(ws["C4"].number_format, '#,##0.00')
-            self.assertEqual(price_text(Decimal("123.22"), config), "123,22" if mode == "none" else "123")
+            self.assertEqual(Decimal(str(ws["A4"].value)), Decimal(source))
+            self.assertEqual(ws["C4"].value, product()["name_1c"])
+            self.assertEqual(ws["A4"].alignment.horizontal, "right")
+            self.assertEqual(ws["A3"].alignment.horizontal, "center")
+            self.assertEqual(price_text(Decimal(source)), source.replace(".", ","))
+            self.assertNotIn(chr(8381), ws["A3"].value)
+            self.assertEqual(ws["A4"].number_format, '#,##0' + ('.' + '0' * len(source.split('.')[1]) if '.' in source else ''))
 
 
 class PublicationTests(UnitTestCase):
