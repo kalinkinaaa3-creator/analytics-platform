@@ -29,6 +29,8 @@
 :where(.sc-dashboard,.sc-modal) dl>div { display:flex; gap:14px; justify-content:space-between; padding:8px 0; }
 :where(.sc-dashboard,.sc-modal) dd { margin:0; font-weight:600; text-align:right; }
 :where(.sc-dashboard,.sc-modal) dt { color:#656d60; }
+.sc-detail-list > div { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:12px; align-items:center; }
+.sc-detail-list dt,.sc-detail-list dd { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sc-total { background:#edf3e9; padding:12px!important; border-radius:6px; color:#34532d; font-size:17px; }
 .sc-partial { display:block; margin-top:5px; color:#786442; font-size:11px; font-weight:400; }
 .sc-table-scroll { overflow:auto; flex:1; min-height:0; overscroll-behavior:contain; }

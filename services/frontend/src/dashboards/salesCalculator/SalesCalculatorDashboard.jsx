@@ -47,14 +47,14 @@ function Modal({ title, children, onClose, wide = false }) {
 function Details({ row, field, config, labels, title }) {
   const entries = config[field].filter(k => row[field]?.[k] != null);
   if (!entries.length) return <span className="sc-muted">—</span>;
-  return <details><summary>{title || entries.slice(0, 2).map(k => `${labels[k]}: ${row[field][k]}`).join(" · ")}{!title && <span className="sc-more">Подробнее</span>}</summary><dl>{entries.map(k => <div key={k}><dt>{labels[k]}</dt><dd>{row[field][k]}</dd></div>)}</dl></details>;
+  return <details><summary>{title || entries.slice(0, 2).map(k => `${labels[k]}: ${row[field][k]}`).join(" · ")}{!title && <span className="sc-more">Подробнее</span>}</summary><dl className="sc-detail-list">{entries.map(k => <div key={k}><dt title={labels[k]}>{labels[k]}</dt><dd title={String(row[field][k])}>{row[field][k]}</dd></div>)}</dl></details>;
 }
 
 function StockDetails({ stocks, warehouses }) {
   if (stocks == null) return <p className="sc-muted">Остатки временно недоступны</p>;
   const entries = warehouses.map(name => [name, Number(stocks[name])]).filter(([, value]) => Number.isFinite(value) && value > 0);
   const total = entries.reduce((sum, [, value]) => sum + value, 0);
-  return <details className="sc-stock-details"><summary>Остаток: <strong>{count(total)} шт.</strong> · По складам</summary><dl>{entries.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{count(value)} шт.</dd></div>)}</dl>{!entries.length && <p className="sc-muted">{warehouses.length ? "Нет положительных остатков по выбранным складам" : "Склады не выбраны"}</p>}</details>;
+  return <details className="sc-stock-details"><summary>Остаток: <strong>{count(total)} шт.</strong> · По складам</summary><dl className="sc-detail-list">{entries.map(([name, value]) => <div key={name}><dt title={name}>{name}</dt><dd title={`${count(value)} шт.`}>{count(value)} шт.</dd></div>)}</dl>{!entries.length && <p className="sc-muted">{warehouses.length ? "Нет положительных остатков по выбранным складам" : "Склады не выбраны"}</p>}</details>;
 }
 
 function PreferenceSelect({ label, field, choices, draft, setDraft }) {
