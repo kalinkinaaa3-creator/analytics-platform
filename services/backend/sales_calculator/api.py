@@ -121,6 +121,6 @@ class ExportView(CalculationView):
         except Exception:
             logging.getLogger("sales_calculator").exception("Export failed: mode=%s format=%s", mode, kind)
             return Response({"detail": f"Не удалось создать {kind.upper()}. Подробности записаны в журнал Django (sales_calculator)."}, status=500)
-        title = "Прайс" if mode == "simple" else "Предложение"
+        title = "Прайс" if mode == "simple" else "Коммерческое предложение"
         return FileResponse(document, as_attachment=True, filename=f"{title}.{kind}",
                             content_type="application/pdf" if kind == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

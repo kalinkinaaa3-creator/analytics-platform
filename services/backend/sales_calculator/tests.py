@@ -28,6 +28,42 @@ def product(**changes):
 
 
 class CalculationTests(UnitTestCase):
+    def test_branded_exports_fit_images_and_include_offer_totals(self):
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+        from PIL import Image
+        from openpyxl import load_workbook
+        from django.test import override_settings
+        image = io.BytesIO()
+        Image.new("RGB", (120, 240), "white").save(image, format="PNG")
+        row = product(image="https://iplast.com/a.png", url="https://iplast.com/item/", characteristics={"equipment": "Описание\n" * 12})
+        result = calculate({"1": row}, [{"product_key": 1, "quantity": 3}], {})
+        with TemporaryDirectory() as folder, override_settings(MEDIA_ROOT=folder):
+            Image.new("RGB", (240, 60), "white").save(Path(folder) / "logo.webp")
+            for mode in ("simple", "full"):
+                config = validate_config({mode + "_columns": ["image", "name", "characteristics", "url"]})
+                with patch("sales_calculator.export.image_bytes", return_value=image.getvalue()):
+                    ws = load_workbook(export_document(result, config, mode, "xlsx")).active
+                    pdf = export_document(result, config, mode, "pdf")
+                self.assertEqual(pdf.read(4), b"%PDF")
+                self.assertIn('ООО "Ай-Пласт"', ws["A1"].value)
+                self.assertEqual(ws["A1"].fill.fgColor.rgb, "00DC2F2F")
+                self.assertIn("A1:D1", str(ws.merged_cells))
+                self.assertEqual(ws["A3"].value, "Изображение")
+                self.assertEqual(ws["D4"].value, "Посмотреть")
+                self.assertIsNone(ws["A3"].fill.patternType)
+                self.assertIsNone(ws["B4"].fill.patternType)
+                self.assertEqual(len(ws._images), 2)
+                anchor = ws._images[1].anchor
+                self.assertAlmostEqual(anchor.ext.cx / anchor.ext.cy, .5)
+                self.assertLessEqual(anchor._from.rowOff + anchor.ext.cy, ws.row_dimensions[4].height * 12700)
+                self.assertLessEqual(anchor._from.colOff + anchor.ext.cx, 18 * 7 * 9525)
+                if mode == "full":
+                    self.assertEqual(ws["D5"].value, result["net"])
+                    self.assertEqual(ws["D6"].value, result["gross"])
+                else:
+                    self.assertEqual(ws.max_row, 4)
+
     def test_optional_properties_and_defaults(self):
         from .properties import SOURCE_NAMES, VALUE_LABELS
         config = validate_config({})
@@ -179,7 +215,7 @@ class CalculationTests(UnitTestCase):
         document = export_document(self.run_order(1), validate_config({"simple_columns": ["image"]}), "simple", "pdf")
         self.assertEqual(document.read(4), b"%PDF")
 
-    def test_export_article_text_and_no_totals(self):
+    def test_export_article_text_and_totals(self):
         from openpyxl import load_workbook
         from .export import display
         config = validate_config({"full_columns": ["code", "name", "unit_net"]})
@@ -189,7 +225,7 @@ class CalculationTests(UnitTestCase):
         self.assertEqual(ws["A4"].value, "00000000123")
         self.assertEqual(ws["A4"].data_type, "s")
         self.assertEqual(ws["A4"].number_format, "@")
-        self.assertEqual(ws.max_row, 4)
+        self.assertEqual(ws.max_row, 6)
         self.assertEqual(display(result["rows"][0], "code", config), "00000000123")
 
     def test_pdf_splits_long_characteristic_across_pages(self):
