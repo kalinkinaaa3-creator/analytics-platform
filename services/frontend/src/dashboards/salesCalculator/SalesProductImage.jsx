@@ -18,6 +18,7 @@ export function SalesProductImage({
   src,
   alt,
   caption,
+  preview = true,
   className = "sc-card-image",
   placeholderClassName = "sc-row-image-placeholder",
   placeholderText = "Нет фото",
@@ -109,6 +110,10 @@ export function SalesProductImage({
         {placeholderText}
       </div>
     );
+  }
+
+  if (!preview) {
+    return <img src={src} alt={alt || ""} loading="lazy" className={className} onError={() => setFailedSrc(src)} />;
   }
 
   return (

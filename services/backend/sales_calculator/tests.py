@@ -52,10 +52,6 @@ class CalculationTests(UnitTestCase):
         result = calculate({"1": row}, [{"product_key": 1, "quantity": 3}], {})
         with TemporaryDirectory() as folder, override_settings(MEDIA_ROOT=folder):
             Image.new("RGBA", (240, 60), (0, 0, 0, 0)).save(Path(folder) / "logo.webp")
-            from .export_layout import logo_bytes
-            with Image.open(io.BytesIO(logo_bytes())) as logo:
-                self.assertEqual(logo.mode, "RGB")
-                self.assertEqual(logo.getpixel((0, 0)), (255, 255, 255))
             for mode in ("simple", "full"):
                 config = validate_config({mode + "_columns": ["image", "name", "characteristics", "url"]})
                 with patch("sales_calculator.export.image_bytes", return_value=image.getvalue()):
@@ -69,8 +65,8 @@ class CalculationTests(UnitTestCase):
                 self.assertEqual(ws["E4"].value, "Посмотреть")
                 self.assertIsNone(ws["B3"].fill.patternType)
                 self.assertIsNone(ws["C4"].fill.patternType)
-                self.assertEqual(len(ws._images), 2)
-                anchor = ws._images[1].anchor
+                self.assertEqual(len(ws._images), 1)
+                anchor = ws._images[0].anchor
                 self.assertAlmostEqual(anchor.ext.cx / anchor.ext.cy, .5)
                 self.assertLessEqual(anchor._from.rowOff + anchor.ext.cy, ws.row_dimensions[4].height * 12700)
                 self.assertLessEqual(anchor._from.colOff + anchor.ext.cx, 18 * 7 * 9525)

@@ -6,7 +6,6 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 from urllib.parse import urlsplit
 
-from django.conf import settings
 from django.utils import timezone
 
 from .export import display, price_text, NUMERIC_COLUMNS
@@ -15,20 +14,6 @@ from .export import display, price_text, NUMERIC_COLUMNS
 def heading(result, mode):
     title = "ПРАЙС-ЛИСТ" if mode == "simple" else "КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ"
     return f'ООО "Ай-Пласт" • {title} • {timezone.localdate():%d.%m.%Y} • СКЛАД ОТГРУЗКИ: {result["rows"][0]["region"].upper()}'
-
-
-def logo_bytes():
-    from PIL import Image
-    path = Path(getattr(settings, "MEDIA_ROOT", "")) / "logo.webp"
-    if not path.is_file():
-        return None
-    with Image.open(path) as logo:
-        output = io.BytesIO()
-        rgba = logo.convert("RGBA")
-        background = Image.new("RGB", rgba.size, "white")
-        background.paste(rgba, mask=rgba.getchannel("A"))
-        background.save(output, format="PNG")
-        return output.getvalue()
 
 
 def width(key):
@@ -48,16 +33,15 @@ def xlsx(result, config, mode, labels, columns, images):
     wb = Workbook()
     ws = wb.active
     ws.sheet_view.showGridLines = False
-    logo = logo_bytes()
     last = len(columns)
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last)
     ws.cell(1, 1, heading(result, mode))
     header_lines = math.ceil(len(heading(result, mode)) / max(12, sum(width(key) for key in columns) * .8))
-    ws.row_dimensions[1].height = max(80 if logo else 45, header_lines * 18 + (48 if logo else 16))
+    ws.row_dimensions[1].height = max(45, header_lines * 18 + 16)
     for cell in ws[1]:
         cell.fill = PatternFill("solid", fgColor="DC2F2F")
     ws["A1"].font = Font(name="Arial", size=12, bold=True, color="FFFFFF")
-    ws["A1"].alignment = Alignment(horizontal="center", vertical="bottom" if logo else "center", wrap_text=True)
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     for index, key in enumerate(columns, 1):
         ws.column_dimensions[get_column_letter(index)].width = width(key)
     def add_image(data, row, column, max_width, max_height, center=True):
@@ -68,8 +52,6 @@ def xlsx(result, config, mode, labels, columns, images):
         dy = 6 + ((max_height - image.height) / 2 if center else 0)
         image.anchor = OneCellAnchor(_from=AnchorMarker(col=column - 1, row=row - 1, colOff=pixels_to_EMU(dx), rowOff=pixels_to_EMU(dy)), ext=XDRPositiveSize2D(pixels_to_EMU(image.width), pixels_to_EMU(image.height)))
         ws.add_image(image)
-    if logo:
-        add_image(logo, 1, 1, min(160, sum(width(key) for key in columns) * 7 - 12), 48, False)
     ws.append([])
     for index, key in enumerate(columns, 1):
         ws.cell(3, index, labels[key])
@@ -145,21 +127,18 @@ def pdf(result, config, mode, labels, columns, images):
         raise ValueError("Не установлен шрифт для PDF")
     if 'CommercialPrice' not in pdfmetrics.getRegisteredFontNames():
         pdfmetrics.registerFont(TTFont('CommercialPrice', str(font)))
+    bold_font = font.with_name('DejaVuSans-Bold.ttf' if font.name == 'DejaVuSans.ttf' else 'arialbd.ttf')
+    if 'CommercialPriceBold' not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont('CommercialPriceBold', str(bold_font)))
     style = ParagraphStyle('Body', fontName='CommercialPrice', fontSize=8, leading=11, textColor=colors.HexColor('#242722'))
     numeric = ParagraphStyle('Numeric', parent=style, alignment=2)
+    total_numeric = ParagraphStyle('TotalNumeric', parent=numeric, fontName='CommercialPriceBold')
     header = ParagraphStyle('Header', parent=style, alignment=1)
     brand = ParagraphStyle('Brand', parent=style, fontSize=12, leading=17, textColor=colors.white, alignment=1)
     output = io.BytesIO()
     doc = SimpleDocTemplate(output, pagesize=landscape(A3), leftMargin=20, rightMargin=20, topMargin=20, bottomMargin=20)
-    logo = logo_bytes()
     brand_cells = [Paragraph(escape(heading(result, mode)), brand)]
     brand_widths = [doc.width]
-    if logo:
-        image = Image(io.BytesIO(logo))
-        scale = min(110 / image.imageWidth, 45 / image.imageHeight)
-        image.drawWidth, image.drawHeight = image.imageWidth * scale, image.imageHeight * scale
-        brand_cells.insert(0, image)
-        brand_widths = [130, doc.width - 130]
     banner = Table([brand_cells], colWidths=brand_widths)
     banner.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#dc2f2f')), ('VALIGN',(0,0),(-1,-1),'MIDDLE'), ('TOPPADDING',(0,0),(-1,-1),12), ('BOTTOMPADDING',(0,0),(-1,-1),12)]))
     widths = [doc.width * width(key) / sum(width(k) for k in columns) for key in columns]
@@ -196,8 +175,8 @@ def pdf(result, config, mode, labels, columns, images):
     flow = [banner, Spacer(1, 12), table]
     if mode == 'full':
         totals = Table([
-            [Paragraph('Итого сумма руб. без НДС:', style), Paragraph(f'{result["net"]:,.2f}'.replace(',', ' ').replace('.', ','), numeric)],
-            [Paragraph('Итого сумма руб. с НДС:', style), Paragraph(f'{result["gross"]:,.2f}'.replace(',', ' ').replace('.', ','), numeric)],
+            [Paragraph('Итого сумма руб. без НДС:', style), Paragraph(f'{result["net"]:,.2f}'.replace(',', ' ').replace('.', ','), total_numeric)],
+            [Paragraph('Итого сумма руб. с НДС:', style), Paragraph(f'{result["gross"]:,.2f}'.replace(',', ' ').replace('.', ','), total_numeric)],
         ], colWidths=[220, 110], hAlign='RIGHT')
         totals.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('TOPPADDING', (0,0), (-1,-1), 8), ('BOTTOMPADDING', (0,0), (-1,-1), 8)]))
         flow.append(KeepTogether([Spacer(1, 12), totals]))
