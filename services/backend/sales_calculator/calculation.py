@@ -63,15 +63,19 @@ def calculate(products, items, config):
     net = sum((r["sum_net"] for r in rows), Decimal(0))
     vat = sum((r["vat_amount"] for r in rows), Decimal(0))
     logistics = {"weight": Decimal(0), "pallets": Decimal(0)}
-    incomplete = {"weight": False, "pallets": False}
+    missing = {"weight": 0, "pallets": 0}
     for row in rows:
         for target, source in (("weight", "weight_value"), ("pallets", "pallet_value")):
             value = row.get(source)
-            if value is None or number(value) == 0:
-                incomplete[target] = True
+            try:
+                parsed = number(value)
+            except ValueError:
+                parsed = None
+            if parsed is None or (target == "pallets" and parsed == 0):
+                missing[target] += 1
                 continue
-            logistics[target] += (number(value) * row["quantity"] if target == "weight" else
-                                    (row["quantity"] / number(value)).to_integral_value(rounding=ROUND_CEILING))
+            logistics[target] += (parsed * row["quantity"] if target == "weight" else
+                                    (row["quantity"] / parsed).to_integral_value(rounding=ROUND_CEILING))
     return {"rows": rows, "automatic_type": automatic,
             "manual": any(r["override"] != "auto" for r in rows),
             "positions": len(rows), "quantity": sum((r["quantity"] for r in rows), Decimal(0)),
@@ -79,4 +83,5 @@ def calculate(products, items, config):
             "warning": net > Decimal(config["warning_threshold"]),
             "next_type": PRICE_TYPES[tier_index + 1] if tier_index < 3 else None,
             "next_gap": max(Decimal(0), Decimal(config["thresholds"][tier_index]) - total(automatic)) if tier_index < 3 else None,
-            "logistics": {k: None if incomplete[k] else v for k, v in logistics.items()}}
+            "logistics": {k: None if rows and missing[k] == len(rows) else v for k, v in logistics.items()},
+            "logistics_missing": missing}

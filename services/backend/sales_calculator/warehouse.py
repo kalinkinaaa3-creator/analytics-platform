@@ -68,6 +68,7 @@ def decorate(row, properties):
     row["weight_value"] = _number(chars["weight"])
     row["pallet_value"] = _number(logistics["pallet"])
     row["sam"] = prop("Статус ассортиментной матрицы", "Статус ассортиментной матрицы (САМ)", "САМ") or ""
+    row["our_offers"] = prop("Наши предложения") or ""
     return row
 
 

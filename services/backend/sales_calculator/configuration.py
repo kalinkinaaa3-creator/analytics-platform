@@ -20,7 +20,7 @@ WAREHOUSES = [
     "Склад готовой продукции №3 Ставрово с 01.10.2014", "Склад готовой продукции №5",
     "Склад №36", "Склад №24 НОВ (Москва)",
 ]
-BASE_COLUMNS = {"image": "Фото", "product_key": "Код", "code": "Код 1С / Артикул",
+BASE_COLUMNS = {"image": "Фото", "code": "Артикул",
                 "name": "Наименование", "price_list": "Номенклатура прайс-листа",
                 "characteristics": "Характеристики", "logistics": "Логистика", "quantity": "Количество"}
 FULL_COLUMNS = {**BASE_COLUMNS, "price_type": "Тип цены", "unit_net": "Цена без НДС, ₽",
@@ -48,7 +48,10 @@ def validate_config(data):
     for key, choices in (("characteristics", CHARACTERISTICS), ("logistics", LOGISTICS),
                          ("warehouses", WAREHOUSES), ("full_columns", FULL_COLUMNS), ("simple_columns", SIMPLE_COLUMNS)):
         value = result[key]
-        if not isinstance(value, list) or any(not isinstance(x, str) or x not in choices for x in value):
+        if key.endswith("_columns") and isinstance(value, list):
+            # Preferences saved before removal of the internal product key remain valid.
+            value = [x for x in value if x != "product_key"]
+        if not isinstance(value, list) or any(not isinstance(x, str) or (not x.strip() or len(x) > 255 if key == "warehouses" else x not in choices) for x in value):
             raise ValueError(f"Некорректный список: {key}")
         result[key] = list(dict.fromkeys(value))
     try:

@@ -1,4 +1,5 @@
 import json
+import logging
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.http import FileResponse
@@ -37,8 +38,13 @@ class AccessView(APIView):
 
 class SettingsView(AccessView):
     def get(self, request):
-        return Response({"config": self.config(), "characteristics": CHARACTERISTICS, "logistics": LOGISTICS,
-                         "warehouses": WAREHOUSES, "full_columns": FULL_COLUMNS, "simple_columns": SIMPLE_COLUMNS})
+        from datasets.models import NomenclatureStock
+        config = self.config()
+        warehouses = set(NomenclatureStock.objects.exclude(warehouse__isnull=True).exclude(warehouse="").values_list("warehouse", flat=True).distinct())
+        warehouses.update(WAREHOUSES)
+        warehouses.update(config["warehouses"])
+        return Response({"config": config, "characteristics": CHARACTERISTICS, "logistics": LOGISTICS,
+                         "warehouses": sorted(warehouses), "full_columns": FULL_COLUMNS, "simple_columns": SIMPLE_COLUMNS})
 
     def put(self, request):
         try:
@@ -107,5 +113,14 @@ class ExportView(CalculationView):
             raise ValidationError("Выберите столбцы таблицы и выгрузки")
         if not result["rows"]:
             raise ValidationError("Добавьте товары в расчёт")
-        return FileResponse(export_document(result, config, mode, kind), as_attachment=True,
-                            filename=f"commercial-price-{timezone.localdate()}.{kind}")
+        try:
+            document = export_document(result, config, mode, kind)
+        except (ImportError, ValueError) as exc:
+            logging.getLogger("sales_calculator").exception("Export unavailable: mode=%s format=%s", mode, kind)
+            return Response({"detail": f"Не удалось создать {kind.upper()}: {exc}. Проверьте зависимости и шрифты backend-контейнера."}, status=503)
+        except Exception:
+            logging.getLogger("sales_calculator").exception("Export failed: mode=%s format=%s", mode, kind)
+            return Response({"detail": f"Не удалось создать {kind.upper()}. Подробности записаны в журнал Django (sales_calculator)."}, status=500)
+        title = "Прайс" if mode == "simple" else "Предложение"
+        return FileResponse(document, as_attachment=True, filename=f"{title}.{kind}",
+                            content_type="application/pdf" if kind == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

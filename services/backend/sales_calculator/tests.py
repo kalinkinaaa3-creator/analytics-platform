@@ -73,16 +73,28 @@ class CalculationTests(UnitTestCase):
         self.assertIsNone(result["logistics"]["weight"])
         self.assertEqual(result["logistics"]["pallets"], 2)
 
+    def test_partial_logistics_keeps_known_values(self):
+        products = {"1": product(weight_value=None, pallet_value=None), "2": product(product_key=2)}
+        result = calculate(products, [{"product_key": 1, "quantity": 10}, {"product_key": 2, "quantity": 75}], {})
+        self.assertEqual(result["logistics"], {"weight": Decimal(150), "pallets": Decimal(2)})
+        self.assertEqual(result["logistics_missing"], {"weight": 1, "pallets": 1})
+
+    def test_old_columns_and_non_default_warehouse_preferences(self):
+        config = validate_config({"full_columns": ["product_key", "code"], "warehouses": ["Новый склад"]})
+        self.assertEqual(config["full_columns"], ["code"])
+        self.assertEqual(config["warehouses"], ["Новый склад"])
+
     def test_characteristics_and_logistics_mapping(self):
         row = decorate(product(color="Черный", nom_cn_fea="3923", quantity_eurotruck=600), {
             "Длина (Глубина), мм": "600", "Ширина, мм": "400", "Высота, мм": "200",
             "Объём, л": "7,5", "Объем, л": "8", "Перфорация стенок": "Нет",
-            "Способ сложения (коробка)": "120", "Вес, кг": "1,5", "Складирование": "60"})
+            "Способ сложения (коробка)": "120", "Вес, кг": "1,5", "Складирование": "60", "Наши предложения": "Новинка"})
         self.assertEqual(row["characteristics"]["dimensions"], "600 × 400 × 200")
         self.assertEqual(row["characteristics"]["volume"], "7,5")
         self.assertNotIn("perforation", row["characteristics"])
         self.assertEqual(row["logistics"]["packing"], "по 120 шт./короб")
         self.assertEqual(row["logistics"]["tnved"], "3923")
+        self.assertEqual(row["our_offers"], "Новинка")
 
     def test_xlsx_embeds_photo_and_does_not_execute_names(self):
         from PIL import Image
@@ -110,6 +122,24 @@ class CalculationTests(UnitTestCase):
     def test_pdf_photo_only_without_available_image(self):
         document = export_document(self.run_order(1), validate_config({"simple_columns": ["image"]}), "simple", "pdf")
         self.assertEqual(document.read(4), b"%PDF")
+
+    def test_export_article_text_and_no_totals(self):
+        from openpyxl import load_workbook
+        from .export import display
+        config = validate_config({"full_columns": ["code", "name", "unit_net"]})
+        result = self.run_order(1)
+        ws = load_workbook(export_document(result, config, "full", "xlsx")).active
+        self.assertEqual(ws.title, "Предложение")
+        self.assertEqual(ws["A4"].value, "00000000123")
+        self.assertEqual(ws["A4"].data_type, "s")
+        self.assertEqual(ws["A4"].number_format, "@")
+        self.assertEqual(ws.max_row, 4)
+        self.assertEqual(display(result["rows"][0], "code", config), "00000000123")
+
+    def test_pdf_splits_long_characteristic_across_pages(self):
+        result = self.run_order(1, characteristics={"equipment": "Длинная комплектация " * 2000})
+        pdf = export_document(result, validate_config({}), "full", "pdf")
+        self.assertEqual(pdf.read(4), b"%PDF")
 
 
 class PublicationTests(UnitTestCase):
@@ -178,6 +208,24 @@ class AccessTests(TestCase):
         with patch("sales_calculator.api.read_products") as read:
             self.assertEqual(self.request("get", ProductsView, user=self.other).status_code, 403)
             read.assert_not_called()
+
+    def test_settings_list_all_warehouses_but_select_defaults(self):
+        from datasets.models import NomenclatureStock
+        with patch.object(NomenclatureStock.objects, "exclude") as query:
+            query.return_value.exclude.return_value.values_list.return_value.distinct.return_value = ["Новый склад"]
+            response = self.request("get", SettingsView)
+        self.assertIn("Новый склад", response.data["warehouses"])
+        self.assertNotIn("Новый склад", response.data["config"]["warehouses"])
+
+    def test_pdf_response_filename_and_content(self):
+        from .api import ExportView
+        with patch("sales_calculator.api.read_products", return_value=[product()]):
+            response = self.request("post", ExportView, data={"items": [{"product_key": 1}], "region": "Москва", "mode": "simple", "format": "pdf"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn("%D0%9F%D1%80%D0%B0%D0%B9%D1%81.pdf", response["Content-Disposition"])
+        self.assertTrue(b"".join(response.streaming_content).startswith(b"%PDF"))
+        response.close()
 
     def test_old_stock_hidden(self):
         with patch("sales_calculator.api.read_products", return_value=[product(calculation_date="2000-01-01", stocks={"A": 7})]), patch("sales_calculator.api.state_payload", return_value={}):

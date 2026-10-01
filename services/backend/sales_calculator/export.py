@@ -24,12 +24,12 @@ def image_bytes(url):
         return None
     if not valid:
         return None
-    folder = Path(settings.MEDIA_ROOT) / "sales-calculator-images"
-    folder.mkdir(parents=True, exist_ok=True)
-    path = folder / (hashlib.sha256(url.encode()).hexdigest() + ".png")
-    if path.exists():
-        return path.read_bytes()
     try:
+        folder = Path(settings.MEDIA_ROOT) / "sales-calculator-images"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / (hashlib.sha256(url.encode()).hexdigest() + ".png")
+        if path.exists():
+            return path.read_bytes()
         from PIL import Image
         with requests.get(url, timeout=(5, 10), stream=True, allow_redirects=False) as response:
             response.raise_for_status()
@@ -57,6 +57,8 @@ def image_bytes(url):
 
 
 def display(row, key, config):
+    if key == "code":
+        return str(row.get("code") or "").zfill(11) if row.get("code") is not None else ""
     if key in ("characteristics", "logistics"):
         labels = CHARACTERISTICS if key == "characteristics" else LOGISTICS
         return "\n".join(f"{labels[k]}: {row.get(key, {}).get(k)}" for k in config[key] if row.get(key, {}).get(k) not in (None, ""))
@@ -66,19 +68,6 @@ def display(row, key, config):
         return "Посмотреть на сайте" if row.get(key) else ""
     value = row.get(key)
     return "" if value is None else value
-
-
-def summary(result):
-    yield "Позиций", result["positions"]
-    yield "Количество, шт.", result["quantity"]
-    yield "Ценовой уровень", "Ручной режим" if result["manual"] else PRICE_LABELS[result["automatic_type"]]
-    if result["manual"]:
-        yield "Расчётный тип", PRICE_LABELS[result["automatic_type"]]
-    for label, key in (("Сумма без НДС, ₽", "net"), ("НДС, ₽", "vat"), ("Итого с НДС, ₽", "gross")):
-        yield label, result[key]
-    for label, key in (("Общий вес, кг", "weight"), ("Паллето-мест", "pallets")):
-        value = result["logistics"][key]
-        yield label, value if value is not None else "Недостаточно данных"
 
 
 def export_document(result, config, mode, kind):
@@ -109,8 +98,9 @@ def _xlsx(result, config, mode, labels, columns, images):
     from openpyxl.utils import get_column_letter
     wb = Workbook()
     ws = wb.active
-    ws.title = "Коммерческий прайс"
-    ws.append(["Коммерческий прайс"])
+    title = "Прайс" if mode == "simple" else "Предложение"
+    ws.title = title
+    ws.append([title])
     ws.append([f"{timezone.localdate():%d.%m.%Y} · Регион: {result['rows'][0]['region']} · НДС {config['vat']}%"])
     ws.append([labels[k] for k in columns])
     for cell in ws[3]:
@@ -134,6 +124,8 @@ def _xlsx(result, config, mode, labels, columns, images):
                 cell.value = value
                 if isinstance(value, str):
                     cell.data_type = "s"  # Untrusted supplier names must not become Excel formulas.
+                    if key == "code":
+                        cell.number_format = "@"
                 else:
                     cell.number_format = '#,##0.00'
                 if key == "url" and urlsplit(row.get("url") or "").scheme in ("http", "https"):
@@ -143,12 +135,6 @@ def _xlsx(result, config, mode, labels, columns, images):
             if index % 2 == 0:
                 cell.fill = PatternFill("solid", fgColor="F3F6F1")
         ws.row_dimensions[index].height = max(80, 14 * max((str(display(row, k, config)).count("\n") + 1 for k in columns if k != "image"), default=1))
-    if mode == "full":
-        ws.append([])
-        for label, value in summary(result):
-            ws.append([label, value])
-        if result["warning"]:
-            ws.append(["Сумма превышает стандартный диапазон прайс-листа"])
     for index, key in enumerate(columns, 1):
         ws.column_dimensions[get_column_letter(index)].width = 45 if key in ("characteristics", "logistics", "name", "price_list") else 19
     ws.freeze_panes = "A4"
@@ -178,7 +164,7 @@ def _pdf(result, config, mode, labels, columns, images):
     title = ParagraphStyle('Title', parent=style, fontSize=18, leading=24, spaceAfter=12)
     output = io.BytesIO()
     doc = SimpleDocTemplate(output, pagesize=landscape(A4), leftMargin=25, rightMargin=25, topMargin=25, bottomMargin=25)
-    flow = [Paragraph('Коммерческий прайс', title), Paragraph(escape(f"Регион: {result['rows'][0]['region']} · НДС {config['vat']}% · {timezone.localdate():%d.%m.%Y}"), style), Spacer(1, 12)]
+    flow = [Paragraph('Прайс' if mode == 'simple' else 'Предложение', title), Paragraph(escape(f"Регион: {result['rows'][0]['region']} · НДС {config['vat']}% · {timezone.localdate():%d.%m.%Y}"), style), Spacer(1, 12)]
     # Compact product blocks remain readable even when many optional columns are enabled.
     for row in result['rows']:
         cells = []
@@ -198,13 +184,9 @@ def _pdf(result, config, mode, labels, columns, images):
             if key == 'url' and urlsplit(row.get('url') or '').scheme in ('https', 'http'):
                 text = f'<link href="{escape(row["url"], {chr(34): "&quot;"})}">{text}</link>'
             cells.append([Paragraph(escape(labels[key]), style), Paragraph(text, style)])
-        table = Table(cells, colWidths=[160, 610], hAlign='LEFT')
+        # A single long characteristic must also be splittable across pages.
+        table = Table(cells, colWidths=[160, doc.width - 172], hAlign='LEFT', splitByRow=1, splitInRow=1)
         table.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F3F6F1')), ('VALIGN',(0,0),(-1,-1),'TOP'), ('BOTTOMPADDING',(0,0),(-1,-1),5)]))
         flow.extend([table, Spacer(1,12)])
-    if mode == 'full':
-        for label, value in summary(result):
-            flow.append(Paragraph(escape(f"{label}: {value}"), style))
-        if result["warning"]:
-            flow.append(Paragraph("Сумма превышает стандартный диапазон прайс-листа. Типы цен сохранены.", style))
     doc.build(flow); output.seek(0)
     return output
