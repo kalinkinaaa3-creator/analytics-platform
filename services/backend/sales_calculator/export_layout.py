@@ -60,6 +60,8 @@ def xlsx(result, config, mode, labels, columns, images):
         cell.font = Font(name="Arial", size=10, bold=True, color="454C40")
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = Border(left=line, right=line, top=line, bottom=line)
+    if "image" in columns:
+        ws.cell(3, columns.index("image") + 1).alignment = Alignment(horizontal="center", vertical="center", wrap_text=False)
     ws.row_dimensions[3].height = 65
     for index, row in enumerate(result["rows"], 4):
         lines = max((sum(max(1, math.ceil(len(part) / max(8, width(key) - 3))) for part in str(display(row, key, config)).split("\n")) for key in columns if key != "image"), default=1)
@@ -91,7 +93,7 @@ def xlsx(result, config, mode, labels, columns, images):
                 cell.font = Font(name="Arial", size=10, color="385C36", underline="single")
     end = len(result["rows"]) + 3
     if mode == "full":
-        for index, (label, key) in enumerate((("Итого сумма руб. без НДС:", "net"), ("Итого сумма руб. с НДС:", "gross")), end + 1):
+        for index, (label, key) in enumerate((("Итого сумма руб. без НДС:", "net"), ("НДС:", "vat"), ("Итого сумма руб. с НДС:", "gross")), end + 1):
             if last > 1:
                 ws.merge_cells(start_row=index, start_column=1, end_row=index, end_column=last - 1)
                 ws.cell(index, 1, label)
@@ -142,7 +144,13 @@ def pdf(result, config, mode, labels, columns, images):
     banner = Table([brand_cells], colWidths=brand_widths)
     banner.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#dc2f2f')), ('VALIGN',(0,0),(-1,-1),'MIDDLE'), ('TOPPADDING',(0,0),(-1,-1),12), ('BOTTOMPADDING',(0,0),(-1,-1),12)]))
     widths = [doc.width * width(key) / sum(width(k) for k in columns) for key in columns]
-    cells = [[Paragraph(escape(labels[key]), header) for key in columns]]
+    if "image" in columns:
+        image_index = columns.index("image")
+        minimum = pdfmetrics.stringWidth(labels["image"], header.fontName, header.fontSize) + 16
+        if widths[image_index] < minimum:
+            remaining = doc.width - widths[image_index]
+            widths = [minimum if index == image_index else value * (doc.width - minimum) / remaining for index, value in enumerate(widths)]
+    cells = [[Paragraph(escape(labels[key]).replace('\n', '<br/>'), header) for key in columns]]
     for row in result['rows']:
         values = []
         row_height = 64
@@ -175,8 +183,9 @@ def pdf(result, config, mode, labels, columns, images):
     flow = [banner, Spacer(1, 12), table]
     if mode == 'full':
         totals = Table([
-            [Paragraph('Итого сумма руб. без НДС:', style), Paragraph(f'{result["net"]:,.2f}'.replace(',', ' ').replace('.', ','), total_numeric)],
-            [Paragraph('Итого сумма руб. с НДС:', style), Paragraph(f'{result["gross"]:,.2f}'.replace(',', ' ').replace('.', ','), total_numeric)],
+            [Paragraph('Итого сумма руб. без НДС:', total_numeric), Paragraph(f'{result["net"]:,.2f}'.replace(',', ' ').replace('.', ','), total_numeric)],
+            [Paragraph('НДС:', total_numeric), Paragraph(f'{result["vat"]:,.2f}'.replace(',', ' ').replace('.', ','), total_numeric)],
+            [Paragraph('Итого сумма руб. с НДС:', total_numeric), Paragraph(f'{result["gross"]:,.2f}'.replace(',', ' ').replace('.', ','), total_numeric)],
         ], colWidths=[220, 110], hAlign='RIGHT')
         totals.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('TOPPADDING', (0,0), (-1,-1), 8), ('BOTTOMPADDING', (0,0), (-1,-1), 8)]))
         flow.append(KeepTogether([Spacer(1, 12), totals]))

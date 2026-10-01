@@ -72,7 +72,8 @@ class CalculationTests(UnitTestCase):
                 self.assertLessEqual(anchor._from.colOff + anchor.ext.cx, 18 * 7 * 9525)
                 if mode == "full":
                     self.assertEqual(ws["E5"].value, result["net"])
-                    self.assertEqual(ws["E6"].value, result["gross"])
+                    self.assertEqual(ws["E6"].value, result["vat"])
+                    self.assertEqual(ws["E7"].value, result["gross"])
                 else:
                     self.assertEqual(ws.max_row, 4)
 
@@ -237,7 +238,7 @@ class CalculationTests(UnitTestCase):
         self.assertEqual(ws["B4"].value, "00000000123")
         self.assertEqual(ws["B4"].data_type, "s")
         self.assertEqual(ws["B4"].number_format, "@")
-        self.assertEqual(ws.max_row, 6)
+        self.assertEqual(ws.max_row, 7)
         self.assertEqual(display(result["rows"][0], "code", config), "00000000123")
 
     def test_pdf_splits_long_characteristic_across_pages(self):

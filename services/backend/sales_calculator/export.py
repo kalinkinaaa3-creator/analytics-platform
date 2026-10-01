@@ -86,7 +86,7 @@ def export_document(result, config, mode, kind):
         for index, (tier, label) in enumerate(PRICE_LABELS.items()):
             band = f"{bounds[index]}–{bounds[index + 1]} руб." if index < 3 else f"свыше {bounds[index]} руб."
             for tax in ("net", "gross"):
-                labels[f"{tier}_{tax}"] = f"{label} руб. {'без НДС' if tax == 'net' else 'с НДС'} ({band})"
+                labels[f"{tier}_{tax}"] = f"{label} руб. {'без НДС' if tax == 'net' else 'с НДС'}\n({band})"
     columns = config[mode + "_columns"]
     if not columns:
         raise ValueError("Выберите столбцы для выгрузки")
