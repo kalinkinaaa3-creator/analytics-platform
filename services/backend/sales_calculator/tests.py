@@ -88,13 +88,14 @@ class CalculationTests(UnitTestCase):
         row = decorate(product(color="Черный", nom_cn_fea="3923", quantity_eurotruck=600), {
             "Длина (Глубина), мм": "600", "Ширина, мм": "400", "Высота, мм": "200",
             "Объём, л": "7,5", "Объем, л": "8", "Перфорация стенок": "Нет",
-            "Способ сложения (коробка)": "120", "Вес, кг": "1,5", "Складирование": "60", "Наши предложения": "Новинка"})
+            "Способ сложения (коробка)": "120", "Вес, кг": "1,5", "Складирование": "60", "Наши предложения": "Новинка", "Материал": "PP"})
         self.assertEqual(row["characteristics"]["dimensions"], "600 × 400 × 200")
         self.assertEqual(row["characteristics"]["volume"], "7,5")
         self.assertNotIn("perforation", row["characteristics"])
         self.assertEqual(row["logistics"]["packing"], "по 120 шт./короб")
         self.assertEqual(row["logistics"]["tnved"], "3923")
         self.assertEqual(row["our_offers"], "Новинка")
+        self.assertEqual(row["material"], "PP")
 
     def test_xlsx_embeds_photo_and_does_not_execute_names(self):
         from PIL import Image

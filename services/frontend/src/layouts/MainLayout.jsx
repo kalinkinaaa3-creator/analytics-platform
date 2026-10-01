@@ -6,6 +6,12 @@ import "../styles/list_base.css";
 
 function DashboardIcon({ name }) {
   const icons = {
+    ruble: (
+      <>
+        <path d="M8 21V3h6a5 5 0 0 1 0 10H5" />
+        <path d="M5 17h11" />
+      </>
+    ),
     projects: (
       <>
         <rect x="4" y="5" width="16" height="14" rx="2" />

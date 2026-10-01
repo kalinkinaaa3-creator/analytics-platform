@@ -1,11 +1,11 @@
-﻿/* Isolated commercial-price styles. Controls use the SEO/CRM design tokens. */
-.sc-dashboard { height:calc(100dvh - 100px); min-height:440px; padding:18px 20px 20px; box-sizing:border-box; display:flex; flex-direction:column; overflow:hidden; background:#f7f8f5; color:#242722; font:14px Helvetica,Arial,sans-serif; }
+/* Isolated commercial-price styles. Controls use the SEO/CRM design tokens. */
+.sc-dashboard { height:var(--sc-height,calc(100dvh - 24px)); min-height:0; padding:18px 20px 20px; box-sizing:border-box; display:flex; flex-direction:column; overflow:hidden; background:#f7f8f5; color:#242722; font:14px Helvetica,Arial,sans-serif; }
 .sc-topbar { display:flex; min-height:48px; align-items:center; justify-content:space-between; gap:18px; margin-bottom:14px; flex-shrink:0; }
 .sc-topbar h1 { margin:0; font-size:24px; font-weight:700; letter-spacing:-.35px; }
 .sc-topbar nav { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:7px; }
-:where(.sc-dashboard,.sc-modal) button:not(:where(.dashboard-filter button)) { min-height:34px; padding:7px 13px; background:#606957; border:1px solid #555e4e; border-radius:5px; color:#fff; font:700 12px Helvetica,Arial,sans-serif; cursor:pointer; box-shadow:0 2px 6px rgba(45,53,41,.12); transition:.15s ease; }
-:where(.sc-dashboard,.sc-modal) button:not(:where(.dashboard-filter button)):hover:not(:disabled) { background:#505a48; box-shadow:0 4px 11px rgba(45,53,41,.17); transform:translateY(-1px); }
-:where(.sc-dashboard,.sc-modal) button:not(:where(.dashboard-filter button)):active:not(:disabled) { background:#46503f; transform:translateY(0); box-shadow:inset 0 1px 3px #0002; }
+:where(.sc-dashboard,.sc-modal) button:not(:where(.dashboard-filter button)) { min-height:44px; box-sizing:border-box; padding:8px 14px; background:linear-gradient(90deg,#6c6c5a,#4e4e43); border:1px solid #4d5747; border-radius:4px; color:#fff; font:700 12px Helvetica,sans-serif; cursor:pointer; transition:background .3s ease,color .3s ease; box-shadow:none; transform:none; }
+:where(.sc-dashboard,.sc-modal) button:not(:where(.dashboard-filter button)):hover:not(:disabled) { background:linear-gradient(90deg,#a0a699,#c8cec5); color:#111; box-shadow:none; transform:none; }
+:where(.sc-dashboard,.sc-modal) button:not(:where(.dashboard-filter button)):active:not(:disabled) { box-shadow:none; transform:none; }
 :where(.sc-dashboard,.sc-modal) button:disabled { opacity:.5; cursor:not-allowed; }
 :where(.sc-dashboard,.sc-modal) button:focus-visible { outline:2px solid #506f4e; outline-offset:2px; }
 .sc-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:12px 0 18px; flex-shrink:0; }
@@ -87,4 +87,5 @@
 .sc-pagination button:disabled { opacity:.4; cursor:not-allowed; }
 .sc-pagination label { display:flex; align-items:center; gap:6px; }
 @media(max-width:1100px) { .sc-workspace { grid-template-columns:minmax(0,1fr) 270px; } .sc-products { grid-template-columns:repeat(3,minmax(0,1fr)); } }
-@media(max-width:760px) { .sc-dashboard { padding:12px; height:calc(100dvh - 70px); } .sc-topbar { flex-wrap:wrap; gap:10px; } .sc-topbar h1 { font-size:21px; } .sc-workspace { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(200px,1fr) minmax(120px,.65fr); overflow:auto; } .sc-settings-grid,.sc-picker-filters { grid-template-columns:1fr; } .sc-products { grid-template-columns:repeat(2,minmax(0,1fr)); } .sc-overlay { padding:8px; } .sc-modal { height:96dvh; } .sc-modal-body { padding:14px; } .sc-modal footer { padding:12px; flex-wrap:wrap; } .sc-region { margin-left:0; font-size:15px; } .sc-tabs { width:100%; } .sc-tabs button { flex:1; min-width:0; padding:10px 8px; font-size:12px; } }
+@media(max-width:760px) { .sc-dashboard { padding:12px; height:var(--sc-height,calc(100dvh - 24px)); } .sc-topbar { flex-wrap:wrap; gap:10px; } .sc-topbar h1 { font-size:21px; } .sc-workspace { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(200px,1fr) minmax(120px,.65fr); overflow:auto; } .sc-settings-grid,.sc-picker-filters { grid-template-columns:1fr; } .sc-products { grid-template-columns:repeat(2,minmax(0,1fr)); } .sc-overlay { padding:8px; } .sc-modal { height:96dvh; } .sc-modal-body { padding:14px; } .sc-modal footer { padding:12px; flex-wrap:wrap; } .sc-region { margin-left:0; font-size:15px; } .sc-tabs { width:100%; } .sc-tabs button { flex:1; min-width:0; padding:10px 8px; font-size:12px; } }
+.sc-table tbody tr:hover .sc-remove-cell { background:#f8faf6; }
