@@ -13,7 +13,7 @@ from .configuration import CHARACTERISTICS, LOGISTICS, FULL_COLUMNS, SIMPLE_COLU
 
 logger = logging.getLogger("sales_calculator")
 PRICE_COLUMNS = {"unit_net", "unit_gross", *[f"{tier}_{tax}" for tier in PRICE_LABELS for tax in ("net", "gross")]}
-NUMERIC_COLUMNS = PRICE_COLUMNS | {"quantity", "sum_net", "sum_gross", "code"}
+NUMERIC_COLUMNS = PRICE_COLUMNS | {"quantity", "sum_net", "sum_gross", "code", "row_number"}
 
 
 def price_text(value):
@@ -82,7 +82,7 @@ def display(row, key, config):
 def export_document(result, config, mode, kind):
     labels = dict(FULL_COLUMNS if mode == "full" else SIMPLE_COLUMNS)
     if mode == "simple":
-        bounds = ["0", *config["thresholds"]]
+        bounds = [price_text(value) for value in [0, *config["thresholds"]]]
         for index, (tier, label) in enumerate(PRICE_LABELS.items()):
             band = f"{bounds[index]}–{bounds[index + 1]} руб." if index < 3 else f"свыше {bounds[index]} руб."
             for tax in ("net", "gross"):
@@ -90,6 +90,9 @@ def export_document(result, config, mode, kind):
     columns = config[mode + "_columns"]
     if not columns:
         raise ValueError("Выберите столбцы для выгрузки")
+    columns = ["row_number", *columns]
+    labels["row_number"] = "№"
+    result = {**result, "rows": [{**row, "row_number": index} for index, row in enumerate(result["rows"], 1)]}
     # Shared columns and data are used by both formats.
     from concurrent.futures import ThreadPoolExecutor
     urls = list(dict.fromkeys(r.get("image") for r in result["rows"] if r.get("image"))) if "image" in columns else []

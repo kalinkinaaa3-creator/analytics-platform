@@ -24,11 +24,16 @@ def logo_bytes():
         return None
     with Image.open(path) as logo:
         output = io.BytesIO()
-        logo.convert("RGBA").save(output, format="PNG")
+        rgba = logo.convert("RGBA")
+        background = Image.new("RGB", rgba.size, "white")
+        background.paste(rgba, mask=rgba.getchannel("A"))
+        background.save(output, format="PNG")
         return output.getvalue()
 
 
 def width(key):
+    if key == "row_number":
+        return 7
     return 40 if key in ("name", "name_1c", "characteristics", "logistics") else 18
 
 
@@ -64,7 +69,7 @@ def xlsx(result, config, mode, labels, columns, images):
         image.anchor = OneCellAnchor(_from=AnchorMarker(col=column - 1, row=row - 1, colOff=pixels_to_EMU(dx), rowOff=pixels_to_EMU(dy)), ext=XDRPositiveSize2D(pixels_to_EMU(image.width), pixels_to_EMU(image.height)))
         ws.add_image(image)
     if logo:
-        add_image(logo, 1, 1, min(160, width(columns[0]) * 7 - 12), 48, False)
+        add_image(logo, 1, 1, min(160, sum(width(key) for key in columns) * 7 - 12), 48, False)
     ws.append([])
     for index, key in enumerate(columns, 1):
         ws.cell(3, index, labels[key])
@@ -143,7 +148,7 @@ def pdf(result, config, mode, labels, columns, images):
     style = ParagraphStyle('Body', fontName='CommercialPrice', fontSize=8, leading=11, textColor=colors.HexColor('#242722'))
     numeric = ParagraphStyle('Numeric', parent=style, alignment=2)
     header = ParagraphStyle('Header', parent=style, alignment=1)
-    brand = ParagraphStyle('Brand', parent=style, fontSize=12, leading=17, textColor=colors.white)
+    brand = ParagraphStyle('Brand', parent=style, fontSize=12, leading=17, textColor=colors.white, alignment=1)
     output = io.BytesIO()
     doc = SimpleDocTemplate(output, pagesize=landscape(A3), leftMargin=20, rightMargin=20, topMargin=20, bottomMargin=20)
     logo = logo_bytes()
@@ -190,7 +195,12 @@ def pdf(result, config, mode, labels, columns, images):
     table.setStyle(TableStyle([('GRID',(0,0),(-1,-1),.4,colors.HexColor('#e5e8e1')), ('VALIGN',(0,0),(-1,-1),'MIDDLE'), ('TOPPADDING',(0,0),(-1,-1),8), ('BOTTOMPADDING',(0,0),(-1,-1),8)]))
     flow = [banner, Spacer(1, 12), table]
     if mode == 'full':
-        flow.append(KeepTogether([Spacer(1, 12), Paragraph(f'Итого сумма руб. без НДС: {price_text(result["net"])}', numeric), Paragraph(f'Итого сумма руб. с НДС: {price_text(result["gross"])}', numeric)]))
+        totals = Table([
+            [Paragraph('Итого сумма руб. без НДС:', style), Paragraph(f'{result["net"]:,.2f}'.replace(',', ' ').replace('.', ','), numeric)],
+            [Paragraph('Итого сумма руб. с НДС:', style), Paragraph(f'{result["gross"]:,.2f}'.replace(',', ' ').replace('.', ','), numeric)],
+        ], colWidths=[220, 110], hAlign='RIGHT')
+        totals.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('TOPPADDING', (0,0), (-1,-1), 8), ('BOTTOMPADDING', (0,0), (-1,-1), 8)]))
+        flow.append(KeepTogether([Spacer(1, 12), totals]))
     doc.build(flow)
     output.seek(0)
     return output

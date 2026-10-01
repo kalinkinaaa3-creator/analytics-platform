@@ -118,3 +118,5 @@
 .sc-product-image-preview--positioned { visibility:visible; }
 .sc-product-image-preview img { display:block; width:100%; height:min(300px,50vh); object-fit:contain; }
 .sc-product-image-preview__caption { margin-top:10px; font:13px/1.4 Helvetica,Arial,sans-serif; color:#30372c; max-height:5.6em; overflow:hidden; }
+
+.sc-table .sc-number-cell { width:40px; min-width:40px; }
