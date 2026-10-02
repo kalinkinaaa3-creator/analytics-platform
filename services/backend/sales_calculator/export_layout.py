@@ -132,7 +132,7 @@ def pdf(result, config, mode, labels, columns, images):
     bold_font = font.with_name('DejaVuSans-Bold.ttf' if font.name == 'DejaVuSans.ttf' else 'arialbd.ttf')
     if 'CommercialPriceBold' not in pdfmetrics.getRegisteredFontNames():
         pdfmetrics.registerFont(TTFont('CommercialPriceBold', str(bold_font)))
-    style = ParagraphStyle('Body', fontName='CommercialPrice', fontSize=8, leading=11, textColor=colors.HexColor('#242722'))
+    style = ParagraphStyle('Body', fontName='CommercialPrice', fontSize=8, leading=11, textColor=colors.HexColor('#242722'), splitLongWords=0)
     numeric = ParagraphStyle('Numeric', parent=style, alignment=2)
     total_numeric = ParagraphStyle('TotalNumeric', parent=numeric, fontName='CommercialPriceBold')
     header = ParagraphStyle('Header', parent=style, alignment=1)
@@ -146,13 +146,26 @@ def pdf(result, config, mode, labels, columns, images):
     brand_widths = [content_width]
     banner = Table([brand_cells], colWidths=brand_widths, hAlign='LEFT')
     banner.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#dc2f2f')), ('VALIGN',(0,0),(-1,-1),'MIDDLE'), ('TOPPADDING',(0,0),(-1,-1),12), ('BOTTOMPADDING',(0,0),(-1,-1),12)]))
-    widths = [content_width * width(key) / sum(width(k) for k in columns) for key in columns]
-    if "image" in columns:
-        image_index = columns.index("image")
-        minimum = pdfmetrics.stringWidth(labels["image"], header.fontName, header.fontSize) + 16
-        if widths[image_index] < minimum:
-            remaining = content_width - widths[image_index]
-            widths = [minimum if index == image_index else value * (content_width - minimum) / remaining for index, value in enumerate(widths)]
+    # Reserve enough room for every unbroken word, especially padded articles
+    # and links. Distribute the remaining space without shrinking these minima.
+    minimums = []
+    for key in columns:
+        words = labels[key].split()
+        if key != 'image':
+            for row in result['rows']:
+                value = display(row, key, config)
+                if key in NUMERIC_COLUMNS - {'code'} and value != '':
+                    value = price_text(value)
+                words.extend(str(value).split())
+        minimums.append(max((pdfmetrics.stringWidth(word, style.fontName, style.fontSize) for word in words), default=0) + 16)
+    if sum(minimums) > content_width:
+        factor = (content_width - 16 * len(columns)) / (sum(minimums) - 16 * len(columns))
+        for paragraph_style in (style, numeric, header):
+            paragraph_style.fontSize *= factor
+            paragraph_style.leading *= factor
+        minimums = [(value - 16) * factor + 16 for value in minimums]
+    remaining = max(0, content_width - sum(minimums))
+    widths = [minimum + remaining * width(key) / sum(width(k) for k in columns) for key, minimum in zip(columns, minimums)]
     cells = [[Paragraph(escape(labels[key]).replace('\n', '<br/>'), header) for key in columns]]
     for row in result['rows']:
         values = []
