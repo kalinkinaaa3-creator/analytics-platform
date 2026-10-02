@@ -139,17 +139,20 @@ def pdf(result, config, mode, labels, columns, images):
     brand = ParagraphStyle('Brand', parent=style, fontSize=12, leading=17, textColor=colors.white, alignment=1)
     output = io.BytesIO()
     doc = SimpleDocTemplate(output, pagesize=landscape(A3), leftMargin=20, rightMargin=20, topMargin=20, bottomMargin=20)
+    # SimpleDocTemplate's frame has 6 pt of padding on either side.
+    # Use its actual content width and the same alignment for both tables.
+    content_width = doc.width - 12
     brand_cells = [Paragraph(escape(heading(result, mode)), brand)]
-    brand_widths = [doc.width]
-    banner = Table([brand_cells], colWidths=brand_widths)
+    brand_widths = [content_width]
+    banner = Table([brand_cells], colWidths=brand_widths, hAlign='LEFT')
     banner.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#dc2f2f')), ('VALIGN',(0,0),(-1,-1),'MIDDLE'), ('TOPPADDING',(0,0),(-1,-1),12), ('BOTTOMPADDING',(0,0),(-1,-1),12)]))
-    widths = [doc.width * width(key) / sum(width(k) for k in columns) for key in columns]
+    widths = [content_width * width(key) / sum(width(k) for k in columns) for key in columns]
     if "image" in columns:
         image_index = columns.index("image")
         minimum = pdfmetrics.stringWidth(labels["image"], header.fontName, header.fontSize) + 16
         if widths[image_index] < minimum:
-            remaining = doc.width - widths[image_index]
-            widths = [minimum if index == image_index else value * (doc.width - minimum) / remaining for index, value in enumerate(widths)]
+            remaining = content_width - widths[image_index]
+            widths = [minimum if index == image_index else value * (content_width - minimum) / remaining for index, value in enumerate(widths)]
     cells = [[Paragraph(escape(labels[key]).replace('\n', '<br/>'), header) for key in columns]]
     for row in result['rows']:
         values = []
