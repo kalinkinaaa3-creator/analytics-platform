@@ -7,6 +7,7 @@ from django.db import transaction
 from django.db.models import Max
 
 from datasets.models import NomenclatureStock
+from .nomenclature_load_lock import serialized_nomenclature_day
 from datasets.services.external_api.stock_api_client import (
     fetch_stock_api_rows,
 )
@@ -144,6 +145,7 @@ def iter_dates(start_date: date, end_date: date):
         current_date += timedelta(days=1)
 
 
+@serialized_nomenclature_day
 def load_stock_day(load_date: date) -> dict:
     """
     Загружает и полностью заменяет данные одного дня.
