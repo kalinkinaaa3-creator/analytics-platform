@@ -215,7 +215,7 @@ export function MainLayout() {
             document.getElementById("workspace-menu-trigger")?.focus();
           }
         }}>
-          {organizations.length > 1 ? <>
+          {organizations.length > 1 && <>
             <button type="button" id="workspace-menu-trigger" className="workspace-menu-trigger"
               aria-expanded={organizationMenuOpen} aria-controls="workspace-menu-options"
               disabled={switching} onClick={() => setOrganizationMenuOpen(!organizationMenuOpen)}>
@@ -231,7 +231,7 @@ export function MainLayout() {
                 {item.name}
               </button>)}
             </div>}
-          </> : <span className="workspace-menu-name">{organization.name}</span>}
+          </>}
         </div>
 
         <div className="user-info">
