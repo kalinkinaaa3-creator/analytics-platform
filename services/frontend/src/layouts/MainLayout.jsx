@@ -219,7 +219,10 @@ export function MainLayout() {
             <button type="button" id="workspace-menu-trigger" className="workspace-menu-trigger"
               aria-expanded={organizationMenuOpen} aria-controls="workspace-menu-options"
               disabled={switching} onClick={() => setOrganizationMenuOpen(!organizationMenuOpen)}>
-              <span>{organization.name}</span><span aria-hidden="true">⌄</span>
+              <span>{organization.name}</span>
+              <svg className="workspace-menu-chevron" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path d="m4 6 4 4 4-4" />
+              </svg>
             </button>
             {organizationMenuOpen && <div id="workspace-menu-options" className="workspace-menu-options">
               {organizations.map(item => <button type="button" key={item.id}
