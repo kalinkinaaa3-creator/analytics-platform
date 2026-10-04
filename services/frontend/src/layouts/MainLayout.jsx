@@ -133,6 +133,7 @@ export function MainLayout() {
   const navigate = useNavigate();
 
   const [sections, setSections] = useState({});
+  const [organizationMenuOpen, setOrganizationMenuOpen] = useState(false);
   const [menuStatus, setMenuStatus] = useState("loading");
 
   useEffect(() => {
@@ -182,6 +183,7 @@ export function MainLayout() {
         !toggleBtn.contains(event.target)
       ) {
         sidebar.classList.remove("open");
+        setOrganizationMenuOpen(false);
       }
     }
 
@@ -207,14 +209,27 @@ export function MainLayout() {
       </button>
 
       <div className={`sidebar${organization.theme === "select-market" && window.matchMedia("(max-width: 760px)").matches ? "" : " open"}`} id="sidebar">
-        <button
-          className="toggle-btn"
-          aria-label="Свернуть меню"
-          onClick={(event) => {
-            event.stopPropagation();
-            toggleSidebar();
-          }}
-        >{organization.theme === "select-market" ? organization.name : null}</button>
+        <div className="workspace-menu-header" onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setOrganizationMenuOpen(false);
+            document.getElementById("workspace-menu-trigger")?.focus();
+          }
+        }}>
+          {organizations.length > 1 ? <>
+            <button type="button" id="workspace-menu-trigger" className="workspace-menu-trigger"
+              aria-expanded={organizationMenuOpen} aria-controls="workspace-menu-options"
+              disabled={switching} onClick={() => setOrganizationMenuOpen(!organizationMenuOpen)}>
+              <span>{organization.name}</span><span aria-hidden="true">⌄</span>
+            </button>
+            {organizationMenuOpen && <div id="workspace-menu-options" className="workspace-menu-options">
+              {organizations.map(item => <button type="button" key={item.id}
+                disabled={switching} aria-pressed={item.id === organization.id}
+                onClick={() => { setOrganizationMenuOpen(false); switchOrganization(item.id); }}>
+                {item.name}
+              </button>)}
+            </div>}
+          </> : <span className="workspace-menu-name">{organization.name}</span>}
+        </div>
 
         <div className="user-info">
           <svg className="user-info-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -297,11 +312,6 @@ export function MainLayout() {
       </div>
 
       <div className="content">
-        {organizations.length > 1 && <div className="workspace-toolbar">
-          <select aria-label="Организация" value={organization.id} disabled={switching} onChange={(event) => switchOrganization(event.target.value)}>
-            {organizations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-        </div>}
         <Outlet context={{ sections, organization, menuStatus }} />
       </div>
     </div>

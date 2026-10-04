@@ -2,6 +2,17 @@
 .workspace-loading-actions { display: flex; gap: 12px; margin-top: 16px; }
 .workspace-switching { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: #ffffffed; color: #1f262e; font: 16px/24px "Segoe UI", sans-serif; }
 .workspace-error { padding: 12px 20px; background: #fbe3e3; color: #7e2626; }
-.workspace-toolbar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 12px 0; }
-.workspace-toolbar select { box-sizing: border-box; height: 36px; max-width: 260px; padding: 0 12px; border: 1px solid #c3ccd6; border-radius: 6px; background: white; color: #1f262e; font: inherit; }
-.workspace-toolbar select:focus-visible { outline: 2px solid #5a8ec4; outline-offset: 2px; }
+/* Organization controls live exclusively inside the sidebar. */
+.app-shell .workspace-menu-header { position: relative; display: flex; align-items: center; justify-content: flex-end; min-height: 48px; padding: 5px 10px 5px 64px; box-sizing: border-box; flex-shrink: 0; background: #d6d6d6; color: #20251d; }
+.app-shell .workspace-menu-trigger, .app-shell .workspace-menu-name { min-width: 0; width: 100%; font: inherit; font-size: 14px; font-weight: 600; }
+.app-shell .workspace-menu-name { text-align: right; overflow-wrap: anywhere; }
+.app-shell .workspace-menu-trigger { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 7px 8px; border: 1px solid #aeb3a8; border-radius: 5px; background: #f5f6f2; color: inherit; cursor: pointer; box-shadow: none; transform: none; }
+.app-shell .workspace-menu-trigger span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell .workspace-menu-trigger:hover { background: #e7eadf; transform: none; }
+.app-shell .workspace-menu-options { position: absolute; top: 100%; right: 10px; left: 10px; z-index: 2; padding: 4px; background: white; border: 1px solid #c3ccd6; border-radius: 6px; box-shadow: 0 4px 12px #0002; }
+.app-shell .workspace-menu-options button { display: block; width: 100%; text-align: left; padding: 10px; border: 0; border-radius: 4px; background: white; color: #20251d; font: inherit; font-size: 14px; cursor: pointer; box-shadow: none; transform: none; }
+.app-shell .workspace-menu-options button:hover, .app-shell .workspace-menu-options button[aria-pressed="true"] { background: #e7eadf; }
+.app-shell .workspace-menu-header button:focus-visible { outline: 2px solid #5a8ec4; outline-offset: 2px; }
+.app-shell.sm-workspace .workspace-menu-header { background: var(--sm-surface); color: var(--sm-text); }
+.app-shell.sm-workspace .workspace-menu-trigger { background: #edf3fa; border-color: var(--sm-border); }
+.app-shell.sm-workspace .workspace-menu-trigger:hover, .app-shell.sm-workspace .workspace-menu-options button:hover, .app-shell.sm-workspace .workspace-menu-options button[aria-pressed="true"] { background: #e1edf8; }
