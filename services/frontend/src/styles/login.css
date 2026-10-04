@@ -25,7 +25,6 @@
 }
 
 .login-page .login-container input[type="text"],
-.login-page .login-container select,
 .login-page .login-container input[type="password"] {
   width: 100%;
   padding: 12px 15px;
@@ -47,6 +46,7 @@
 .login-page .login-account { color: #666; overflow-wrap: anywhere; }
 .login-page .login-container button:disabled { opacity: .65; cursor: wait; }
 .login-page .login-container .login-back { background: transparent; color: #414c38; font-size: 14px; }
+.login-page .login-container .login-back:hover { background: #2d3328; color: #fff; }
 
 .login-page .login-container button {
   width: 100%;
@@ -71,3 +71,24 @@
 }
 
 
+
+.login-page .login-org-picker { position: relative; margin-top: 10px; text-align: left; }
+.login-page .login-container .login-org-trigger,
+.login-page .login-container .login-org-options button {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  box-sizing: border-box; width: 100%; margin: 0; padding: 12px 14px;
+  background: #fff; color: #30382c; border: 1px solid #b8c0b1;
+  border-radius: 6px; font: 14px/20px Helvetica, sans-serif; text-align: left;
+  box-shadow: none; transform: none;
+}
+.login-page .login-container .login-org-trigger { min-height: 46px; font-weight: 600; }
+.login-page .login-org-picker svg { width: 16px; height: 16px; flex: 0 0 16px; fill: none; stroke: #59664f; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.login-page .login-org-trigger[aria-expanded="true"] svg { transform: rotate(180deg); }
+.login-page .login-org-options { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 10; padding: 5px; border: 1px solid #aab59f; border-radius: 8px; background: #fff; box-shadow: 0 8px 24px #30382c1f; max-height: 240px; overflow-y: auto; }
+.login-page .login-container .login-org-options button { border-color: transparent; }
+.login-page .login-container .login-org-options button + button { margin-top: 4px; }
+.login-page .login-container .login-org-options button[aria-pressed="true"] { background: #edf0e8; border-color: #ccd4c4; font-weight: 600; }
+.login-page .login-container .login-org-trigger:hover,
+.login-page .login-container .login-org-options button:hover { background: #f3f5ef; border-color: #aab59f; }
+.login-page .login-org-picker button:focus-visible { outline: 2px solid #667859; outline-offset: -3px; }
+.login-page .login-org-picker span { overflow-wrap: anywhere; }

@@ -1,7 +1,59 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import "../styles/login.css";
+
+function OrganizationPicker({ organizations, value, onChange, disabled }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef(null);
+  const trigger = useRef(null);
+  const options = useRef([]);
+  const selected = organizations.findIndex(org => String(org.id) === value);
+
+  useEffect(() => {
+    function closeOutside(event) {
+      if (!root.current?.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, []);
+
+  useEffect(() => {
+    if (open) options.current[Math.max(selected, 0)]?.focus();
+  }, [open, selected]);
+
+  return <div className="login-org-picker" ref={root}
+    onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}
+    onKeyDown={event => {
+      if (event.key === "Escape") { event.preventDefault(); setOpen(false); trigger.current?.focus(); }
+    }}>
+    <button id="login-organization" className="login-org-trigger" type="button" ref={trigger}
+      disabled={disabled} autoFocus aria-expanded={open} aria-controls="login-org-options"
+      aria-labelledby="login-org-label login-org-value"
+      onClick={() => setOpen(!open)}
+      onKeyDown={event => { if (["ArrowDown", "ArrowUp"].includes(event.key)) { event.preventDefault(); setOpen(true); } }}>
+      <span id="login-org-value">{organizations[selected]?.name}</span>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+    </button>
+    {open && <div id="login-org-options" className="login-org-options" role="group" aria-labelledby="login-org-label">
+      {organizations.map((org, index) => <button type="button" key={org.id}
+        ref={element => { options.current[index] = element; }} disabled={disabled}
+        aria-pressed={index === selected}
+        onKeyDown={event => {
+          let next;
+          if (event.key === "ArrowDown") next = (index + 1) % organizations.length;
+          if (event.key === "ArrowUp") next = (index - 1 + organizations.length) % organizations.length;
+          if (event.key === "Home") next = 0;
+          if (event.key === "End") next = organizations.length - 1;
+          if (next !== undefined) { event.preventDefault(); options.current[next]?.focus(); }
+        }}
+        onClick={() => { onChange(String(org.id)); setOpen(false); trigger.current?.focus(); }}>
+        <span>{org.name}</span>
+        {index === selected && <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8 3 3 7-7" /></svg>}
+      </button>)}
+    </div>}
+  </div>;
+}
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -53,10 +105,8 @@ export function LoginPage() {
         {error && <div className="error" role="alert">{error}</div>}
         <form onSubmit={handleSubmit} aria-busy={busy}>
           {pending ? <>
-            <label className="login-organization" htmlFor="login-organization">Организация</label>
-            <select id="login-organization" value={organizationId} onChange={event => setOrganizationId(event.target.value)} disabled={busy} autoFocus>
-              {pending.organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
-            </select>
+            <label id="login-org-label" className="login-organization" htmlFor="login-organization">Организация</label>
+            <OrganizationPicker organizations={pending.organizations} value={organizationId} onChange={setOrganizationId} disabled={busy} />
             <p className="login-account">{username}</p>
           </> : <>
             <input type="text" placeholder="Имя пользователя" aria-label="Имя пользователя" autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} disabled={busy} required />
