@@ -1,4 +1,9 @@
+import { useWorkspace } from "../organizations/useWorkspace";
+import { SelectMarketHome } from "../organizations/SelectMarketHome";
+
 export function HomePage() {
+  const workspace = useWorkspace();
+  if (workspace?.organization.theme === "select-market") return <SelectMarketHome />;
   return (
     <>
 

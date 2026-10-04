@@ -453,7 +453,7 @@ class ProcurementPlanView(APIView):
     sync = None
 
     def _authorize(self, request, **kwargs):
-        dashboard = Dashboard.objects.filter(slug=self.dashboard_slug).first()
+        dashboard = Dashboard.objects.filter(organization__code="iplast", slug=self.dashboard_slug).first()
         if dashboard is None:
             raise NotFound("Dashboard not found")
         if not user_can_view_dashboard(request.user, dashboard):
@@ -556,9 +556,18 @@ class DatasetViewSet(ModelViewSet):
     queryset = Dataset.objects.all()
     serializer_class = DatasetSerializer
 
+    def get_queryset(self):
+        return super().get_queryset().filter(organization=self.request.organization)
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.organization)
+
 class DatasetRowViewSet(ModelViewSet):
     queryset = DatasetRow.objects.all()
     serializer_class = DatasetRowSerializer
+
+    def get_queryset(self):
+        return super().get_queryset().filter(dataset__organization=self.request.organization)
 
 
 
@@ -757,7 +766,7 @@ class FBAccreceivIndicatorUploadView(APIView):
 
     def post(self, request):
         try:
-            dashboard = Dashboard.objects.filter(slug="accreceiv").first()
+            dashboard = Dashboard.objects.filter(organization__code="iplast", slug="accreceiv").first()
             if dashboard is None:
                 raise NotFound("Dashboard not found")
             if not user_can_edit_dashboard(request.user, dashboard):
@@ -1197,7 +1206,7 @@ class PlanSalesUploadView(APIView):
 
     def post(self, request):
         try:
-            dashboard = Dashboard.objects.filter(name="PlannedSales").first()
+            dashboard = Dashboard.objects.filter(organization__code="iplast", name="PlannedSales").first()
 
             if not dashboard:
                 return Response(
@@ -1307,7 +1316,7 @@ class PlannedSalesSavePlanView(APIView):
         row_date = request.data.get("date")
         id_directory = request.data.get("id_directory")
 
-        dashboard = Dashboard.objects.filter(name="PlannedSales").first()
+        dashboard = Dashboard.objects.filter(organization__code="iplast", name="PlannedSales").first()
 
         if not dashboard:
             return Response(

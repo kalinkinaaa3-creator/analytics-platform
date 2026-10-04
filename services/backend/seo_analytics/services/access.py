@@ -6,7 +6,7 @@ SEO_DASHBOARD_NAME = "SEO-аналитика"
 
 
 def get_seo_dashboard():
-    return Dashboard.objects.get(name=SEO_DASHBOARD_NAME)
+    return Dashboard.objects.get(organization__code="iplast", name=SEO_DASHBOARD_NAME)
 
 
 def can_view(user):

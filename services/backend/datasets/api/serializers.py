@@ -21,9 +21,15 @@ class DatasetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Dataset
         fields = "__all__"
+        read_only_fields = ("organization",)
 
 
 class DatasetRowSerializer(serializers.ModelSerializer):
+
+    def validate_dataset(self, value):
+        if value.organization_id != self.context["request"].organization.id:
+            raise serializers.ValidationError("Набор данных недоступен в этой организации.")
+        return value
 
     class Meta:
         model = DatasetRow

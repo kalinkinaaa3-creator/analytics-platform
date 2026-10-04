@@ -1,4 +1,5 @@
 from dashboards.models import DashboardViewLog
+from organizations.services import audit_snapshot
 
 
 def get_client_ip(request):
@@ -18,6 +19,7 @@ def log_dashboard_view(
     public_access=None,
 ):
     DashboardViewLog.objects.create(
+        **audit_snapshot(request.user, dashboard.organization),
         user=request.user if request.user.is_authenticated else None,
         dashboard=dashboard,
         public_access=public_access,

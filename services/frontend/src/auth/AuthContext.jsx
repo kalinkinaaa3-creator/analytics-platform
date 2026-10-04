@@ -6,6 +6,8 @@ import {
   useState,
 } from "react";
 import { api } from "../api/client";
+import axios from "axios";
+import { setOrganizationId } from "../organizations/storage";
 
 const AuthContext = createContext(null);
 
@@ -22,16 +24,34 @@ export function AuthProvider({ children }) {
       password,
     });
 
-    localStorage.setItem("access", response.data.access);
-    localStorage.setItem("refresh", response.data.refresh);
-    localStorage.setItem("username", usernameValue);
+    return { ...response.data, username: usernameValue };
+  }
 
-    setAccess(response.data.access);
-    setRefresh(response.data.refresh);
-    setUsername(usernameValue);
+  async function completeLogin(session, organizationId) {
+    // Keep the pending login in memory until the organization is selected.
+    // Use its own credentials, independently of any previous browser session.
+    let organization = session.organization;
+    if (session.organizations.length > 1) {
+      const { data } = await axios.post(`${api.defaults.baseURL}/v1/organizations/switch/`, {
+        organization_id: organizationId,
+      }, { headers: {
+        Authorization: `Bearer ${session.access}`,
+        "X-Organization-ID": String(session.organization.id),
+      } });
+      organization = data.organization;
+    }
+    localStorage.setItem("access", session.access);
+    localStorage.setItem("refresh", session.refresh);
+    localStorage.setItem("username", session.username);
+    setOrganizationId(organization.id);
+
+    setAccess(session.access);
+    setRefresh(session.refresh);
+    setUsername(session.username);
   }
 
   const logout = useCallback(() => {
+    setOrganizationId(null);
     localStorage.removeItem("access");
     localStorage.removeItem("refresh");
     localStorage.removeItem("username");
@@ -39,6 +59,14 @@ export function AuthProvider({ children }) {
     setAccess(null);
     setRefresh(null);
     setUsername(null);
+  }, []);
+
+  useEffect(() => {
+    function handleAuthStorage(event) {
+      if (event.key === "username" || (event.key === "access" && !event.newValue)) window.location.reload();
+    }
+    window.addEventListener("storage", handleAuthStorage);
+    return () => window.removeEventListener("storage", handleAuthStorage);
   }, []);
 
   useEffect(() => {
@@ -67,6 +95,7 @@ export function AuthProvider({ children }) {
         username,
         isAuthenticated,
         login,
+        completeLogin,
         logout,
       }}
     >

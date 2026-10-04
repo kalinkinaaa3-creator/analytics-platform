@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, Navigate, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { DashboardRenderer } from "../dashboards/DashboardRenderer";
+import { getOrganizationId } from "../organizations/storage";
 
 const DASHBOARD_WS_NAMES = {
   "planned-sales": "PlannedSales",
@@ -117,7 +118,7 @@ export function DashboardPage() {
       }
 
       const wsUrl = buildDashboardWsUrl();
-      socket = new WebSocket(`${wsUrl}?token=${encodeURIComponent(access)}`);
+      socket = new WebSocket(`${wsUrl}?token=${encodeURIComponent(access)}&organization_id=${encodeURIComponent(getOrganizationId())}&dashboard_slug=${encodeURIComponent(dashboardSlug)}`);
 
       socket.onopen = () => {
         reconnectAttempt = 0;
@@ -160,7 +161,9 @@ export function DashboardPage() {
       socket.onclose = (event) => {
         console.log("Dashboard WebSocket closed:", event.code, event.reason);
 
-        if (stopped) {
+        // A parallel API request may be refreshing an expired access token.
+        // Reconnect with that fresh token after 4401; a permission denial is final.
+        if (stopped || event.code === 4403) {
           return;
         }
 
@@ -190,7 +193,7 @@ export function DashboardPage() {
         socket.close(1000, "component unmounted");
       }
     };
-  }, []);
+  }, [dashboardSlug]);
 
   function handleFiltersChange(filters) {
     const nextParams = new URLSearchParams(searchParams);

@@ -41,7 +41,7 @@ def invalidate_dashboards_for_dataset(dataset_id: int):
 def invalidate_dashboard_by_name(name: str):
     if name == "Wordstat":
         cache.set("wordstat:statistics:generation", uuid4().hex, timeout=None)
-    dashboards = Dashboard.objects.filter(name=name)
+    dashboards = Dashboard.objects.filter(organization__code="iplast", name=name)
 
     for dashboard in dashboards:
         delete_dashboard_cache(dashboard.id)

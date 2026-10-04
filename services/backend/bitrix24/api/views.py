@@ -32,7 +32,7 @@ from .serializers import (
 
 
 def _can_view_crm(user) -> bool:
-    dashboard = Dashboard.objects.filter(slug="crm-analytics").first()
+    dashboard = Dashboard.objects.filter(organization__code="iplast", slug="crm-analytics").first()
     return bool(dashboard and user_can_view_dashboard(user, dashboard))
 
 

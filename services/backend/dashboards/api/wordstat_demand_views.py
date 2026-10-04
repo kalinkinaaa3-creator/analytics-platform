@@ -37,7 +37,7 @@ class WordstatDemandView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        dashboard = Dashboard.objects.filter(slug="wordstat").first()
+        dashboard = Dashboard.objects.filter(organization__code="iplast", slug="wordstat").first()
         if not dashboard or not user_can_view_dashboard(request.user, dashboard):
             raise PermissionDenied("Нет доступа к дашборду Wordstat.")
         params = DemandParams(data=request.data if request.method == "POST" else request.query_params)

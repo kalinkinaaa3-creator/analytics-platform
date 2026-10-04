@@ -27,7 +27,7 @@ class AccessView(APIView):
 
     def initial(self, request, *args, **kwargs):
         super().initial(request, *args, **kwargs)
-        self.dashboard = Dashboard.objects.filter(slug="commercial-price").first()
+        self.dashboard = Dashboard.objects.filter(organization__code="iplast", slug="commercial-price").first()
         if not self.dashboard or not user_can_view_dashboard(request.user, self.dashboard):
             raise PermissionDenied("Нет доступа к коммерческому прайсу")
 

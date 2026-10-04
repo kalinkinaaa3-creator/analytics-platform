@@ -16,7 +16,7 @@ def get_iprice_dashboard(request):
 
     request._iprice_dashboard = (
         Dashboard.objects
-        .filter(slug=IPRICE_DASHBOARD_SLUG)
+        .filter(slug=IPRICE_DASHBOARD_SLUG, organization__code="iplast")
         .first()
     )
     return request._iprice_dashboard

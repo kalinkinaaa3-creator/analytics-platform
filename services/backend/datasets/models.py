@@ -1,12 +1,14 @@
 from django.db import models
 from django.db.models import Q
 from django.conf import settings
+from organizations.models import legacy_organization_id
 from .tara_models import TaraCoordinator, TaraItem, TaraRun, TaraFetch, TaraWorker
 
 
 
 
 class Dataset(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, default=legacy_organization_id)
     name = models.CharField(max_length=255)
 
     source_file = models.FileField(

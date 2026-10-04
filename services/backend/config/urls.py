@@ -11,6 +11,7 @@ from config.health import health
 
 urlpatterns = [
     path("api/health/", health),
+    path("api/v1/organizations/", include("organizations.api")),
     path("admin/", admin.site.urls),
 
     path("api/token/", LoggingTokenObtainPairView.as_view()),

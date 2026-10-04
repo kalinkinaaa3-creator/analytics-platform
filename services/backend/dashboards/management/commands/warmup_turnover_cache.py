@@ -52,7 +52,7 @@ class Command(BaseCommand):
             },
         ]
 
-        dashboard = Dashboard.objects.filter(name="Turnover").first()
+        dashboard = Dashboard.objects.filter(organization__code="iplast", name="Turnover").first()
 
         if not dashboard:
             self.stderr.write('Dashboard "Turnover" not found')

@@ -6,7 +6,7 @@ DASHBOARD_NAME = "Лидогенерация"
 
 
 def get_dashboard():
-    return Dashboard.objects.get(name=DASHBOARD_NAME)
+    return Dashboard.objects.get(organization__code="iplast", name=DASHBOARD_NAME)
 
 
 def can_view(user):

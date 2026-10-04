@@ -83,6 +83,7 @@ DASHBOARD_MENU_CONFIG = {
 
 
 class DashboardMenuView(APIView):
+    organization_aware = True
     permission_classes = [
         IsAuthenticated,
     ]
@@ -118,10 +119,8 @@ class DashboardMenuView(APIView):
                 )
             )
 
-        dashboards = {
-            dashboard.name: dashboard
-            for dashboard in dashboard_queryset
-        }
+        dashboard_list = list(dashboard_queryset.filter(organization=request.organization, show_in_menu=True).order_by("menu_order", "id"))
+        dashboards = {dashboard.name: dashboard for dashboard in dashboard_list}
 
         sections = {}
 
@@ -132,9 +131,7 @@ class DashboardMenuView(APIView):
         for (
             section_name,
             items,
-        ) in DASHBOARD_MENU_CONFIG.items():
-            section_items = []
-
+        ) in (DASHBOARD_MENU_CONFIG.items() if request.organization.code == "iplast" else []):
             for (
                 dashboard_name,
                 display_name,
@@ -147,39 +144,49 @@ class DashboardMenuView(APIView):
                 if dashboard is None:
                     continue
 
-                section_items.append({
+                sections.setdefault(dashboard.menu_group or section_name, []).append({
                     "id": dashboard.id,
                     "slug": dashboard.slug,
-                    "name": display_name,
+                    "name": dashboard.display_name or display_name,
                     "url": (
                         f"/dashboards/"
                         f"{dashboard.slug}"
                     ),
-                    "icon": icon,
+                    "icon": dashboard.menu_icon or icon,
                 })
-
-            if section_items:
-                sections[
-                    section_name
-                ] = section_items
 
         # ----------------------------------------------------
         # iPrice использует обычную запись Dashboard,
         # но отображается прямой ссылкой верхнего уровня.
         # ----------------------------------------------------
 
-        iprice_dashboard = dashboards.get("IPrice")
+        iprice_dashboard = dashboards.get("IPrice") if request.organization.code == "iplast" else None
 
         if iprice_dashboard is not None:
-            sections["iPrice"] = [{
+            sections.setdefault(iprice_dashboard.menu_group or "iPrice", []).append({
                 "id": iprice_dashboard.id,
                 "slug": iprice_dashboard.slug,
-                "name": "iPrice",
+                "name": iprice_dashboard.display_name or "iPrice",
                 "url": "/iprice",
                 "icon": "🗁",
                 "navigation_type": "section_link",
-            }]
+            })
 
+        configured_ids = {item["id"] for items in sections.values() for item in items}
+        for dashboard in dashboard_list:
+            if dashboard.id in configured_ids or not dashboard.menu_group:
+                continue
+            sections.setdefault(dashboard.menu_group, []).append({
+                "id": dashboard.id, "slug": dashboard.slug,
+                "name": dashboard.display_name or dashboard.name,
+                "url": f"/dashboards/{dashboard.slug}",
+                "icon": dashboard.menu_icon or dashboard.component,
+                "component": dashboard.component,
+            })
+
+        order = {dashboard.id: dashboard.menu_order for dashboard in dashboard_list}
+        for items in sections.values():
+            items.sort(key=lambda item: order[item["id"]])
         return Response({
             "sections": sections,
         })

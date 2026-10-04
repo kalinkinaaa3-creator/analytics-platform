@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { api } from "../api/client";
+import { useWorkspace } from "../organizations/useWorkspace";
+import { SelectMarketIcon } from "../organizations/SelectMarketHome";
 import "../styles/list_base.css";
 
 function DashboardIcon({ name }) {
+  if (name === "sps" || name === "suc") return <SelectMarketIcon type={name} />;
   const icons = {
     ruble: (
       <>
@@ -125,17 +128,21 @@ function isSectionLink(item) {
 }
 
 export function MainLayout() {
+  const { organization, organizations, switching, switchOrganization } = useWorkspace();
   const { logout, username } = useAuth();
   const navigate = useNavigate();
 
   const [sections, setSections] = useState({});
+  const [menuStatus, setMenuStatus] = useState("loading");
 
   useEffect(() => {
     async function loadMenu() {
       try {
         const response = await api.get("/v1/dashboards/menu/");
         setSections(response.data.sections || {});
+        setMenuStatus("ready");
       } catch (error) {
+        setMenuStatus("error");
         if (error.response?.status === 401) {
           logout();
           navigate("/login");
@@ -186,7 +193,7 @@ export function MainLayout() {
   }, []);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${organization.theme === "select-market" ? " sm-workspace" : ""}`}>
       <button
         className="sidebar-toggle-btn"
         id="toggleBtn"
@@ -199,14 +206,15 @@ export function MainLayout() {
         ☰
       </button>
 
-      <div className="sidebar open" id="sidebar">
+      <div className={`sidebar${organization.theme === "select-market" && window.matchMedia("(max-width: 760px)").matches ? "" : " open"}`} id="sidebar">
         <button
           className="toggle-btn"
+          aria-label="Свернуть меню"
           onClick={(event) => {
             event.stopPropagation();
             toggleSidebar();
           }}
-        ></button>
+        >{organization.theme === "select-market" ? organization.name : null}</button>
 
         <div className="user-info">
           <svg className="user-info-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -289,7 +297,12 @@ export function MainLayout() {
       </div>
 
       <div className="content">
-        <Outlet />
+        {organizations.length > 1 && <div className="workspace-toolbar">
+          <select aria-label="Организация" value={organization.id} disabled={switching} onChange={(event) => switchOrganization(event.target.value)}>
+            {organizations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </div>}
+        <Outlet context={{ sections, organization, menuStatus }} />
       </div>
     </div>
   );

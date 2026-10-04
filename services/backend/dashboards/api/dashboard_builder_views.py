@@ -9,10 +9,11 @@ from dashboards.services.dashboard_builder import build_dashboard
 
 
 class DashboardBuilderView(APIView):
+    organization_aware = True
     permission_classes = [IsAuthenticated]
 
     def _get_dashboard(self, dashboard_slug):
-        dashboard = Dashboard.objects.filter(slug=dashboard_slug).first()
+        dashboard = Dashboard.objects.filter(slug=dashboard_slug, organization=self.request.organization).first()
 
         if dashboard is None:
             raise NotFound("Dashboard not found")

@@ -310,7 +310,11 @@ class AccessTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="viewer")
         self.other = get_user_model().objects.create_user(username="other")
-        self.dashboard = Dashboard.objects.create(name="Commercial Price", slug="commercial-price")
+        from organizations.models import Organization, OrganizationMembership
+        organization = Organization.objects.get(code="iplast")
+        for user in (self.user, self.other):
+            OrganizationMembership.objects.create(user=user, organization=organization, is_default=True)
+        self.dashboard, _ = Dashboard.objects.get_or_create(organization=organization, slug="commercial-price", defaults={"name": "Commercial Price"})
         DashboardAccess.objects.create(user=self.user, dashboard=self.dashboard, can_view=True, can_edit=False)
         self.factory = APIRequestFactory()
 

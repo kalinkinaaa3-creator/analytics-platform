@@ -6,6 +6,7 @@ import { MainLayout } from "./layouts/MainLayout";
 
 import { LoginPage } from "./pages/LoginPage";
 import { HomePage } from "./pages/HomePage";
+import { WorkspaceProvider } from "./organizations/WorkspaceContext";
 import { DashboardPage } from "./pages/DashboardPage";
 import { AccessDeniedPage } from "./pages/AccessDeniedPage";
 
@@ -42,7 +43,7 @@ function App() {
             path="/"
             element={
               <ProtectedRoute>
-                <MainLayout />
+                <WorkspaceProvider><MainLayout /></WorkspaceProvider>
               </ProtectedRoute>
             }
           >

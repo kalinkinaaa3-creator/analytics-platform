@@ -219,15 +219,8 @@ def clean_runtime_filters(filters: dict | None = None) -> dict:
 
 
 def _can_edit_dashboard(user, dashboard) -> bool:
-    if user is None:
-        return False
-    if user.is_superuser or dashboard.owner_id == user.id:
-        return True
-    return DashboardAccess.objects.filter(
-        user=user,
-        dashboard=dashboard,
-        can_edit=True,
-    ).exists()
+    from dashboards.services.access import user_can_edit_dashboard
+    return user_can_edit_dashboard(user, dashboard)
 
 
 
@@ -241,6 +234,18 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
     if user is not None and not user_can_view_dashboard(user, dashboard):
         raise PermissionDenied("Нет доступа к этому дашборду")
+
+    if user is not None and not dashboard.organization.is_active:
+        raise PermissionDenied("Организация неактивна")
+    if dashboard.component in ("sps", "suc"):
+        return {
+            "dashboard": {"id": dashboard.id, "name": dashboard.display_name or dashboard.name,
+                "component": dashboard.component, "organization_id": dashboard.organization_id,
+                "can_edit": _can_edit_dashboard(user, dashboard)},
+            "widgets": [],
+        }
+    if dashboard.organization.code != "iplast":
+        raise PermissionDenied("Источник данных ещё не подключён для этой организации")
 
     cache_filters = normalize_filters_for_dashboard(
         dashboard=dashboard,
@@ -268,12 +273,12 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
     ).hexdigest()
 
     shared_key = dashboard_cache_key(
-        f"dashboard:{dashboard_id}:filters:{filters_hash}"
+        f"dashboard:{dashboard_id}:filters:{filters_hash}", organization_id=dashboard.organization_id,
     )
 
     if user is not None:
         key = dashboard_cache_key(
-            f"user:{user.id}:dashboard:{dashboard_id}:filters:{filters_hash}"
+            f"user:{user.id}:dashboard:{dashboard_id}:filters:{filters_hash}", organization_id=dashboard.organization_id,
         )
     else:
         key = shared_key
@@ -281,6 +286,7 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
     cached = cache.get(key)
     
     if cached is not None:
+        cached["dashboard"]["can_edit"] = _can_edit_dashboard(user, dashboard)
         return cached
 
     if user is not None:
@@ -311,6 +317,9 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
         wordstat_metadata = widget.type == "yd_wordstat_table" and str(runtime_filters.get("metadata_only", "")).lower() in ("1", "true")
 
         if dataset_id and not wordstat_metadata:
+            from datasets.models import Dataset
+            if not Dataset.objects.filter(pk=dataset_id, organization_id=dashboard.organization_id).exists():
+                raise PermissionDenied("Набор данных не принадлежит организации дашборда")
             rows = repository.fetch_dataset_rows(dataset_id)
         else:
             rows = []
@@ -368,7 +377,7 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
                 json.dumps(wordstat_base_filters, sort_keys=True, ensure_ascii=False).encode("utf-8")
             ).hexdigest()
             wordstat_base_key = dashboard_cache_key(
-                f"dashboard:{dashboard_id}:filters:wordstat-base:{wordstat_base_hash}"
+                f"dashboard:{dashboard_id}:filters:wordstat-base:{wordstat_base_hash}", organization_id=dashboard.organization_id,
             )
             wordstat_base = cache.get(wordstat_base_key)
             if wordstat_base is None:

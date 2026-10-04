@@ -25,6 +25,7 @@
 }
 
 .login-page .login-container input[type="text"],
+.login-page .login-container select,
 .login-page .login-container input[type="password"] {
   width: 100%;
   padding: 12px 15px;
@@ -35,6 +36,17 @@
   font-size: 14px;
   text-align: left;
 }
+
+.login-page .login-organization {
+  display: block;
+  text-align: left;
+  color: #333;
+  font-size: 14px;
+}
+
+.login-page .login-account { color: #666; overflow-wrap: anywhere; }
+.login-page .login-container button:disabled { opacity: .65; cursor: wait; }
+.login-page .login-container .login-back { background: transparent; color: #414c38; font-size: 14px; }
 
 .login-page .login-container button {
   width: 100%;

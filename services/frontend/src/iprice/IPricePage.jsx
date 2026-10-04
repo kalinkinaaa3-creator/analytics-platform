@@ -1,3 +1,4 @@
+import { getOrganizationId } from "../organizations/storage";
 import {
   useCallback,
   useEffect,
@@ -829,7 +830,7 @@ export function IPricePage() {
     function connect() {
       const token = localStorage.getItem("access");
       const suffix = token
-        ? `?token=${encodeURIComponent(token)}`
+        ? `?token=${encodeURIComponent(token)}&organization_id=${encodeURIComponent(getOrganizationId())}&dashboard_slug=iprice`
         : "";
 
       socket = new WebSocket(

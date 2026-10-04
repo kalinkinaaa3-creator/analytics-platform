@@ -4,11 +4,20 @@ from decimal import Decimal
 
 from django.utils import timezone
 import uuid
+from django.core.exceptions import ValidationError
+from organizations.models import legacy_organization_id
 
 
 
 
 class Dashboard(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, default=legacy_organization_id)
+    menu_group = models.CharField(max_length=255, blank=True, default="")
+    display_name = models.CharField(max_length=255, blank=True, default="")
+    menu_icon = models.CharField(max_length=32, blank=True, default="")
+    menu_order = models.PositiveIntegerField(default=0)
+    show_in_menu = models.BooleanField(default=True)
+    component = models.CharField(max_length=32, default="legacy", choices=[("legacy", "Действующий дашборд"), ("sps", "СПС"), ("suc", "СУЦ")])
 
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -22,13 +31,26 @@ class Dashboard(models.Model):
 
     slug = models.SlugField(
         max_length=255,
-        unique=True,
         db_index=True,
         null=True,
         blank=True,
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=("organization", "slug"), name="dashboard_org_slug")]
+
+    def clean(self):
+        super().clean()
+        if self.organization_id and self.slug is not None and type(self).objects.filter(
+            organization_id=self.organization_id, slug=self.slug,
+        ).exclude(pk=self.pk).exists():
+            raise ValidationError({"slug": "Этот адрес уже используется в организации."})
+        if self.pk and type(self).objects.filter(pk=self.pk).exclude(organization_id=self.organization_id).exists():
+            raise ValidationError("Перенос существующего дашборда в другую организацию требует отдельной миграции.")
+        if self.component != "legacy" and self.organization.code == "iplast":
+            raise ValidationError("Новые компоненты предназначены для отдельного рабочего пространства.")
 
     def __str__(self):
         return self.name
@@ -102,6 +124,14 @@ class DashboardAccess(models.Model):
 
     def __str__(self):
         return f"{self.user} → {self.dashboard}"
+
+    def clean(self):
+        super().clean()
+        from organizations.models import OrganizationMembership
+        if self.user_id and self.dashboard_id and not OrganizationMembership.objects.filter(
+            user_id=self.user_id, organization_id=self.dashboard.organization_id, is_active=True,
+        ).exists():
+            raise ValidationError("Сначала добавьте пользователю доступ к организации дашборда.")
 
 
 class DashboardPublicAccess(models.Model):
@@ -194,7 +224,12 @@ class DashboardPublicGroupItem(models.Model):
 
 
 
+
 class UserLoginLog(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.SET_NULL, null=True, blank=True)
+    organization_name = models.CharField(max_length=255, blank=True, default="")
+    full_name = models.CharField(max_length=255, blank=True, default="")
+    department_name = models.CharField(max_length=255, blank=True, default="")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -221,6 +256,10 @@ class UserLoginLog(models.Model):
 
 
 class DashboardViewLog(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.SET_NULL, null=True, blank=True)
+    organization_name = models.CharField(max_length=255, blank=True, default="")
+    full_name = models.CharField(max_length=255, blank=True, default="")
+    department_name = models.CharField(max_length=255, blank=True, default="")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

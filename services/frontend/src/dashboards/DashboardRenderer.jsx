@@ -1,4 +1,5 @@
 import { SalesCalculatorDashboard } from "./salesCalculator/SalesCalculatorDashboard";
+import { SelectMarketSystem } from "../organizations/SelectMarketHome";
 import { PlannedSalesDashboard } from "./plannedSales/PlannedSalesDashboard";
 import { ProjectGanttDashboard } from "./projects/ProjectGanttDashboard";
 import { WordstatDashboard } from "./wordstat/WordstatDashboard";
@@ -31,6 +32,9 @@ export function DashboardRenderer({
   onFiltersChange,
   publicToken = null,
 }) {
+  if (data?.dashboard?.component === "sps" || data?.dashboard?.component === "suc") {
+    return <SelectMarketSystem dashboard={data.dashboard} />;
+  }
   if (loading && !data?.widgets?.length) {
     return <GlobalSpinner />;
   }

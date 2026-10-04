@@ -15,7 +15,11 @@ from dashboards.models import (
 
 @admin.register(Dashboard)
 class DashboardAdmin(admin.ModelAdmin):
-    list_display = ("id", "slug", "name", "owner", "created_at")
+    list_display = ("id", "organization", "slug", "name", "owner", "created_at")
+    list_filter = ("organization", "component", "show_in_menu")
+
+    def get_readonly_fields(self, request, obj=None):
+        return ("organization",) if obj else ()
 
 
 @admin.register(DashboardWidget)
@@ -30,6 +34,7 @@ class DashboardWidgetAdmin(admin.ModelAdmin):
 @admin.register(DashboardAccess)
 class DashboardAccessAdmin(admin.ModelAdmin):
     list_display = (
+        "organization",
         "user",
         "dashboard",
         "can_view",
@@ -38,6 +43,7 @@ class DashboardAccessAdmin(admin.ModelAdmin):
     )
 
     list_filter = (
+        "dashboard__organization",
         "can_view",
         "can_edit",
         "dashboard",
@@ -54,6 +60,10 @@ class DashboardAccessAdmin(admin.ModelAdmin):
     )
 
     ordering = ("dashboard", "user")
+
+    @admin.display(description="Организация", ordering="dashboard__organization")
+    def organization(self, obj):
+        return obj.dashboard.organization
 
 
 @admin.register(DashboardPublicAccess)
@@ -86,6 +96,7 @@ class DashboardPublicAccessAdmin(admin.ModelAdmin):
 @admin.register(UserLoginLog)
 class UserLoginLogAdmin(admin.ModelAdmin):
     list_display = (
+        "organization_name", "full_name", "department_name",
         "created_at",
         "username",
         "success",
@@ -103,6 +114,7 @@ class UserLoginLogAdmin(admin.ModelAdmin):
     )
 
     readonly_fields = (
+        "organization", "organization_name", "full_name", "department_name",
         "created_at",
         "user",
         "username",
@@ -117,6 +129,7 @@ class UserLoginLogAdmin(admin.ModelAdmin):
 @admin.register(DashboardViewLog)
 class DashboardViewLogAdmin(admin.ModelAdmin):
     list_display = (
+        "organization_name", "full_name", "department_name",
         "created_at",
         "user",
         "dashboard",
@@ -135,6 +148,7 @@ class DashboardViewLogAdmin(admin.ModelAdmin):
         "ip_address",
     )
     readonly_fields = (
+        "organization", "organization_name", "full_name", "department_name",
         "created_at",
         "user",
         "dashboard",
