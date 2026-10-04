@@ -11,15 +11,14 @@
 .app-shell .workspace-menu-trigger:hover { background: #e7eadf; transform: none; }
 .app-shell .workspace-menu-chevron { width: 16px; height: 16px; flex: 0 0 16px; fill: none; stroke: #59634f; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .app-shell .workspace-menu-trigger[aria-expanded="true"] .workspace-menu-chevron { transform: rotate(180deg); }
-.app-shell .workspace-menu-options { position: absolute; top: 100%; right: 10px; left: 10px; z-index: 2; padding: 4px; background: white; border: 1px solid #b7bdae; border-radius: 6px; box-shadow: 0 4px 12px #414c381a; }
-.app-shell .workspace-menu-options button { display: block; width: 100%; text-align: left; padding: 10px; border: 0; border-radius: 4px; background: white; color: #20251d; font: inherit; font-size: 14px; cursor: pointer; box-shadow: none; transform: none; }
+.app-shell .workspace-menu-options { position: absolute; top: 100%; right: 10px; left: 10px; z-index: 2; padding: 4px; background: white; border: 1px solid #929d87; border-radius: 6px; box-shadow: 0 4px 12px #414c381a; }
+.app-shell .workspace-menu-options button { display: block; width: 100%; text-align: left; box-sizing: border-box; padding: 10px; border: 1px solid #b4bdab; border-radius: 4px; background: white; color: #20251d; font: inherit; font-size: 14px; cursor: pointer; box-shadow: none; transform: none; }
 .app-shell .workspace-menu-options button:hover, .app-shell .workspace-menu-options button[aria-pressed="true"] { background: #e7eadf; }
-.app-shell .workspace-menu-options button + button { border-top: 1px solid #e0e4da; }
+.app-shell .workspace-menu-options button + button { margin-top: 4px; }
 .app-shell .workspace-menu-header button:focus-visible { outline: 2px solid #5a8ec4; outline-offset: 2px; }
 .app-shell.sm-workspace .workspace-menu-header { background: var(--sm-surface); color: var(--sm-text); }
 .app-shell.sm-workspace .workspace-menu-trigger { background: #edf3fa; border-color: var(--sm-border); }
 .app-shell.sm-workspace .workspace-menu-chevron { stroke: var(--sm-primary); }
-.app-shell.sm-workspace .workspace-menu-options { border-color: #c5d4e5; box-shadow: 0 4px 12px #3f72aa1a; }
-.app-shell.sm-workspace .workspace-menu-options button { color: var(--sm-text); }
-.app-shell.sm-workspace .workspace-menu-options button + button { border-top-color: var(--sm-border); }
+.app-shell.sm-workspace .workspace-menu-options { border-color: #87a5c6; box-shadow: 0 4px 12px #3f72aa1a; }
+.app-shell.sm-workspace .workspace-menu-options button { color: var(--sm-text); border-color: #b0c5dd; }
 .app-shell.sm-workspace .workspace-menu-trigger:hover, .app-shell.sm-workspace .workspace-menu-options button:hover, .app-shell.sm-workspace .workspace-menu-options button[aria-pressed="true"] { background: #e1edf8; }
