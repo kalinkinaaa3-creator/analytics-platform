@@ -120,3 +120,6 @@
 .sc-product-image-preview__caption { margin-top:10px; font:13px/1.4 Helvetica,Arial,sans-serif; color:#30372c; max-height:5.6em; overflow:hidden; }
 
 .sc-table .sc-number-cell { width:40px; min-width:40px; }
+
+.sc-product-price-list { margin-top: 8px; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; color: #30382c; }
+.sc-product-price-list > span { color: #626b5c; }
