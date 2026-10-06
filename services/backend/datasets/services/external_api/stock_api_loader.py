@@ -57,7 +57,10 @@ def clean_int(value, default=None):
     )
 
     try:
-        return int(Decimal(value))
+        number = Decimal(value)
+        if not number.is_finite() or number != number.to_integral_value():
+            return default
+        return int(number)
     except (InvalidOperation, ValueError, TypeError):
         return default
 
@@ -87,21 +90,27 @@ def clean_decimal(value, default=None):
     )
 
     try:
-        return Decimal(value)
+        number = Decimal(value)
+        return number if number.is_finite() else default
     except (InvalidOperation, ValueError, TypeError):
         return default
 
 
 def normalize_stock_record(record: dict, load_date: date) -> NomenclatureStock:
     # As with prices, date_1C is not used: store the requested reporting date.
+    if not isinstance(record, dict):
+        raise ValueError("Stock API row must be an object")
+    quantity = clean_decimal(record.get("quantity"))
+    if clean_str(record.get("quantity")) is not None and quantity is None:
+        raise ValueError("Stock API returned an invalid quantity")
     return NomenclatureStock(
         date=load_date,
         warehouse=clean_str(record.get("warehouse")),
-        nom_code=clean_int(record.get("nom_code"), default=0),
+        # Source codes are zero-padded strings; related catalogues use numeric
+        # keys. Keep that join contract. Rows without a code are excluded below.
+        nom_code=clean_int(record.get("nom_code")),
         nomenclature=clean_str(record.get("nomenclature")),
-        quantity=clean_decimal(record.get("quantity")),
-        stock=clean_decimal(record.get("stock")),
-        dev_maximum=clean_decimal(record.get("dev_maximum")),
+        quantity=quantity,
     )
 
 
