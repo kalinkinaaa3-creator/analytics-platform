@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 
@@ -82,10 +83,13 @@ def decorate(row, properties):
 
 def build_rows(day, stock_available):
     # PostgreSQL provides a single consistent source snapshot; no historical price fallback.
+    day_start = timezone.make_aware(datetime.combine(day, time.min))
+    day_end = timezone.make_aware(datetime.combine(day + timedelta(days=1), time.min))
     with connection.cursor() as cursor:
         cursor.execute("""
             WITH b AS (
-                SELECT DISTINCT ON (product_key) * FROM base_product_price
+                SELECT DISTINCT ON (product_key) * FROM public.base_product_price
+                WHERE date_add < %s
                 ORDER BY product_key, date_add DESC, id DESC
             ), n AS (
                 SELECT DISTINCT ON (nom_code) * FROM nomenclature ORDER BY nom_code, date_add DESC, id DESC
@@ -96,10 +100,11 @@ def build_rows(day, stock_available):
             )
             SELECT b.product_key, b.code_1c AS code, p.shipp_region AS region,
                 p.retail, p.small, p.medium, p.large, p.distr, p.distr_1, p.price_list AS price_list,
+                (b.date_add >= %s) AS website_available,
                 b.url, b.color, b.image, b.name, n.nom AS name_1c,
                 n.nom_view, n.nom_category, n.nom_group, n.nom_cn_fea, n.quantity_eurotruck
             FROM b JOIN p ON p.code=b.code_1c LEFT JOIN n ON n.nom_code=b.code_1c
-        """, [day])
+        """, [day_end, day, day_start])
         keys = [d[0] for d in cursor.description]
         rows = [dict(zip(keys, values)) for values in cursor.fetchall()]
         cursor.execute("""SELECT DISTINCT ON (product_key, properties) product_key, properties, value
@@ -116,6 +121,9 @@ def build_rows(day, stock_available):
                 if warehouse:
                     stocks.setdefault(code, {})[warehouse] = quantity
     for row in rows:
+        if not row["website_available"]:
+            row["url"] = ""
+            row["image"] = ""
         decorate(row, properties.get(row["product_key"], {}))
         row["calculation_date"] = day.isoformat()
         row["stocks"] = stocks.get(row["code"], {}) if stock_available else None

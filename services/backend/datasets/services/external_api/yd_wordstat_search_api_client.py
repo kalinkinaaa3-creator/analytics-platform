@@ -1,4 +1,5 @@
 import logging
+import math
 import random
 import time
 from datetime import datetime, timezone
@@ -24,11 +25,12 @@ def _headers():
     return {"Authorization": f"Api-Key {api_key}", "Content-Type": "application/json"}
 
 
-def quota_scope():
-    return fingerprint(settings.YD_WORDSTAT_FOLDER_ID.strip() or settings.YD_WORDSTAT_API_KEY.strip())
+def quota_scope(folder_id=None):
+    folder_id = settings.YD_WORDSTAT_FOLDER_ID if folder_id is None else folder_id
+    return fingerprint(folder_id.strip() or settings.YD_WORDSTAT_API_KEY.strip())
 
 
-def reserve_request():
+def reserve_request(*, scope=None):
     """Reserve an attempt atomically across workers and restarts."""
     from datasets.models import YdWordstatApiQuota
 
@@ -36,7 +38,7 @@ def reserve_request():
     per_hour = settings.YD_WORDSTAT_REQUESTS_PER_HOUR
     if min(per_second, per_hour) < 1:
         raise YdWordstatSearchApiError("Wordstat request limits must be positive")
-    scope = quota_scope()
+    scope = quota_scope() if scope is None else scope
     YdWordstatApiQuota.objects.get_or_create(scope=scope)
     while True:
         with transaction.atomic():
@@ -58,10 +60,10 @@ def reserve_request():
         time.sleep(min(wait + 0.05, 60))
 
 
-def block_quota(seconds):
+def block_quota(seconds, *, scope=None):
     from datasets.models import YdWordstatApiQuota
 
-    scope = quota_scope()
+    scope = quota_scope() if scope is None else scope
     YdWordstatApiQuota.objects.get_or_create(scope=scope)
     with transaction.atomic():
         state = YdWordstatApiQuota.objects.select_for_update().get(scope=scope)
@@ -78,10 +80,10 @@ def retry_after(response, default):
             seconds = (parsedate_to_datetime(value) - datetime.now(timezone.utc)).total_seconds()
         except (ValueError, TypeError, OverflowError):
             return default
-    return max(1, seconds)
+    return max(1, seconds) if math.isfinite(seconds) else default
 
 
-def _request(method, body, *, statistical=False):
+def _request(method, body):
     headers = _headers()
     base_url = settings.YD_WORDSTAT_API_BASE_URL.rstrip("/")
     if base_url != "https://searchapi.api.cloud.yandex.net/v2/wordstat":
@@ -89,9 +91,12 @@ def _request(method, body, *, statistical=False):
     attempts = settings.YD_WORDSTAT_API_MAX_ATTEMPTS
     if attempts < 1:
         raise YdWordstatSearchApiError("YD_WORDSTAT_API_MAX_ATTEMPTS must be positive")
+    # Use the request's actual folder, including diagnostic folder overrides.
+    scope = quota_scope(body.get("folderId", ""))
     for attempt in range(attempts):
-        if statistical:
-            reserve_request()
+        # Reference requests must also honor persisted limits after a restart.
+        # Conservatively count every HTTP attempt in the shared local budget.
+        reserve_request(scope=scope)
         backoff = min(60, 2 ** attempt) + random.random()
         try:
             response = requests.post(
@@ -116,12 +121,13 @@ def _request(method, body, *, statistical=False):
         request_id = response.headers.get("x-request-id") or response.headers.get("x-server-trace-id", "")
         # Response bodies may echo authentication or request data.
         message = f"Wordstat HTTP {status}; request_id={request_id}"
-        if status == 429 and statistical:
-            block_quota(retry_after(response, 3600))
+        if status == 429:
+            # Persist even the final failed attempt, for the next pipeline run.
+            block_quota(retry_after(response, 3600), scope=scope)
         if status not in (429, 500, 502, 503, 504) or attempt == attempts - 1:
             raise YdWordstatSearchApiError(message)
         logger.warning("%s; retry %s/%s", message, attempt + 1, attempts)
-        if status != 429 or not statistical:
+        if status != 429:
             remaining = retry_after(response, backoff)
             while remaining > 0:
                 pause = min(remaining, 60)
@@ -145,4 +151,4 @@ def fetch_dynamics(phrase, date_start, date_finish, devices=None, regions=None):
     body = dynamics_body(phrase, date_start, date_finish, devices, regions)
     if settings.YD_WORDSTAT_FOLDER_ID.strip():
         body["folderId"] = settings.YD_WORDSTAT_FOLDER_ID.strip()
-    return _request("dynamics", body, statistical=True)
+    return _request("dynamics", body)

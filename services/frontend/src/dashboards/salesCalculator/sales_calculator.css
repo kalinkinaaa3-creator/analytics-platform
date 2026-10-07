@@ -91,6 +91,8 @@
 .sc-product-check { position:absolute; top:12px; left:12px; }
 .sc-products details { font-size:12px; }
 .sc-no-photo { height:145px; display:grid; place-items:center; color:#959c90; }
+.sc-products .sc-card-image, .sc-products .sc-no-photo { flex-shrink:0; min-height:145px; }
+.sc-website-unavailable { font-size:12px; line-height:1.4; color:#874b12; background:#fff4df; border:1px solid #ead4b5; border-radius:4px; padding:4px 7px; width:fit-content; }
 .sc-pagination { display:flex; flex-shrink:0; align-items:center; justify-content:center; flex-wrap:wrap; gap:14px; padding:12px; font-size:12px; border-top:1px solid #e4e7df; }
 .sc-pagination button { min-width:90px; min-height:34px; background:#515b4b; border:0; border-radius:4px; color:#fff; box-shadow:none; }
 .sc-pagination button:disabled { opacity:.4; cursor:not-allowed; }

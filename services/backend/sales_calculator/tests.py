@@ -28,6 +28,36 @@ def product(**changes):
 
 
 class CalculationTests(UnitTestCase):
+    def test_missing_website_product_keeps_position_but_not_links(self):
+        from .warehouse import build_rows
+        from .export import display
+        from openpyxl import load_workbook
+        fields = ["product_key", "code", "website_available", "url", "image"]
+        cursor = Mock()
+        cursor.description = [(field,) for field in fields]
+        cursor.fetchall.side_effect = [
+            [(1, 123, False, "https://iplast.com/old", "https://iplast.com/old.png"),
+             (2, 456, True, "https://iplast.com/current", "")], []]
+        with patch("sales_calculator.warehouse.connection") as connection:
+            connection.cursor.return_value.__enter__.return_value = cursor
+            rows = build_rows(date(2026, 10, 7), False)
+        params = cursor.execute.call_args_list[0].args[1]
+        self.assertEqual(params[0].date(), date(2026, 10, 8))
+        self.assertEqual(params[2].date(), date(2026, 10, 7))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["url"], "")
+        self.assertEqual(rows[0]["image"], "")
+        self.assertEqual(rows[1]["url"], "https://iplast.com/current")
+        self.assertEqual(display(rows[0], "url", {}), "")
+        result = calculate({"1": product(**rows[0])}, [{"product_key": 1}], {})
+        for mode in ("simple", "full"):
+            config = validate_config({mode + "_columns": ["url"]})
+            ws = load_workbook(export_document(result, config, mode, "xlsx")).active
+            self.assertIsNone(ws["B4"].value)
+            self.assertIsNone(ws["B4"].hyperlink)
+            pdf = export_document(result, config, mode, "pdf").getvalue()
+            self.assertNotIn(b"https://iplast.com/old", pdf)
+
     def test_export_numbers_follow_order_not_product_keys(self):
         from openpyxl import load_workbook
         products = {str(key): product(product_key=key) for key in (91, 7, 24)}
