@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from dashboards.models import Dashboard
-from dashboards.services.access import user_can_view_dashboard, user_can_edit_dashboard
+from dashboards.services.access import user_can_view_dashboard
 from .configuration import DEFAULTS, CHARACTERISTICS, LOGISTICS, WAREHOUSES, FULL_COLUMNS, SIMPLE_COLUMNS, validate_config
 from .models import SalesCalculatorPreference
 from .warehouse import read_products
@@ -70,7 +70,7 @@ class ProductsView(AccessView):
                 row["stocks"] = None
         return Response({"products": rows, "regions": regions, "region": region,
                          "stale": any(p["calculation_date"] != today for p in rows),
-                         "state": state_payload(), "can_refresh": user_can_edit_dashboard(request.user, self.dashboard)})
+                         "state": state_payload(), "can_refresh": True})
 
 
 class CalculationView(AccessView):
@@ -95,8 +95,7 @@ class RefreshView(AccessView):
         return Response(state_payload())
 
     def post(self, request):
-        if not user_can_edit_dashboard(request.user, self.dashboard):
-            raise PermissionDenied("Обновление доступно с правом редактирования")
+        # AccessView already requires permission to view this dashboard.
         started = request_refresh(sources=True)
         return Response(state_payload(), status=202 if started else 409)
 

@@ -42,7 +42,7 @@ DEFAULTS = {
 
 
 def validate_config(data):
-    # Old saved preferences remain readable; source prices are no longer rounded.
+    # Ignore legacy rounding preferences: whole-ruble rounding is now mandatory.
     if isinstance(data, dict):
         data = {key: value for key, value in data.items() if key != "rounding"}
     if not isinstance(data, dict) or set(data) - set(DEFAULTS):

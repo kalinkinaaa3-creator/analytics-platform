@@ -1,4 +1,6 @@
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_CEILING
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from fractions import Fraction
+from math import ceil
 
 from .configuration import PRICE_TYPES, validate_config
 
@@ -26,14 +28,14 @@ def calculate(products, items, config):
             raise ValueError("Товар повторяется или отсутствует в выбранном регионе")
         seen.add(key)
         quantity = number(item.get("quantity", 1))
-        if quantity <= 0 or quantity > 1000000000:
-            raise ValueError("Количество должно быть больше нуля и не более 1 млрд")
+        if quantity <= 0 or quantity > 1000000000 or quantity != quantity.to_integral_value():
+            raise ValueError("Количество должно быть целым числом от 1 до 1 млрд")
         override = item.get("price_type", "auto")
         if override not in (*PRICE_TYPES, "auto"):
             raise ValueError("Некорректный тип цены")
         rows.append({**products[key], "quantity": quantity, "override": override})
     def price(row, tier):
-        return number(row[tier])
+        return number(row[tier]).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
     def total(tier):
         return sum(((price(r, tier) * r["quantity"]).quantize(CENT, rounding=ROUND_HALF_UP) for r in rows), Decimal(0))
     tier_index = 0
@@ -57,6 +59,7 @@ def calculate(products, items, config):
     net = sum((r["sum_net"] for r in rows), Decimal(0))
     vat = sum((r["vat_amount"] for r in rows), Decimal(0))
     logistics = {"weight": Decimal(0), "pallets": Decimal(0)}
+    pallet_share = Fraction(0)
     missing = {"weight": 0, "pallets": 0}
     for row in rows:
         for target, source in (("weight", "weight_value"), ("pallets", "pallet_value")):
@@ -68,8 +71,11 @@ def calculate(products, items, config):
             if parsed is None or (target == "pallets" and parsed == 0):
                 missing[target] += 1
                 continue
-            logistics[target] += (parsed * row["quantity"] if target == "weight" else
-                                    (row["quantity"] / parsed).to_integral_value(rounding=ROUND_CEILING))
+            if target == "weight":
+                logistics[target] += parsed * row["quantity"]
+            else:
+                pallet_share += Fraction(row["quantity"]) / Fraction(parsed)
+    logistics["pallets"] = Decimal(ceil(pallet_share))
     return {"rows": rows, "automatic_type": automatic,
             "manual": any(r["override"] != "auto" for r in rows),
             "positions": len(rows), "quantity": sum((r["quantity"] for r in rows), Decimal(0)),

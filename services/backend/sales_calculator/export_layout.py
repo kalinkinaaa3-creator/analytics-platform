@@ -97,7 +97,7 @@ def xlsx(result, config, mode, labels, columns, images):
             if last > 1:
                 ws.merge_cells(start_row=index, start_column=1, end_row=index, end_column=last - 1)
                 ws.cell(index, 1, label)
-                ws.cell(index, last, result[key]).number_format = '#,##0.00'
+                ws.cell(index, last, result[key]).number_format = '#,##0' if key == 'net' else '#,##0.00'
             else:
                 ws.cell(index, 1, f"{label} {price_text(result[key])}")
             for cell in ws[index]:
@@ -199,7 +199,7 @@ def pdf(result, config, mode, labels, columns, images):
     flow = [banner, Spacer(1, 12), table]
     if mode == 'full':
         totals = Table([
-            [Paragraph('Итого сумма руб. без НДС:', total_numeric), Paragraph(f'{result["net"]:,.2f}'.replace(',', ' ').replace('.', ','), total_numeric)],
+            [Paragraph('Итого сумма руб. без НДС:', total_numeric), Paragraph(f'{result["net"]:,.0f}'.replace(',', ' '), total_numeric)],
             [Paragraph('НДС:', total_numeric), Paragraph(f'{result["vat"]:,.2f}'.replace(',', ' ').replace('.', ','), total_numeric)],
             [Paragraph('Итого сумма руб. с НДС:', total_numeric), Paragraph(f'{result["gross"]:,.2f}'.replace(',', ' ').replace('.', ','), total_numeric)],
         ], colWidths=[220, 110], hAlign='RIGHT')

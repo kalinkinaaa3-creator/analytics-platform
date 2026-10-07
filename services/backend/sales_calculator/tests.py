@@ -187,7 +187,7 @@ class CalculationTests(UnitTestCase):
     def test_vat_rounding_and_warning(self):
         for mode in ("none", "half_up", "floor", "ceil"):
             result = calculate({"1": product(retail="100.5")}, [{"product_key": 1, "quantity": 1}], {"rounding": mode, "vat": 0})
-            self.assertEqual(result["net"], Decimal("100.5"))
+            self.assertEqual(result["net"], Decimal("101"))
             self.assertEqual(result["vat"], 0)
         result = self.run_order(40000)
         self.assertTrue(result["warning"])
@@ -196,7 +196,7 @@ class CalculationTests(UnitTestCase):
     def test_missing_price_invalid_numbers_and_duplicate_rejected(self):
         for value in (None, "NaN", "Infinity", "-1"):
             with self.assertRaises(ValueError): self.run_order(1, retail=value)
-        for quantity in (0, -1, "NaN"):
+        for quantity in (0, -1, "NaN", "1.5", "0.001", "1000000001"):
             with self.assertRaises(ValueError): self.run_order(quantity)
         with self.assertRaises(ValueError):
             calculate({"1": product()}, [{"product_key": 1}, {"product_key": 1}], {})
@@ -206,6 +206,27 @@ class CalculationTests(UnitTestCase):
         result = self.run_order(100, weight_value=None)
         self.assertIsNone(result["logistics"]["weight"])
         self.assertEqual(result["logistics"]["pallets"], 2)
+
+    def test_pallet_shares_are_summed_before_rounding(self):
+        products = {str(i): product(product_key=i, pallet_value=str(capacity))
+                    for i, capacity in enumerate((84, 120, 120), 1)}
+        for quantities, expected in (((1, 1, 1), 1), ((84, 120, 120), 3), ((85, 120, 120), 4)):
+            result = calculate(products, [{"product_key": i, "quantity": qty}
+                for i, qty in enumerate(quantities, 1)], {})
+            self.assertEqual(result["logistics"]["pallets"], expected)
+        # Exact fractional sums must not create an extra pallet at a boundary.
+        products = {str(i): product(product_key=i, pallet_value="3") for i in range(1, 7)}
+        result = calculate(products, [{"product_key": i, "quantity": 1} for i in range(1, 7)], {})
+        self.assertEqual(result["logistics"]["pallets"], 2)
+
+    def test_all_price_tiers_round_before_vat_and_quantity(self):
+        row = product(retail="100.50", small="90.49", medium="80.50", large="70.01")
+        for tier, expected in (("retail", 101), ("small", 90), ("medium", 81), ("large", 70)):
+            result = calculate({"1": row}, [{"product_key": 1, "quantity": 3, "price_type": tier}], {})
+            self.assertEqual(result["rows"][0]["unit_net"], expected)
+            self.assertEqual(result["net"], expected * 3)
+            self.assertEqual(result["vat"], Decimal(expected * 3) * Decimal("0.22"))
+        self.assertEqual(row["retail"], "100.50")
 
     def test_partial_logistics_keeps_known_values(self):
         products = {"1": product(weight_value=None, pallet_value=None), "2": product(product_key=2)}
@@ -276,23 +297,24 @@ class CalculationTests(UnitTestCase):
         pdf = export_document(result, validate_config({}), "full", "pdf")
         self.assertEqual(pdf.read(4), b"%PDF")
 
-    def test_source_precision_and_legacy_preferences_in_exports(self):
+    def test_whole_prices_and_legacy_preferences_in_exports(self):
         from openpyxl import load_workbook
         from .export import price_text
-        for source in ("100", "100.25", "100.1234"):
+        for source, expected in (("100", 100), ("100.25", 100), ("100.1234", 100), ("100.5", 101)):
             config = validate_config({"rounding": "ceil", "full_columns": ["unit_net", "unit_gross", "price_list"]})
             self.assertNotIn("rounding", config)
             self.assertEqual(config["full_columns"][-1], "name_1c")
             result = calculate({"1": product(retail=source)}, [{"product_key": 1}], config)
-            self.assertEqual(result["rows"][0]["unit_net"], Decimal(source))
+            self.assertEqual(result["rows"][0]["unit_net"], expected)
             ws = load_workbook(export_document(result, config, "full", "xlsx")).active
-            self.assertEqual(Decimal(str(ws["B4"].value)), Decimal(source))
+            self.assertEqual(ws["B4"].value, expected)
             self.assertEqual(ws["D4"].value, product()["name_1c"])
             self.assertEqual(ws["B4"].alignment.horizontal, "right")
             self.assertEqual(ws["B3"].alignment.horizontal, "center")
-            self.assertEqual(price_text(Decimal(source)), source.replace(".", ","))
+            self.assertEqual(price_text(result["rows"][0]["unit_net"]), str(expected))
             self.assertNotIn(chr(8381), ws["B3"].value)
-            self.assertEqual(ws["B4"].number_format, '#,##0' + ('.' + '0' * len(source.split('.')[1]) if '.' in source else ''))
+            self.assertEqual(ws["B4"].number_format, '#,##0')
+            self.assertEqual(ws["D5"].number_format, '#,##0')
 
 
 class PublicationTests(UnitTestCase):
@@ -353,10 +375,12 @@ class AccessTests(TestCase):
         force_authenticate(request, user=user or self.user)
         return view.as_view()(request)
 
-    def test_viewer_can_save_own_settings_but_cannot_refresh(self):
+    def test_viewer_can_save_own_settings_and_refresh(self):
         self.assertEqual(self.request("put", SettingsView, data={"vat": 0}).status_code, 200)
         self.assertEqual(self.request("get", SettingsView).data["config"]["vat"], 0)
-        self.assertEqual(self.request("post", RefreshView).status_code, 403)
+        with patch("sales_calculator.api.request_refresh", return_value=True) as refresh, patch("sales_calculator.api.state_payload", return_value={}):
+            self.assertEqual(self.request("post", RefreshView).status_code, 202)
+            refresh.assert_called_once_with(sources=True)
         DashboardAccess.objects.create(user=self.other, dashboard=self.dashboard, can_view=True)
         self.assertEqual(self.request("get", SettingsView, user=self.other).data["config"]["vat"], 22)
 
@@ -365,6 +389,18 @@ class AccessTests(TestCase):
         with patch("sales_calculator.api.read_products") as read:
             self.assertEqual(self.request("get", ProductsView, user=self.other).status_code, 403)
             read.assert_not_called()
+        with patch("sales_calculator.api.request_refresh") as refresh:
+            self.assertEqual(self.request("post", RefreshView, user=self.other).status_code, 403)
+            refresh.assert_not_called()
+
+    def test_viewer_sees_refresh_button_and_duplicate_refresh_is_rejected(self):
+        with patch("sales_calculator.api.read_products", return_value=[]), patch("sales_calculator.api.state_payload", return_value={}):
+            self.assertTrue(self.request("get", ProductsView).data["can_refresh"])
+        with patch("sales_calculator.api.request_refresh", return_value=False) as refresh, patch("sales_calculator.api.state_payload", return_value={"running": True}):
+            response = self.request("post", RefreshView)
+            self.assertEqual(response.status_code, 409)
+            self.assertTrue(response.data["running"])
+            refresh.assert_called_once_with(sources=True)
 
     def test_settings_list_all_warehouses_but_select_defaults(self):
         from datasets.models import NomenclatureStock
