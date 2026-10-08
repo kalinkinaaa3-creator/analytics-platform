@@ -124,7 +124,9 @@ def _request(method, body):
         if status == 429:
             # Persist even the final failed attempt, for the next pipeline run.
             block_quota(retry_after(response, 3600), scope=scope)
-        if status not in (429, 500, 502, 503, 504) or attempt == attempts - 1:
+        # These endpoints only read statistics/reference data. A transient 499
+        # response can be retried safely, within the same attempt/quota budget.
+        if status not in (429, 499, 500, 502, 503, 504) or attempt == attempts - 1:
             raise YdWordstatSearchApiError(message)
         logger.warning("%s; retry %s/%s", message, attempt + 1, attempts)
         if status != 429:

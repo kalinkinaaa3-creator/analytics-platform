@@ -1,6 +1,5 @@
 from analytics.services.bitrix_notify import send_bitrix_message
-from datetime import date, datetime, time, timedelta
-from zoneinfo import ZoneInfo
+from datetime import date
 
 from django.core.cache import cache
 from django.core.management.base import BaseCommand, CommandError
@@ -17,6 +16,7 @@ from bitrix24.services.clickhouse import sync_lead_analytics_to_clickhouse
 from bitrix24.services.client import Bitrix24Client
 from bitrix24.services.loaders import reconcile_leads_window, load_deals
 from bitrix24.services.reconciliation import purge_deleted_lead_derivatives, purge_deleted_deal_derivatives
+from bitrix24.services.reconciliation_periods import MOSCOW_TZ, reconciliation_windows
 from bitrix24.services.refresh import (
     ADVISORY_LOCK_NAME,
     LOCK_KEY,
@@ -28,14 +28,12 @@ from dashboards.realtime import notify_dashboard_updated
 from lead_generation.clickhouse import rebuild_mart_safely
 
 
-MOSCOW_TZ = ZoneInfo("Europe/Moscow")
-
-
 class Command(BaseCommand):
     help = "Reconcile recent Bitrix24 leads, then deals, by creation date."
 
     def add_arguments(self, parser):
-        parser.add_argument("--days", type=int, default=14)
+        parser.add_argument("--days", type=int, default=14, help="Complete calendar days to reconcile leads.")
+        parser.add_argument("--deals-months", type=int, default=4, help="Calendar months to reconcile deals.")
         parser.add_argument(
             "--as-of-date",
             type=date.fromisoformat,
@@ -44,13 +42,15 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         days = options["days"]
-        if days < 1:
-            raise CommandError("--days must be a positive integer.")
         boundary_date = options["as_of_date"] or timezone.now().astimezone(
             MOSCOW_TZ
         ).date()
-        created_to = datetime.combine(boundary_date, time.min, tzinfo=MOSCOW_TZ)
-        created_from = created_to - timedelta(days=days)
+        try:
+            created_from, deals_created_from, created_to = reconciliation_windows(
+                boundary_date, lead_days=days, deal_months=options["deals_months"],
+            )
+        except (ValueError, OverflowError) as exc:
+            raise CommandError(str(exc)) from exc
 
         if not acquire_refresh_cache_lock():
             raise CommandError("Обновление Аналитики CRM уже выполняется.")
@@ -62,6 +62,8 @@ class Command(BaseCommand):
                 "operation": "recent_leads_reconciliation",
                 "created_from": created_from.isoformat(),
                 "created_to": created_to.isoformat(),
+                "deals_created_from": deals_created_from.isoformat(),
+                "deals_created_to": created_to.isoformat(),
             },
             timeout=None,
         )
@@ -95,11 +97,11 @@ class Command(BaseCommand):
             )
             deal_run = load_deals(
                 Bitrix24Client(), mode=BitrixSyncRun.Mode.REPAIR,
-                created_from=created_from, created_to=created_to,
+                created_from=deals_created_from, created_to=created_to,
             )
             deal_purged = purge_deleted_deal_derivatives()
             received_deal_ids = BitrixDeal.objects.filter(
-                is_deleted=False, source_created_at__gte=created_from,
+                is_deleted=False, source_created_at__gte=deals_created_from,
                 source_created_at__lt=created_to, last_seen_at__gte=deal_run.started_at,
             ).values_list("deal_id", flat=True)
             rebuild_stage_intervals(entity_type_id=2, entity_ids=received_deal_ids)
@@ -115,6 +117,8 @@ class Command(BaseCommand):
                     "operation": "recent_leads_reconciliation",
                     "created_from": created_from.isoformat(),
                     "created_to": created_to.isoformat(),
+                    "deals_created_from": deals_created_from.isoformat(),
+                    "deals_created_to": created_to.isoformat(),
                     "received": run.rows_received,
                     "deactivated": run.rows_deactivated,
                     "purged": purged,
@@ -128,8 +132,9 @@ class Command(BaseCommand):
             rebuild_mart_safely()
             self.stdout.write(
                 self.style.SUCCESS(
-                    "Recent Bitrix24 leads reconciled: "
-                    f"window=[{created_from.isoformat()}, {created_to.isoformat()}), "
+                    "Recent Bitrix24 leads and deals reconciled: "
+                    f"leads_window=[{created_from.isoformat()}, {created_to.isoformat()}), "
+                    f"deals_window=[{deals_created_from.isoformat()}, {created_to.isoformat()}), "
                     f"received={run.rows_received}, deactivated={run.rows_deactivated}, "
                     f"deals_received={deal_run.rows_received}, deals_deactivated={deal_run.rows_deactivated}, "
                     f"analytics_rows={rows}."
@@ -148,6 +153,8 @@ class Command(BaseCommand):
                     "created_from": created_from.isoformat(),
                     "created_to": created_to.isoformat(),
                     "error": str(exc)[:1000],
+                    "deals_created_from": deals_created_from.isoformat(),
+                    "deals_created_to": created_to.isoformat(),
                 },
                 timeout=None,
             )

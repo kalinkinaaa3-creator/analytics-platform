@@ -143,6 +143,42 @@ class WordstatQuotaTests(TestCase):
         self.assertEqual(self.post.call_count, 1)
         self.assertEqual(YdWordstatApiQuota.objects.get().blocked_until, 0)
 
+    def test_499_retries_same_dynamics_request_and_counts_both_attempts(self):
+        self.post.side_effect = [self.response(499, {"x-request-id": "temporary"}), self.response(data={"data": []})]
+        with patch.object(client.random, "random", return_value=0):
+            result = client.fetch_dynamics("test", date(2025, 1, 1), date(2025, 1, 31))
+        self.assertEqual(result, {"data": []})
+        self.assertEqual(self.post.call_count, 2)
+        self.assertEqual(self.post.call_args_list[0], self.post.call_args_list[1])
+        self.assertEqual(self.pauses, [1])
+        state = YdWordstatApiQuota.objects.get()
+        self.assertEqual(len(state.requests), 2)
+        self.assertEqual(state.blocked_until, 0)
+
+    def test_499_stops_at_attempt_limit_and_keeps_last_request_id(self):
+        self.post.side_effect = [self.response(499, {"x-request-id": "first"}),
+                                 self.response(499, {"x-request-id": "last"})]
+        with patch.object(client.random, "random", return_value=0), self.assertRaisesRegex(
+            client.YdWordstatSearchApiError, "HTTP 499; request_id=last"
+        ):
+            client.fetch_regions_tree()
+        self.assertEqual(self.post.call_count, 2)
+        self.assertEqual(self.pauses, [1])
+
+    def test_499_retry_after_is_honored_without_hourly_quota_block(self):
+        self.post.side_effect = [self.response(499, {"Retry-After": "125"}), self.response()]
+        client.fetch_regions_tree()
+        self.assertEqual(sum(self.pauses), 125)
+        self.assertLessEqual(max(self.pauses), 60)
+        self.assertEqual(YdWordstatApiQuota.objects.get().blocked_until, 0)
+
+    def test_499_retry_still_waits_for_hourly_quota(self):
+        with override_settings(YD_WORDSTAT_REQUESTS_PER_HOUR=1):
+            self.post.side_effect = [self.response(499), self.response()]
+            client.fetch_regions_tree()
+        self.assertEqual(self.post.call_count, 2)
+        self.assertGreaterEqual(sum(self.pauses), 3600)
+
     def test_new_short_block_does_not_shorten_existing_block(self):
         client.block_quota(120)
         client.block_quota(10)

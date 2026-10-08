@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useDropdownPosition } from "./useDropdownPosition";
 import "./dashboard_multi_select.css";
 
-export function DashboardMultiSelect({ label, options = [], selected = [], onApply, emptyLabel = "Все", floating = false }) {
+export function DashboardMultiSelect({ label, options = [], selected = [], onApply, emptyLabel = "Все", floating = false, applyOnChange = false }) {
   const rootRef = useRef(null); const menuRef = useRef(null); const openRef = useRef(false);
   const selectedRef = useRef(selected); const draftRef = useRef(selected); const onApplyRef = useRef(onApply);
   const [open, setOpen] = useState(false); const [draft, setDraft] = useState(selected); const [search, setSearch] = useState("");
@@ -13,7 +13,13 @@ export function DashboardMultiSelect({ label, options = [], selected = [], onApp
     const query = normalize(search);
     return normalizedOptions.filter((item) => !query || normalize(item).includes(query));
   }, [normalizedOptions, search]);
-  const updateDraft = (next) => { draftRef.current = next; setDraft(next); };
+  const updateDraft = (next) => {
+    draftRef.current = next; setDraft(next);
+    if (applyOnChange && (selectedRef.current.length !== next.length || selectedRef.current.some((value, index) => value !== next[index]))) {
+      selectedRef.current = next;
+      onApplyRef.current(next);
+    }
+  };
   const commit = () => { const current = selectedRef.current; const next = draftRef.current; if (current.length !== next.length || current.some((value, index) => value !== next[index])) onApplyRef.current(next); };
   useEffect(() => { const close = (event) => { if (openRef.current && !rootRef.current?.contains(event.target)) { commit(); openRef.current = false; setOpen(false); setSearch(""); } }; document.addEventListener("mousedown", close); return () => document.removeEventListener("mousedown", close); }, []);
   const { menuStyle, resetPosition } = useDropdownPosition({ open, rootRef, menuRef, contentKey: `${visible.length}:${search}`, portal: floating, preferredWidth: floating ? 400 : null });
