@@ -268,6 +268,7 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
         }
     if dashboard.name == "Wordstat":
         cache_key_payload["generation"] = cache.get("wordstat:statistics:generation", "initial")
+        cache_key_payload["publication_timestamp_version"] = 1
     filters_hash = hashlib.md5(
         json.dumps(cache_key_payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
     ).hexdigest()
@@ -567,6 +568,10 @@ def build_dashboard(dashboard_id: int, user=None, filters: dict | None = None):
 
 
 
+
+        if widget.type == "yd_wordstat_table":
+            loaded_at = repository.fetch_yd_wordstat_last_update()
+            widget_data["data"]["last_update"] = loaded_at.isoformat() if loaded_at is not None else None
 
         source_model = {
             "fb_project_gantt": FbProject,

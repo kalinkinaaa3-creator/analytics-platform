@@ -635,7 +635,7 @@ function WordstatStatistics({ data, active, publicToken }) {
 
 export function WordstatDashboard({ data, publicToken = null }) {
   const [tab, setTab] = useState("demand");
-  return <section className="wd-dashboard" data-dashboard-type="wordstat">
+  return <section className="wd-dashboard" data-dashboard-type="wordstat" data-last-updated={data?.last_update || undefined}>
     <h2 className="wd-title">Тренды и сезонность</h2>
     <nav className="wd-tabs" aria-label="Разделы Wordstat">
       <button type="button" className={tab === "demand" ? "is-active" : ""} aria-pressed={tab === "demand"} onClick={() => setTab("demand")}>Анализ спроса</button>

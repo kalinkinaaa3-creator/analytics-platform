@@ -144,6 +144,10 @@ def ensure_yd_wordstat_for_table():
         ORDER BY (feature, category, phrase, year, id)
     """)
 
+    # Old publications did not retain their source timestamp. Keep those rows
+    # NULL until the next atomic publication, rather than inventing a load date.
+    client.execute("ALTER TABLE default.yd_wordstat_for ADD COLUMN IF NOT EXISTS date_add Nullable(DateTime)")
+
 
 
 def ensure_fb_purchases_use_table():

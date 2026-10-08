@@ -18,7 +18,7 @@ from analytics.clickhouse.schema import (
     ensure_planned_sales_directory_table,
     ensure_revenue_sales_table,
 )
-from datetime import date, datetime
+from datetime import date, datetime, timezone as datetime_timezone
 
 
 FB_PROJECT_COLUMNS = [
@@ -122,6 +122,7 @@ YD_WORDSTAT_COLUMNS = [
     "spb_macroregion",
     "sng_macroregion",
     "other_macroregion",
+    "date_add",
 ]
 
 
@@ -488,6 +489,18 @@ class ClickHouseRepository:
             """,
             payload,
         )
+
+    def fetch_yd_wordstat_last_update(self):
+        ensure_yd_wordstat_for_table()
+        client = get_clickhouse_client()
+        try:
+            # Read the visible publication, independently of filters or page.
+            # An epoch avoids interpreting the server timezone as browser time.
+            result = client.execute("SELECT toUnixTimestamp(max(date_add)) FROM default.yd_wordstat_for")
+            value = result[0][0] if result else None
+            return datetime.fromtimestamp(value, tz=datetime_timezone.utc) if value is not None else None
+        finally:
+            client.disconnect()
 
     def fetch_yd_wordstat_rows(
         self,
