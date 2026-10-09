@@ -195,19 +195,7 @@ def rebuild_revenue_sales_from_dash_sales_sql(
                                     AND p.draft2 =
                                         CASE
                                             WHEN p.level1 = 'СТРАТЕГИ'
-                                                AND b.contract_initiator NOT IN (
-                                                    'Отдел продаж "Логистика"',
-                                                    'Отдел продаж (СПП)',
-                                                    'Отдел продаж "Агропромышленный комплекс"',
-                                                    'Отдел продаж "Контейнеры для ТКО"',
-                                                    'Отдел продаж "Москва"',
-                                                    'Отдел продаж по Северо-Западному региону',
-                                                    'Отдел продаж "Екатеринбург"',
-                                                    'Отдел продаж "Татарстан"',
-                                                    'Отдел продаж "Новосибирск"',
-                                                    'Отдел продаж (экспорт)',
-                                                    'Отдел продаж "Крупный опт"'
-                                                )
+                                                AND b.contract_initiator = 'Коммерческая дирекция'
                                                 THEN b.contract_project
                                             ELSE b.contract_initiator
                                         END
@@ -216,41 +204,57 @@ def rebuild_revenue_sales_from_dash_sales_sql(
                                 OR (
                                     p.level3 = 'Прочие'
                                     AND p.draft2 = 'Отдел продаж "Логистика"'
-                                    AND b.contract_initiator = 'Отдел продаж "Логистика"'
-                                    AND b.partner NOT IN ('РВБ ООО', 'ИНТЕРНЕТ РЕШЕНИЯ ООО')
+                                    AND b.contract_initiator IN (
+                                        'Отдел продаж "Логистика"',
+                                        'Дирекция по развитию бизнес-проектов'
+                                    )
+                                    AND NOT EXISTS (
+                                        SELECT 1
+                                        FROM planned_sales_directory pd2
+                                        WHERE pd2.draft3 = b.partner
+                                        AND pd2.draft2 =
+                                            CASE
+                                                WHEN pd2.level1 = 'СТРАТЕГИ'
+                                                    AND b.contract_initiator = 'Коммерческая дирекция'
+                                                THEN b.contract_project
+                                                ELSE b.contract_initiator
+                                            END
+                                    )
                                 )
 
                                 OR (
                                     p.level3 = 'Прочие'
                                     AND p.draft2 = 'Отдел продаж (СПП)'
-                                    AND b.contract_initiator = 'Отдел продаж (СПП)'
-                                    AND b.partner NOT IN ('РВБ ООО', 'ИНТЕРНЕТ РЕШЕНИЯ ООО')
+                                    AND b.contract_initiator IN (
+                                        'Отдел продаж (СПП)'
+                                    )
+                                    AND NOT EXISTS (
+                                        SELECT 1
+                                        FROM planned_sales_directory pd2
+                                        WHERE pd2.draft3 = b.partner
+                                        AND pd2.draft2 =
+                                            CASE
+                                                WHEN pd2.level1 = 'СТРАТЕГИ'
+                                                    AND b.contract_initiator = 'Коммерческая дирекция'
+                                                THEN b.contract_project
+                                                ELSE b.contract_initiator
+                                            END
+                                    )
                                 )
 
                                 OR (
                                     p.draft2 =
                                         CASE
                                             WHEN p.level1 = 'СТРАТЕГИ'
-                                                AND b.contract_initiator NOT IN (
-                                                    'Отдел продаж "Логистика"',
-                                                    'Отдел продаж (СПП)',
-                                                    'Отдел продаж "Агропромышленный комплекс"',
-                                                    'Отдел продаж "Контейнеры для ТКО"',
-                                                    'Отдел продаж "Москва"',
-                                                    'Отдел продаж по Северо-Западному региону',
-                                                    'Отдел продаж "Екатеринбург"',
-                                                    'Отдел продаж "Татарстан"',
-                                                    'Отдел продаж "Новосибирск"',
-                                                    'Отдел продаж (экспорт)',
-                                                    'Отдел продаж "Крупный опт"'
-                                                )
+                                                AND b.contract_initiator = 'Коммерческая дирекция'                                                
                                                 THEN b.contract_project
                                             ELSE b.contract_initiator
                                         END
                                     AND p.draft3 = '-'
                                     AND b.contract_initiator NOT IN (
                                         'Отдел продаж "Логистика"',
-                                        'Отдел продаж (СПП)'
+                                        'Отдел продаж (СПП)',
+                                        'Дирекция по развитию бизнес-проектов'
                                     )
                                 )
                             )
