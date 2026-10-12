@@ -5,6 +5,7 @@ import { DashboardMultiSelect } from "../../components/DashboardMultiSelect";
 import { RefreshInfoTooltip } from "../../components/RefreshInfoTooltip";
 import { SalesProductImage } from "./SalesProductImage";
 import "./sales_calculator.css";
+import "../spinner.css";
 
 const ROOT = "/v1/sales-calculator/";
 const TYPES = { auto: "Авто", retail: "Розница", small: "Мелкий опт", medium: "Средний опт", large: "Крупный опт" };
@@ -154,6 +155,7 @@ export function SalesCalculatorDashboard() {
     return () => { observer.disconnect(); window.removeEventListener("resize", fit); };
   }, []);
   const [metadata, setMetadata] = useState(null);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [config, setConfig] = useState(null);
   const [catalog, setCatalog] = useState({ products: [], regions: [], region: "" });
   const [state, setState] = useState({});
@@ -187,19 +189,30 @@ export function SalesCalculatorDashboard() {
   const regionRef = useRef("");
   const calculationIdentity = JSON.stringify([items, config, catalog]);
   const calculating = busy || resultIdentity !== calculationIdentity;
-  async function loadCatalog(region = "") {
+  async function loadCatalog(region = "", signal) {
     const sequence = ++catalogSequence.current;
-    const { data } = await api.get(ROOT + "products/", { params: { region } });
+    const { data } = await api.get(ROOT + "products/", { params: { region }, signal });
     if (sequence !== catalogSequence.current) return;
     setCatalog(data); regionRef.current = data.region; setState(data.state);
     publishedAt.current = data.state.finished_at || null;
   }
   useEffect(() => {
     let active = true;
-    api.get(ROOT + "settings/").then(({ data }) => { if (active) { setMetadata(data); setConfig(data.config); loadCatalog(data.config.region).catch(e => setMessage(errorText(e), "error")); } }).catch(e => setMessage(errorText(e), "error"));
-    return () => { active = false; catalogSequence.current = -1; };
+    const controller = new AbortController();
+    async function initialize() {
+      try {
+        const { data } = await api.get(ROOT + "settings/", { signal: controller.signal });
+        if (!active) return;
+        setMetadata(data); setConfig(data.config);
+        await loadCatalog(data.config.region, controller.signal);
+      } catch (e) { if (active) setMessage(errorText(e), "error"); }
+      finally { if (active) setInitialLoading(false); }
+    }
+    initialize();
+    return () => { active = false; controller.abort(); catalogSequence.current += 1; };
   }, [setMessage]);
   useEffect(() => {
+    if (initialLoading) return;
     let active = true;
     const timer = setInterval(async () => {
       try {
@@ -214,7 +227,7 @@ export function SalesCalculatorDashboard() {
       } catch { /* Existing report remains visible during a short network outage. */ }
     }, 3000);
     return () => { active = false; clearInterval(timer); };
-  }, [setMessage]);
+  }, [setMessage, initialLoading]);
   useEffect(() => {
     let active = true;
     if (!config || !catalog.region) return;
@@ -267,7 +280,9 @@ export function SalesCalculatorDashboard() {
     if (key.startsWith("unit_") || key.endsWith("_net") || key.endsWith("_gross")) return price(calculated?.[key]);
     return row[key] || "—";
   }
-  return <div ref={dashboardRef} className="sc-dashboard" data-dashboard-type="commercial-price"><header className="sc-topbar"><div><h1>Коммерческий прайс</h1></div><nav><button onClick={() => setModal("settings")} disabled={!config}>Настройки</button><RefreshInfoTooltip sections={[{ title: "Прайс 1С", content: date(state.price_updated_at) }, { title: "Остатки", content: date(state.stock_updated_at) }]}><button onClick={refresh} disabled={state.running || !catalog.can_refresh}>{state.running ? "Обновление…" : "Обновить"}</button></RefreshInfoTooltip></nav></header>
+  return <div ref={dashboardRef} className="sc-dashboard" data-dashboard-type="commercial-price" aria-busy={initialLoading}>
+    {initialLoading && createPortal(<div className="global-spinner-overlay show" role="status" aria-live="polite"><div className="spinner-container"><div className="infinite-spinner" aria-hidden="true" /><div className="spinner-text">Загрузка данных...</div></div></div>, document.body)}
+    <header className="sc-topbar"><div><h1>Коммерческий прайс</h1></div><nav><button onClick={() => setModal("settings")} disabled={!config}>Настройки</button><RefreshInfoTooltip sections={[{ title: "Прайс 1С", content: date(state.price_updated_at) }, { title: "Остатки", content: date(state.stock_updated_at) }]}><button onClick={refresh} disabled={state.running || !catalog.can_refresh}>{state.running ? "Обновление…" : "Обновить"}</button></RefreshInfoTooltip></nav></header>
     {message && <div className="sc-toast-stack"><div className={`sc-toast sc-toast--${notice.kind}`} role={notice.kind === "error" ? "alert" : "status"}><span>{message}</span><button aria-label="Закрыть уведомление" onClick={() => setMessage("")}>×</button></div></div>}
     {catalog.stale && <div className="sc-notice">Показан последний доступный прайс. Данные за сегодня ещё не обновлены.</div>}
     <div className="sc-toolbar"><div className="sc-tabs"><button className={mode === "simple" ? "is-active" : ""} onClick={() => setMode("simple")}>Прайс</button><button className={mode === "full" ? "is-active" : ""} onClick={() => setMode("full")}>Калькулятор</button></div><span className="sc-region">Склад отгрузки: {catalog.region || "не выбран"} · НДС {config?.vat ?? 22}%</span></div>
