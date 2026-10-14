@@ -28,6 +28,24 @@ def product(**changes):
 
 
 class CalculationTests(UnitTestCase):
+    def test_column_visibility_does_not_change_default_or_custom_order(self):
+        from openpyxl import load_workbook
+        for mode in ("simple", "full"):
+            field, order = mode + "_columns", mode + "_column_order"
+            config = validate_config({field: ["name", "image", "code"]})
+            self.assertEqual(config[field], ["image", "code", "name"])
+            config = validate_config({field: ["image", "name"], order: ["name", "code", "image"]})
+            config[field].append("code")
+            restored = validate_config(config)
+            self.assertEqual(restored[field], ["name", "code", "image"])
+            self.assertEqual(restored[order][:3], ["name", "code", "image"])
+            result = calculate({"1": product()}, [{"product_key": 1}], restored)
+            ws = load_workbook(export_document(result, restored, mode, "xlsx")).active
+            self.assertEqual(ws['B3'].value, 'Номенклатура прайс-листа')
+            self.assertEqual(ws['C3'].value, 'Артикул')
+        with self.assertRaises(ValueError):
+            validate_config({"full_column_order": ["unknown"]})
+
     def test_missing_website_product_keeps_position_but_not_links(self):
         from .warehouse import build_rows
         from .export import display
@@ -301,7 +319,7 @@ class CalculationTests(UnitTestCase):
         from openpyxl import load_workbook
         from .export import price_text
         for source, expected in (("100", 100), ("100.25", 100), ("100.1234", 100), ("100.5", 101)):
-            config = validate_config({"rounding": "ceil", "full_columns": ["unit_net", "unit_gross", "price_list"]})
+            config = validate_config({"rounding": "ceil", "full_columns": ["unit_net", "unit_gross", "price_list"], "full_column_order": ["unit_net", "unit_gross", "name_1c"]})
             self.assertNotIn("rounding", config)
             self.assertEqual(config["full_columns"][-1], "name_1c")
             result = calculate({"1": product(retail=source)}, [{"product_key": 1}], config)

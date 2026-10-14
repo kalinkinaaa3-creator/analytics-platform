@@ -88,9 +88,9 @@ def build_rows(day, stock_available):
     with connection.cursor() as cursor:
         cursor.execute("""
             WITH b AS (
-                SELECT DISTINCT ON (product_key) * FROM public.base_product_price
-                WHERE date_add < %s
-                ORDER BY product_key, date_add DESC, id DESC
+                SELECT DISTINCT ON (code_1c) * FROM public.base_product_price
+                WHERE date_add < %s AND code_1c IS NOT NULL
+                ORDER BY code_1c, date_add DESC, id DESC
             ), n AS (
                 SELECT DISTINCT ON (nom_code) * FROM nomenclature ORDER BY nom_code, date_add DESC, id DESC
             ), p AS (

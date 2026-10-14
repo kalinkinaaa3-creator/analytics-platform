@@ -94,6 +94,32 @@ function PreferenceSelect({ label, field, choices, draft, setDraft }) {
   return <DashboardMultiSelect floating label={label} options={Object.values(labels)} selected={draft[field].map(k => labels[k]).filter(Boolean)} onApply={values => setDraft({ ...draft, [field]: values.map(v => reverse[v]) })} emptyLabel="Не выбрано" />;
 }
 
+function ColumnSettings({ mode, choices, draft, setDraft }) {
+  const dragged = useRef(null);
+  const field = mode + "_columns";
+  const orderField = mode + "_column_order";
+  const order = [...new Set([...(draft[orderField] || []), ...Object.keys(choices)])].filter(key => key in choices);
+  function update(nextOrder, selected = draft[field]) {
+    setDraft(old => ({ ...old, [orderField]: nextOrder, [field]: nextOrder.filter(key => selected.includes(key)) }));
+  }
+  function move(key, target) {
+    if (!key || key === target || !order.includes(key)) return;
+    const next = order.filter(value => value !== key);
+    next.splice(order.indexOf(target), 0, key);
+    update(next);
+  }
+  return <details className="sc-column-settings"><summary>Столбцы · Выбрано: {draft[field].length}</summary>
+    <p className="sc-muted">Перетащите столбцы за значок ⋮⋮ или используйте стрелки. Скрытые столбцы сохраняют своё место.</p>
+    <ul>{order.map((key, index) => <li key={key} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); move(dragged.current, key); dragged.current = null; }}>
+      <span className="sc-column-handle" draggable onDragStart={event => { dragged.current = key; event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", key); }} onDragEnd={() => { dragged.current = null; }} title="Перетащить столбец" aria-hidden="true">⋮⋮</span>
+      <label><input type="checkbox" checked={draft[field].includes(key)} onChange={event => update(order, event.target.checked ? [...draft[field], key] : draft[field].filter(value => value !== key))} />{choices[key]}</label>
+      <button type="button" disabled={index === 0} aria-label={`Выше: ${choices[key]}`} onClick={() => move(key, order[index - 1])}>↑</button>
+      <button type="button" disabled={index === order.length - 1} aria-label={`Ниже: ${choices[key]}`} onClick={() => move(key, order[index + 1])}>↓</button>
+    </li>)}</ul>
+    <button type="button" onClick={() => update(Object.keys(choices))}>Порядок по умолчанию</button>
+  </details>;
+}
+
 function Settings({ metadata, config, regions, onSave, onClose }) {
   const [draft, setDraft] = useState(config);
   const [tab, setTab] = useState("simple");
@@ -115,7 +141,7 @@ function Settings({ metadata, config, regions, onSave, onClose }) {
     <section><h3>Характеристики и логистика</h3><p className="sc-muted">Выбранный набор используется на экране и в Excel / PDF.</p><div className="sc-settings-grid"><PreferenceSelect label="Характеристики" field="characteristics" choices={metadata.characteristics} draft={draft} setDraft={setDraft} /><PreferenceSelect label="Логистика" field="logistics" choices={metadata.logistics} draft={draft} setDraft={setDraft} /></div></section>
     <section><h3>Склады для остатков</h3><p className="sc-muted">Остатки отображаются справочно по каждому складу.</p><PreferenceSelect label="Склады" field="warehouses" choices={metadata.warehouses} draft={draft} setDraft={setDraft} /></section>
     <section><h3>Пороги типов цен · без НДС</h3><div className="sc-settings-grid">{["Розница → Мелкий опт", "Мелкий → Средний опт", "Средний → Крупный опт"].map((label, i) => <label key={label}>{label}, руб.<input type="number" min="0" value={draft.thresholds[i]} onChange={e => field("thresholds", draft.thresholds.map((x, j) => i === j ? e.target.value : x))} /></label>)}<label>Порог предупреждения, руб.<input type="number" value={draft.warning_threshold} onChange={e => field("warning_threshold", e.target.value)} /></label></div><p className="sc-muted">Переход только при строгом превышении.</p></section>
-    <section><h3 className="sc-logistics-title">Столбцы таблицы и выгрузки <ColumnsTooltip /></h3><div className="sc-tabs"><button className={tab === "simple" ? "is-active" : ""} onClick={() => setTab("simple")}>Прайс</button><button className={tab === "full" ? "is-active" : ""} onClick={() => setTab("full")}>Калькулятор</button></div><PreferenceSelect label="Столбцы" field={tab + "_columns"} choices={metadata[tab + "_columns"]} draft={draft} setDraft={setDraft} /></section>
+    <section><h3 className="sc-logistics-title">Столбцы таблицы и выгрузки <ColumnsTooltip /></h3><div className="sc-tabs"><button className={tab === "simple" ? "is-active" : ""} onClick={() => setTab("simple")}>Прайс</button><button className={tab === "full" ? "is-active" : ""} onClick={() => setTab("full")}>Калькулятор</button></div><ColumnSettings key={tab} mode={tab} choices={metadata[tab + "_columns"]} draft={draft} setDraft={setDraft} /></section>
   </div><footer><button onClick={onClose} disabled={busy}>Отмена</button><button className="sc-primary" onClick={save} disabled={busy}>{busy ? "Сохранение…" : "Сохранить"}</button></footer></Modal>;
 }
 
@@ -180,6 +206,7 @@ export function SalesCalculatorDashboard() {
   const [calcError, setCalcError] = useState("");
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [bulkType, setBulkType] = useState("auto");
@@ -237,7 +264,7 @@ export function SalesCalculatorDashboard() {
         const { data } = await api.post(ROOT + "calculate/", { items, region: catalog.region });
         if (active) { setResult(data); setResultIdentity(calculationIdentity); }
       } catch (e) { if (active) { setCalcError(errorText(e)); setResult(null); } }
-      finally { if (active) setBusy(false); }
+      finally { if (active) { setBusy(false); setAdding(false); } }
     }, 200);
     return () => { active = false; clearTimeout(timer); };
   }, [items, config, catalog, calculationIdentity]);
@@ -245,6 +272,7 @@ export function SalesCalculatorDashboard() {
   const resultsByKey = useMemo(() => new Map((result?.rows || []).map(p => [String(p.product_key), p])), [result]);
   function updateItem(key, changes) { setItems(old => old.map(i => String(i.product_key) === String(key) ? { ...i, ...changes } : i)); }
   function add(keys) {
+    if (keys.some(key => !items.some(item => String(item.product_key) === key))) setAdding(true);
     setItems(old => { const have = new Set(old.map(i => String(i.product_key))); return [...old, ...keys.filter(k => !have.has(k)).map(k => ({ product_key: k, quantity: 1, price_type: "auto" }))]; });
     setModal(null);
   }
@@ -281,7 +309,7 @@ export function SalesCalculatorDashboard() {
     return row[key] || "—";
   }
   return <>
-    {initialLoading && <div className="global-spinner-overlay show" role="status" aria-live="polite"><div className="spinner-container"><div className="infinite-spinner" aria-hidden="true" /><div className="spinner-text">Загрузка данных...</div></div></div>}
+    {(initialLoading || adding) && <div className="global-spinner-overlay show" role="status" aria-live="polite"><div className="spinner-container"><div className="infinite-spinner" aria-hidden="true" /><div className="spinner-text">{adding ? "Добавляем товары в расчёт…" : "Загрузка данных..."}</div></div></div>}
     <div ref={dashboardRef} className="sc-dashboard" data-dashboard-type="commercial-price" aria-busy={initialLoading}>
     <header className="sc-topbar"><div><h1>Коммерческий прайс</h1></div><nav><button onClick={() => setModal("settings")} disabled={!config}>Настройки</button><RefreshInfoTooltip sections={[{ title: "Прайс 1С", content: date(state.price_updated_at) }, { title: "Остатки", content: date(state.stock_updated_at) }]}><button onClick={refresh} disabled={state.running || !catalog.can_refresh}>{state.running ? "Обновление…" : "Обновить"}</button></RefreshInfoTooltip></nav></header>
     {message && <div className="sc-toast-stack"><div className={`sc-toast sc-toast--${notice.kind}`} role={notice.kind === "error" ? "alert" : "status"}><span>{message}</span><button aria-label="Закрыть уведомление" onClick={() => setMessage("")}>×</button></div></div>}

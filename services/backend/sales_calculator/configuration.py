@@ -38,6 +38,7 @@ DEFAULTS = {
     "thresholds": [50000, 300000, 800000], "warning_threshold": 2200000,
     "characteristics": DEFAULT_CHARACTERISTICS, "logistics": DEFAULT_LOGISTICS,
     "warehouses": WAREHOUSES, "full_columns": list(FULL_COLUMNS), "simple_columns": list(SIMPLE_COLUMNS),
+    "full_column_order": list(FULL_COLUMNS), "simple_column_order": list(SIMPLE_COLUMNS),
 }
 
 
@@ -60,6 +61,14 @@ def validate_config(data):
         if not isinstance(value, list) or any(not isinstance(x, str) or (not x.strip() or len(x) > 255 if key == "warehouses" else x not in choices) for x in value):
             raise ValueError(f"Некорректный список: {key}")
         result[key] = list(dict.fromkeys(value))
+    for mode, choices in (("full", FULL_COLUMNS), ("simple", SIMPLE_COLUMNS)):
+        key = mode + "_column_order"
+        order = result[key]
+        if not isinstance(order, list) or any(not isinstance(x, str) or x not in choices for x in order):
+            raise ValueError(f"Некорректный список: {key}")
+        # Keep positions of hidden columns; append future columns in default order.
+        result[key] = list(dict.fromkeys([*order, *choices]))
+        result[mode + "_columns"] = [x for x in result[key] if x in result[mode + "_columns"]]
     try:
         thresholds = [Decimal(str(x)) for x in result["thresholds"]]
         warning = Decimal(str(result["warning_threshold"]))
