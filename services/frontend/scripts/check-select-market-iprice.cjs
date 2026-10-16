@@ -55,6 +55,26 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
       ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(SelectMarketIPrice, { dashboard: {name: 'iPrice'} }));
     </script></body></html>` }));
     await page.goto(`${base}/iprice-check`);
+    await page.locator('.sm-iprice-help-trigger').click();
+    assert.equal(await page.locator('dialog').evaluate(el => el.open), true);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('dialog').evaluate(el => el.open), false);
+    assert.equal(await page.locator('.sm-iprice-help-trigger').evaluate(el => el === document.activeElement), true);
+    await page.locator('.sm-iprice-help-trigger').click();
+    await page.locator('dialog header button').click();
+    await page.locator('.sm-iprice-nav button').nth(4).click();
+    await page.locator('.sm-iprice-source-card').first().waitFor();
+    assert.equal(await page.locator('.sm-iprice-source-card').evaluateAll(cards => {
+      const rows = new Map();
+      for (const card of cards) {
+        const top = Math.round(card.getBoundingClientRect().top);
+        const levels = ['.sm-iprice-source-download', '.sm-iprice-source-upload'].map(sel => card.querySelector(sel).getBoundingClientRect().top);
+        if (rows.has(top) && levels.some((v, i) => Math.abs(v - rows.get(top)[i]) > 1)) return false;
+        rows.set(top, levels);
+      }
+      return true;
+    }), true, 'Source actions align within each grid row');
+    await page.locator('.sm-iprice-nav button').first().click();
     await page.getByLabel('Последние 50 версий').selectOption('1');
     await page.getByText('Временная ошибка строк', { exact: false }).waitFor();
     assert.equal(await page.getByText('Загружаем строки…', { exact: true }).count(), 0);
@@ -158,7 +178,7 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     assert.equal(await page.getByRole('button', { name: 'Утвердить внутри системы', exact: true }).count(), 0);
     await page.getByRole('button', { name: 'Исходные данные', exact: true }).click();
     await page.getByLabel('Дата полного прайса', { exact: true }).fill('2026-10-15');
-    const priceCard = page.getByRole('heading', { name: 'Прайс', exact: true }).locator('..');
+    const priceCard = page.getByRole('heading', { name: 'Прайс', exact: true }).locator('xpath=ancestor::article');
     await priceCard.locator('input[type=file]').setInputFiles({ name: 'invalid.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from('fixture') });
     await page.getByText('В файле не заполнен код товара.', { exact: true }).waitFor();
     version.historical_routes = false;

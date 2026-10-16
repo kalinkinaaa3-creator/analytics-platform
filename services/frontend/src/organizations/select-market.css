@@ -21,7 +21,7 @@
   min-height: 100dvh;
 }
 .app-shell.sm-workspace .content { background: var(--sm-background); min-width: 0; }
-.app-shell.sm-workspace .sidebar.open ~ .content { margin-left: 250px; }
+.app-shell.sm-workspace .sidebar.open ~ .content { margin-left: 0; }
 .app-shell.sm-workspace .sidebar { background: var(--sm-surface); border-right: 1px solid var(--sm-border); color: var(--sm-text); }
 .app-shell.sm-workspace .user-info, .app-shell.sm-workspace .section-title { color: var(--sm-text); }
 .app-shell.sm-workspace .user-info { background: var(--sm-surface); border-color: var(--sm-border); }

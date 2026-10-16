@@ -140,3 +140,19 @@
   .sm-iprice .sm-iprice-detail { padding: 12px; }
   .sm-iprice .sm-iprice-toolbar > label { flex: 1 1 100%; }
 }
+
+/* Source cards share row heights, including the optional price date. */
+.sm-iprice .sm-iprice-source-card { display: grid; grid-template-rows: subgrid; grid-row: span 4; row-gap: 12px; }
+.sm-iprice .sm-iprice-source-card p { margin-bottom: 0; }
+.sm-iprice .sm-iprice-source-card h4 { margin: 0 0 10px; color: var(--sm-muted); font-size: 12px; }
+.sm-iprice .sm-iprice-source-download, .sm-iprice .sm-iprice-source-upload { border-top: 1px solid var(--sm-border); padding-top: 12px; }
+.sm-iprice .sm-iprice-source-date label, .sm-iprice .sm-iprice-source-upload label { margin: 0; }
+.sm-iprice .sm-iprice-help-trigger { margin-bottom: 4px; }
+.sm-iprice dialog.sm-iprice-help { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(560px, 100%); max-width: 100%; height: 100dvh; max-height: 100dvh; padding: 0; border: 0; background: #fff; color: var(--sm-text); box-shadow: -12px 0 32px #16212124; }
+.sm-iprice .sm-iprice-help::backdrop { background: #1f262e66; }
+.sm-iprice .sm-iprice-help > header { display: flex; align-items: center; gap: 16px; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--sm-border); position: sticky; top: 0; background: #fff; }
+.sm-iprice .sm-iprice-help > header h2 { margin: 0; }
+.sm-iprice .sm-iprice-help > header button { font-size: 24px; flex-shrink: 0; }
+.sm-iprice .sm-iprice-help-body { padding: 20px 24px; }
+.sm-iprice .sm-iprice-help-body ol { padding-left: 24px; }
+.sm-iprice .sm-iprice-help-body li { padding: 8px 0; }

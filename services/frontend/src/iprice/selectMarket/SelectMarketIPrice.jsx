@@ -17,6 +17,7 @@ const statuses = { queued: "В очереди", running: "Выполняется
 const steps = { starting: "Подготовка", base_parser: "Сайт", base_report: "Итоги загрузки сайта", tt_parser: "ТопТара", tt_report: "Итоги ТопТара", ps_parser: "PS", ps_report: "Итоги PS", tara_parser: "ТАРА", tara_failed_retry: "Повтор ошибок ТАРА", tara_report: "Итоги ТАРА", completed: "Все этапы завершены" };
 
 export function SelectMarketIPrice({ dashboard }) {
+  const helpRef = useRef(null);
   const [view, setView] = useState("home");
   const [state, setState] = useState(null);
   const [error, setError] = useState("");
@@ -68,11 +69,14 @@ export function SelectMarketIPrice({ dashboard }) {
   return <section className="sm-system-page sm-iprice" aria-busy={!state || !!busy}>
     <header className="sm-system-heading"><SelectMarketIcon type="suc" /><h1>{dashboard.name}</h1></header>
     <nav className="sm-iprice-nav" aria-label="Разделы iPrice">{[["home", "Главная"], ["prices", "Цены"], ["market", "Рынок и изменения"], ["versions", "Расчёты и история"], ["data", "Исходные данные"]].map(([key, title]) => <button key={key} aria-current={view === key ? "page" : undefined} onClick={() => setView(key)}>{title}</button>)}</nav>
-    <details><summary>Справка по работе с iPrice</summary>
+    <button type="button" className="sm-iprice-help-trigger" onClick={() => helpRef.current.showModal()}>Справка по работе с iPrice</button>
+    <dialog ref={helpRef} className="sm-iprice-help" aria-labelledby="sm-iprice-help-title" onClick={event => { if (event.target === event.currentTarget) { const rect = event.currentTarget.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) event.currentTarget.close(); } }}>
+      <header><h2 id="sm-iprice-help-title">Справка по работе с iPrice</h2><button type="button" aria-label="Закрыть справку" onClick={() => helpRef.current.close()}>×</button></header>
+      <div className="sm-iprice-help-body">
       <ol><li>В разделе «Исходные данные» скачайте шаблоны. Прайс содержит все регионы за выбранную дату и исходные цены с НДС 22%. Коды 1С вводятся текстом.</li><li>Обновите сайт и конкурентов. Дождитесь завершения сбора, затем выберите дату и запустите расчёт.</li><li>Выберите рассчитанную версию. Проверьте ошибки строк. Карточка товара показывает источники, расчёт и оптовые цены.</li><li>Для своей РРЦ укажите причину. Параметры меняются по точным фильтрам после предварительного просмотра. Изменение аналогов требует повторного подтверждения ручных цен.</li><li>Утвердите проверенную версию внутри системы и скачайте Excel. В 1С цены автоматически не отправляются.</li></ol>
       <p>РРЦ — розничная цена. Маржа и скидки задаются долями: 0,15 означает 15%. «Нет данных рынка» означает отсутствие пригодной конкурентной цены. Предупреждение требует проверки; ошибка строки блокирует утверждение.</p>
       <p>Цены утверждённой версии зафиксированы. Чтобы изменить их, создайте новый расчёт. Снятие утверждения сохраняет историю и не разблокирует редактирование прежней версии.</p>
-    </details>
+    </div></dialog>
     {error && <p role="alert" className="sm-iprice-error">{error}</p>}
     {statusError && <p role="alert" className="sm-iprice-error">{statusError}</p>}
     {message && <p role="status">{message}</p>}
@@ -82,10 +86,12 @@ export function SelectMarketIPrice({ dashboard }) {
       <div hidden={view !== "data"}>
       <h2>Источники и загрузки</h2>
       {!state.can_edit && <p>Доступен просмотр. Загрузка файлов и запуск парсеров доступны редакторам.</p>}
-      <div className="sm-iprice-sources">{sources.map(([key, title, hint, route]) => {
+      <div className="sm-iprice-sources sm-iprice-source-grid">{sources.map(([key, title, hint, route]) => {
         const path = route || `sources/${key}/`;
-        return <article key={key} className="sm-iprice-card"><h3>{title}</h3><p>{hint}</p>
+        return <article key={key} className="sm-iprice-card sm-iprice-source-card"><div><h3>{title}</h3><p>{hint}</p></div>
+          <div className="sm-iprice-source-date">
           {key === "price" && state.can_edit && <label>Дата полного прайса<input type="date" required value={priceDate} disabled={!!busy} onChange={event => setPriceDate(event.target.value)} /></label>}
+          </div><section className="sm-iprice-source-download"><h4>Скачивание</h4>
           <button type="button" disabled={!!busy} onClick={() => perform(`template-${key}`, async () => {
             const response = await api.get(`${root}${path}`, { responseType: "blob" });
             if (!mounted.current) return;
@@ -93,6 +99,7 @@ export function SelectMarketIPrice({ dashboard }) {
             const link = document.createElement("a"); link.href = url; link.download = `select_market_${key}.xlsx`;
             document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
           })}>Скачать шаблон</button>
+          </section><section className="sm-iprice-source-upload"><h4>Загрузка</h4>
           {state.can_edit && <label>Загрузить XLSX
             <input type="file" accept=".xlsx" disabled={!!busy || (key === "price" && !priceDate)} onChange={event => {
               const file = event.target.files?.[0]; event.target.value = "";
@@ -107,6 +114,7 @@ export function SelectMarketIPrice({ dashboard }) {
             }} />
           </label>}
           {busy === key && <p role="status" className="sm-iprice-loading">Проверяем и загружаем файл…</p>}
+          </section>
         </article>;
       })}</div>
       <article className="sm-iprice-card"><h2>Обновление сайта и конкурентов</h2>
