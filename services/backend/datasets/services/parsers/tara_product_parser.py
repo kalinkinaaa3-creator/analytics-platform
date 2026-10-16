@@ -1,3 +1,4 @@
+from .queue_execution import standalone
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -85,11 +86,11 @@ def html_has_product_content(html: str) -> bool:
     )
 
 
-def fetch_html_via_browser(url: str) -> str:
+def fetch_html_via_browser(url: str, *, workspace=None, run_id=None, run_lease=None) -> str:
     logger.info("Browser request URL: %s", url)
 
     from .tara_remote import fetch
-    return validate_payload(url, fetch(url))
+    return validate_payload(url, fetch(url, workspace=workspace, run_id=run_id, run_lease=run_lease))
 
 
 def validate_payload(url, payload):
@@ -321,10 +322,13 @@ def save_product_data(
     product_url: ParserProductUrl,
     properties: list[dict],
     prices: list[dict],
+    *, workspace=None,
 ) -> dict:
+    ParserProductProperty = workspace.model("ParserProductProperty") if workspace else globals()["ParserProductProperty"]
+    TaraProductPrice = workspace.model("TaraProductPrice") if workspace else globals()["TaraProductPrice"]
     product_key = product_url.id
     now = timezone.now()
-    today = date.today()
+    today = timezone.localdate() if workspace else date.today()
 
     property_objects = [
         ParserProductProperty(
@@ -394,7 +398,8 @@ def save_product_data(
     }
 
 
-def mark_url_failed(product_url_id: int, error: Exception) -> None:
+def mark_url_failed(product_url_id: int, error: Exception, *, workspace=None) -> None:
+    ParserProductUrl = workspace.model("ParserProductUrl") if workspace else globals()["ParserProductUrl"]
     ParserProductUrl.objects.filter(id=product_url_id).update(
         is_loaded=False,
         last_error=str(error),
@@ -402,7 +407,8 @@ def mark_url_failed(product_url_id: int, error: Exception) -> None:
     )
 
 
-def mark_url_not_found(product_url_id: int, error: Exception) -> None:
+def mark_url_not_found(product_url_id: int, error: Exception, *, workspace=None) -> None:
+    ParserProductUrl = workspace.model("ParserProductUrl") if workspace else globals()["ParserProductUrl"]
     ParserProductUrl.objects.filter(id=product_url_id).update(
         status=ParserProductUrl.STATUS_INACTIVE,
         is_loaded=False,
@@ -443,6 +449,7 @@ def parse_one_url(product_url_id: int) -> dict:
     }
 
 
+@standalone("tara")
 def parse_tara_products(
     limit: int | None = None,
     retry_failed: bool = False,

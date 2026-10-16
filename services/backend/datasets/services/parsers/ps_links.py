@@ -1,3 +1,4 @@
+from .queue_execution import standalone
 import logging
 from urllib.parse import parse_qs, urljoin, urlparse
 
@@ -177,7 +178,7 @@ def extract_category_urls(base_url):
     return result
 
 
-def extract_product_urls_from_category(category_url, base_url):
+def extract_product_urls_from_category(category_url, base_url, *, strict=False):
     result = []
     seen = set()
 
@@ -191,6 +192,8 @@ def extract_product_urls_from_category(category_url, base_url):
         try:
             html = fetch_html(page_url)
         except PsPageNotFoundError as exc:
+            if strict and page_num == 1:
+                raise
             logger.warning(
                 "PS category skipped: page not found category_url=%s page=%s error=%s",
                 category_url,
@@ -201,6 +204,8 @@ def extract_product_urls_from_category(category_url, base_url):
         except PsBlockedError:
             raise
         except Exception as exc:
+            if strict:
+                raise
             logger.exception(
                 "PS category page failed: category_url=%s page=%s error=%s",
                 category_url,
@@ -298,7 +303,10 @@ def extract_product_urls_from_category(category_url, base_url):
     return result
 
 
-def sync_ps_product_urls():
+@standalone("links")
+def sync_ps_product_urls(*, workspace=None):
+    ParserPrefix = workspace.model("ParserPrefix") if workspace else globals()["ParserPrefix"]
+    ParserProductUrl = workspace.model("ParserProductUrl") if workspace else globals()["ParserProductUrl"]
     prefixes = list(
         ParserPrefix.objects.filter(source=SOURCE)
         .order_by("id")
@@ -342,6 +350,8 @@ def sync_ps_product_urls():
                 skipped += 1
                 continue
 
+            if workspace and not categories:
+                raise RuntimeError("Empty PS regional catalog; existing links preserved")
             total_categories += len(categories)
 
             for category in categories:
@@ -349,6 +359,7 @@ def sync_ps_product_urls():
                     product_urls = extract_product_urls_from_category(
                         category_url=category["url"],
                         base_url=base_url,
+                        strict=workspace is not None,
                     )
                 except PsPageNotFoundError as exc:
                     category_not_found += 1
@@ -389,6 +400,9 @@ def sync_ps_product_urls():
                         created += 1
                     else:
                         updated += 1
+
+        if workspace and (not active_ids or skipped or category_failed or category_not_found):
+            raise RuntimeError("Incomplete PS catalog; existing links preserved")
 
         inactive_qs = ParserProductUrl.objects.filter(
             source=SOURCE,

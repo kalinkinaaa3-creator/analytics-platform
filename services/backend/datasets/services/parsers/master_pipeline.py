@@ -1,3 +1,4 @@
+from .queue_execution import master
 import logging
 import traceback
 from datetime import timedelta
@@ -20,6 +21,19 @@ from datasets.services.iprice_runtime import (
 logger = logging.getLogger("parsers.master")
 
 
+def _workspace(run):
+    from datasets.services.iprice_workspace import IPriceWorkspace
+    return IPriceWorkspace("select-market") if run._meta.app_label == "select_market" else None
+
+
+def _notify(run, message, **kwargs):
+    if _workspace(run):
+        logger.info("Select Market master %s: %s", run.pk, message)
+    else:
+        send_bitrix_message(message, **kwargs)
+
+
+
 class ParserMasterPipelineError(Exception):
     pass
 
@@ -38,6 +52,8 @@ def _publish_run_event(
     выполняющийся парсер в состояние failed.
     """
 
+    if _workspace(run):
+        return
     try:
         publish_iprice_update(
             change_type,
@@ -135,6 +151,9 @@ def _run_command(
     и запускает соответствующую management-команду.
     """
 
+    if _workspace(run):
+        from select_market.iprice_pipeline import run_step
+        return run_step(run, step_name=step_name, command_name=command_name, options=command_options or {})
     command_options = command_options or {}
     completed = list(run.result.get('completed_steps', []))
     if step_name in completed:
@@ -178,8 +197,10 @@ def _run_command(
     run.save(update_fields=['result'])
 
 
+@master
 def run_parser_master_pipeline(
     run_id: int,
+    *, workspace=None,
 ) -> dict:
     """
     Выполняет полный мастер-пайплайн парсеров.
@@ -193,6 +214,7 @@ def run_parser_master_pipeline(
         parser_failed
     """
 
+    ParserMasterPipelineRun = workspace.model("ParserMasterPipelineRun") if workspace else globals()["ParserMasterPipelineRun"]
     try:
         run = ParserMasterPipelineRun.objects.get(
             pk=run_id,
@@ -383,6 +405,7 @@ def run_parser_master_pipeline(
         )
 
         result = {
+            **run.result,
             "run_id": run.pk,
             "status": "success",
             "completed_steps": (
@@ -427,7 +450,7 @@ def run_parser_master_pipeline(
         )
 
         try:
-            send_bitrix_message(
+            _notify(run,
                 (
                     "✅ Мастер-пайплайн парсеров "
                     "завершён\n"
@@ -463,6 +486,7 @@ def run_parser_master_pipeline(
 
     except TaraPending:
         from datasets.models import TaraRun
+        TaraRun = workspace.model("TaraRun") if workspace else TaraRun
         run.refresh_from_db()
         if run.status in ('failed', 'cancelled', 'success'):
             return {'run_id': run.pk, 'status': run.status}
@@ -492,6 +516,7 @@ def run_parser_master_pipeline(
         error_text = traceback.format_exc()
 
         result = {
+            **run.result,
             "run_id": run.pk,
             "status": "failed",
             "failed_step": failed_step,
@@ -536,7 +561,7 @@ def run_parser_master_pipeline(
         )
 
         try:
-            send_bitrix_message(
+            _notify(run,
                 (
                     "❌ Мастер-пайплайн парсеров "
                     "завершился с ошибкой\n"

@@ -3,6 +3,7 @@ from django.db.models import Q
 from django.conf import settings
 from organizations.models import legacy_organization_id
 from .tara_models import TaraCoordinator, TaraItem, TaraRun, TaraFetch, TaraWorker
+from .parser_queue_models import ParserQueueCoordinator, ParserQueueEntry
 
 
 

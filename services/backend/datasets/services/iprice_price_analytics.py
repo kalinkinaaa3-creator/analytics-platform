@@ -90,7 +90,8 @@ def _percent(value):
     return value * Decimal("100")
 
 
-def get_active_price_zone_config() -> dict:
+def get_active_price_zone_config(*, workspace=None) -> dict:
+    IPricePriceZoneConfig = workspace.model('IPricePriceZoneConfig') if workspace else globals()['IPricePriceZoneConfig']
     config = (
         IPricePriceZoneConfig.objects
         .filter(is_active=True)
@@ -143,7 +144,12 @@ def activate_price_zone_config(
     above_market_threshold: Decimal,
     critical_threshold: Decimal,
     user,
+    workspace=None,
 ) -> tuple[dict, bool]:
+    IPricePriceZoneConfig = workspace.model('IPricePriceZoneConfig') if workspace else globals()['IPricePriceZoneConfig']
+    if workspace:
+        from datasets.services.iprice_snapshot_builder import _lock_snapshot_workspace
+        _lock_snapshot_workspace(workspace)
     active = (
         IPricePriceZoneConfig.objects
         .select_for_update()
@@ -152,7 +158,7 @@ def activate_price_zone_config(
         .first()
     )
 
-    current = get_active_price_zone_config() if active is None else {
+    current = get_active_price_zone_config(workspace=workspace) if active is None else {
         "id": active.id,
         "below_market_threshold": active.below_market_threshold,
         "above_market_threshold": active.above_market_threshold,
@@ -366,8 +372,9 @@ def _apply_drill_path(queryset, path, prefix=""):
     return queryset
 
 
-def _product_rows(queryset, regional_metrics=None):
+def _product_rows(queryset, regional_metrics=None, extra_fields=()):
     values = queryset.values(
+        *extra_fields,
         "id",
         "base_product_key",
         "code_1c",
@@ -424,6 +431,7 @@ def _product_rows(queryset, regional_metrics=None):
 
 
 def _with_effective_approved_rrp(queryset):
+    IPriceSnapshotApproval = queryset.model._meta.get_field('approvals').related_model
     decimal_output = DecimalField(max_digits=24, decimal_places=8)
     current_approval = (
         IPriceSnapshotApproval.objects
@@ -607,8 +615,20 @@ def build_iprice_price_analytics(
     page_size: int,
     ordering: str,
     selected_zones: list[str] | None = None,
+    hierarchy: str = 'classification',
 ) -> dict:
-    path = _validate_drill(drill_level, drill_path)
+    from datasets.services.iprice_snapshot_builder import _snapshot_workspace
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshotProduct = workspace.model('IPriceSnapshotProduct') if workspace else globals()['IPriceSnapshotProduct']
+    IPriceSnapshotRegion = workspace.model('IPriceSnapshotRegion') if workspace else globals()['IPriceSnapshotRegion']
+    group_fields = tuple(f'group_{i}' for i in range(1, 5)) if hierarchy == '1c' and workspace and workspace.code == 'select-market' else ()
+    if group_fields:
+        levels = ('root', *group_fields)
+        if drill_level not in levels or set(drill_path) != set(group_fields[:levels.index(drill_level)]):
+            raise IPricePriceAnalyticsError('Некорректный путь групп 1С.')
+        path = drill_path
+    else:
+        path = _validate_drill(drill_level, drill_path)
     queryset = IPriceSnapshotProduct.objects.filter(snapshot=snapshot)
     queryset = filter_iprice_products_queryset(
         queryset=queryset,
@@ -635,8 +655,8 @@ def build_iprice_price_analytics(
     if path:
         queryset = _apply_drill_path(queryset, path)
 
-    config = get_active_price_zone_config()
-    rows = _product_rows(queryset, regional_metrics=regional_metrics)
+    config = get_active_price_zone_config(workspace=workspace)
+    rows = _product_rows(queryset, regional_metrics=regional_metrics, extra_fields=group_fields)
     summary = _summarize_rows(rows, config)
     normalized_zones = [
         zone for zone in (selected_zones or []) if zone in ZONE_ORDER
@@ -649,7 +669,12 @@ def build_iprice_price_analytics(
         ]
         if normalized_zones else rows
     )
-    next_field, next_label = DRILL_LEVELS[drill_level]
+    if group_fields:
+        index = levels.index(drill_level)
+        next_field = group_fields[index] if index < 4 else None
+        next_label = f'Группа {index + 1}' if next_field else 'Товар'
+    else:
+        next_field, next_label = DRILL_LEVELS[drill_level]
 
     if next_field is None:
         items = []
@@ -693,7 +718,7 @@ def build_iprice_price_analytics(
         "snapshot_id": snapshot.id,
         "drill_level": drill_level,
         "drill_path": path,
-        "breadcrumb": _breadcrumb(path),
+        "breadcrumb": ([{'field': field, 'value': value, 'label': value} for field, value in path.items()] if group_fields else _breadcrumb(path)),
         "next_level": next_field,
         "next_level_label": next_label,
         "result_type": result_type,
@@ -717,6 +742,10 @@ def resolve_iprice_analytics_product_keys(
     drill_path: dict,
     selected_zones: list[str] | None = None,
 ) -> list[int]:
+    from datasets.services.iprice_snapshot_builder import _snapshot_workspace
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshotProduct = workspace.model('IPriceSnapshotProduct') if workspace else globals()['IPriceSnapshotProduct']
+    IPriceSnapshotRegion = workspace.model('IPriceSnapshotRegion') if workspace else globals()['IPriceSnapshotRegion']
     """Return the exact product scope currently selected in analytics."""
     path = _validate_drill(drill_level, drill_path)
     queryset = IPriceSnapshotProduct.objects.filter(snapshot=snapshot)
@@ -740,7 +769,7 @@ def resolve_iprice_analytics_product_keys(
     if path:
         queryset = _apply_drill_path(queryset, path)
 
-    config = get_active_price_zone_config()
+    config = get_active_price_zone_config(workspace=workspace)
     normalized_zones = {
         zone for zone in (selected_zones or []) if zone in ZONE_ORDER
     }
@@ -767,6 +796,9 @@ def build_iprice_regional_price_analytics(
     ordering: str = "",
     selected_zones: list[str] | None = None,
 ) -> dict:
+    from datasets.services.iprice_snapshot_builder import _snapshot_workspace
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshotRegion = workspace.model('IPriceSnapshotRegion') if workspace else globals()['IPriceSnapshotRegion']
     path = _normalize_optional_drill_path(drill_path)
     queryset = (
         IPriceSnapshotRegion.objects
@@ -788,11 +820,11 @@ def build_iprice_regional_price_analytics(
         prefix="snapshot_product__",
     )
 
-    config = get_active_price_zone_config()
+    config = get_active_price_zone_config(workspace=workspace)
     items = []
     for row in queryset.order_by(
         "sale_region",
-        "departure",
+        "historical_variant" if workspace else "departure",
         "snapshot_product__code_1c",
         "id",
     ):
@@ -809,7 +841,7 @@ def build_iprice_regional_price_analytics(
             "image": row.snapshot_product.image,
             "pricing_method": row.snapshot_product.pricing_method,
             "sale_region": row.sale_region,
-            "departure": row.departure,
+            "departure": getattr(row, "departure", None),
             "final_rrp": final_rrp,
             "retail_price": retail_price,
             "market_price": market_price,

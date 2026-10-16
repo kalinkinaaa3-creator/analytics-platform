@@ -19,6 +19,7 @@ VALID_SOURCES = {
 
 def get_active_classified_product_keys(
     source: str,
+    *, workspace=None,
 ) -> set[int]:
     """
     Возвращает product_key для указанного источника, которые:
@@ -31,6 +32,8 @@ def get_active_classified_product_keys(
     ParserProductUrl.id является product_key.
     """
 
+    ParserProductUrl = workspace.model("ParserProductUrl") if workspace else globals()["ParserProductUrl"]
+    ParserProductClassification = workspace.model("ParserProductClassification") if workspace else globals()["ParserProductClassification"]
     source = str(source or "").strip().casefold()
 
     if source not in VALID_SOURCES:

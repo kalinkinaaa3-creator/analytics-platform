@@ -1,3 +1,4 @@
+from .queue_execution import standalone
 import logging
 from itertools import product
 from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
@@ -447,7 +448,10 @@ def extract_variations_from_product_html(html):
     return variations
 
 
-def sync_tt_product_urls():
+@standalone("links")
+def sync_tt_product_urls(*, workspace=None):
+    ParserPrefix = workspace.model("ParserPrefix") if workspace else globals()["ParserPrefix"]
+    ParserProductUrl = workspace.model("ParserProductUrl") if workspace else globals()["ParserProductUrl"]
     prefixes = list(
         ParserPrefix.objects.filter(source=SOURCE)
         .order_by("id")
@@ -526,6 +530,9 @@ def sync_tt_product_urls():
                         created += 1
                     else:
                         updated += 1
+
+        if workspace and (not active_ids or product_failed):
+            raise RuntimeError("Incomplete TT catalog; existing links preserved")
 
         inactive_qs = ParserProductUrl.objects.filter(
             source=SOURCE,

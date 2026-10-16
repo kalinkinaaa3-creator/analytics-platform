@@ -27,6 +27,17 @@ COMPETITOR_PRICE_MODELS = {
 }
 
 
+def _source_model(legacy_model, workspace):
+    return legacy_model if workspace is None else workspace.model(legacy_model.__name__)
+
+
+def _price_rows(calculation_date, workspace):
+    if workspace is not None and workspace.code == "select-market":
+        from select_market.iprice_prices import prices_as_of
+        return prices_as_of(calculation_date)
+    return NomenclaturePrice.objects.all()
+
+
 def get_local_date(value) -> date | None:
     """
     Преобразует DateTimeField в локальную календарную дату.
@@ -79,6 +90,7 @@ def get_iprice_config(
     departure: str,
     arrival: str,
     calculation_date: date,
+    workspace=None,
 ) -> IPriceCalculationConfig | None:
     """
     Возвращает конфигурацию расчета iPrice.
@@ -95,7 +107,7 @@ def get_iprice_config(
     текущего is_active.
     """
 
-    queryset = IPriceCalculationConfig.objects.filter(
+    queryset = _source_model(IPriceCalculationConfig, workspace).objects.filter(
         product_key=product_key,
         departure__iexact=normalize_text(departure),
         arrival__iexact=normalize_text(arrival),
@@ -125,6 +137,7 @@ def get_departure_discount(
     departure: str,
     arrival: str,
     calculation_date: date,
+    workspace=None,
 ) -> DepartureDiscount | None:
     """
     Возвращает скидки для товара и производства.
@@ -143,7 +156,7 @@ def get_departure_discount(
     if not normalized_departure or not normalized_arrival:
         return None
 
-    queryset = DepartureDiscount.objects.filter(
+    queryset = _source_model(DepartureDiscount, workspace).objects.filter(
         product_key=product_key,
         departure__iexact=normalized_departure,
         arrival__iexact=normalized_arrival,
@@ -172,6 +185,7 @@ def get_transport_cost(
     departure: str,
     arrival: str,
     calculation_date: date,
+    workspace=None,
 ) -> TransportCost | None:
     """
     Возвращает стоимость перевозки для маршрута.
@@ -190,7 +204,7 @@ def get_transport_cost(
     if not normalized_departure or not normalized_arrival:
         return None
 
-    queryset = TransportCost.objects.filter(
+    queryset = _source_model(TransportCost, workspace).objects.filter(
         departure__iexact=normalized_departure,
         arrival__iexact=normalized_arrival,
     )
@@ -234,9 +248,10 @@ def normalize_text(value: str | None) -> str | None:
 
 def get_product_cost(
     *,
-    code: int,
+    code: int | str,
     departure: str,
     calculation_date: date,
+    workspace=None,
 ) -> ProductCost | None:
     """
     Возвращает себестоимость товара за месяц расчета.
@@ -262,7 +277,7 @@ def get_product_cost(
     )
 
     return (
-        ProductCost.objects
+        _source_model(ProductCost, workspace).objects
         .filter(
             date=cost_month,
             code=code,
@@ -277,9 +292,10 @@ def get_product_cost(
 
 def get_nomenclature_price(
     *,
-    code: int,
+    code: int | str,
     shipp_region: str,
     calculation_date: date,
+    workspace=None,
 ) -> NomenclaturePrice | None:
     """
     Возвращает последнюю цену 1С для кода и региона.
@@ -297,7 +313,7 @@ def get_nomenclature_price(
         return None
 
     return (
-        NomenclaturePrice.objects
+        _price_rows(calculation_date, workspace)
         .filter(
             code=code,
             shipp_region__iexact=normalized_region,
@@ -313,8 +329,9 @@ def get_nomenclature_price(
 
 def get_nomenclature_prices_by_region(
     *,
-    code: int,
+    code: int | str,
     calculation_date: date,
+    workspace=None,
 ) -> dict[str, NomenclaturePrice]:
     """
     Возвращает по одной последней цене для каждого региона.
@@ -329,7 +346,7 @@ def get_nomenclature_prices_by_region(
     """
 
     rows = (
-        NomenclaturePrice.objects
+        _price_rows(calculation_date, workspace)
         .filter(
             code=code,
             date__lte=calculation_date,
@@ -371,6 +388,7 @@ def get_competitor_price_data(
     *,
     product_key: int,
     calculation_date: date,
+    workspace=None,
 ) -> dict[str, Any] | None:
     """
     Возвращает конкурентные цены за последний доступный день.
@@ -392,7 +410,7 @@ def get_competitor_price_data(
     """
 
     product_url = (
-        ParserProductUrl.objects
+        _source_model(ParserProductUrl, workspace).objects
         .filter(
             id=product_key,
         )
@@ -425,6 +443,7 @@ def get_competitor_price_data(
     if price_model is None:
         return None
 
+    price_model = _source_model(price_model, workspace)
     base_queryset = price_model.objects.filter(
         product_key=product_key,
         date_add__date__lte=calculation_date,
@@ -584,6 +603,7 @@ def get_base_product_price(
     *,
     product_key: int,
     calculation_date: date,
+    workspace=None,
 ) -> BaseProductPrice | None:
     """
     Возвращает актуальную строку нашего товара на дату расчета.
@@ -598,7 +618,7 @@ def get_base_product_price(
     """
 
     rows = list(
-        BaseProductPrice.objects
+        _source_model(BaseProductPrice, workspace).objects
         .filter(
             product_key=product_key,
             date_add__date__lte=calculation_date,
@@ -690,7 +710,7 @@ def split_regions(
     return result
 
 
-def get_all_sale_regions() -> list[str]:
+def get_all_sale_regions(*, workspace=None) -> list[str]:
     """
     Возвращает уникальные регионы продажи из ParserPrefix.
 
@@ -700,7 +720,7 @@ def get_all_sale_regions() -> list[str]:
     result_by_key = {}
 
     values = (
-        ParserPrefix.objects
+        _source_model(ParserPrefix, workspace).objects
         .exclude(
             shipp_region__isnull=True,
         )
@@ -730,6 +750,7 @@ def get_competitor_regions(
     *,
     source: str,
     prefix: str | None,
+    workspace=None,
 ) -> dict[str, Any]:
     """
     Определяет региональную применимость конкурента.
@@ -755,7 +776,7 @@ def get_competitor_regions(
         }
 
     source_rows = list(
-        ParserPrefix.objects
+        _source_model(ParserPrefix, workspace).objects
         .filter(
             source__iexact=normalized_source,
         )

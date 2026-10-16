@@ -12,6 +12,7 @@ from config.health import health
 urlpatterns = [
     path("api/health/", health),
     path("api/v1/organizations/", include("organizations.api")),
+    path("api/v1/select-market/iprice/", include("select_market.iprice_api")),
     path("admin/", admin.site.urls),
 
     path("api/token/", LoggingTokenObtainPairView.as_view()),

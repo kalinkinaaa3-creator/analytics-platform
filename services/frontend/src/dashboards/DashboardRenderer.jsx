@@ -1,5 +1,6 @@
 import { SalesCalculatorDashboard } from "./salesCalculator/SalesCalculatorDashboard";
 import { SelectMarketSystem } from "../organizations/SelectMarketHome";
+import { SelectMarketIPrice } from "../iprice/selectMarket/SelectMarketIPrice";
 import { PlannedSalesDashboard } from "./plannedSales/PlannedSalesDashboard";
 import { ProjectGanttDashboard } from "./projects/ProjectGanttDashboard";
 import { WordstatDashboard } from "./wordstat/WordstatDashboard";
@@ -32,6 +33,9 @@ export function DashboardRenderer({
   onFiltersChange,
   publicToken = null,
 }) {
+  if (data?.dashboard?.component === "suc" && !publicToken) {
+    return <SelectMarketIPrice key={data.dashboard.id} dashboard={data.dashboard} />;
+  }
   if (data?.dashboard?.component === "sps" || data?.dashboard?.component === "suc") {
     return <SelectMarketSystem dashboard={data.dashboard} />;
   }

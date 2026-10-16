@@ -1,3 +1,4 @@
+from .queue_execution import standalone
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -401,9 +402,12 @@ def save_product_data(
     price_rows: list[dict],
     properties: list[dict],
     base_data: dict,
+    *, workspace=None,
 ) -> dict:
+    ParserProductProperty = workspace.model("ParserProductProperty") if workspace else globals()["ParserProductProperty"]
+    TtProductPrice = workspace.model("TtProductPrice") if workspace else globals()["TtProductPrice"]
     product_key = product_url.id
-    today = date.today()
+    today = timezone.localdate() if workspace else date.today()
     now = timezone.now()
 
     property_objects = [
@@ -490,7 +494,8 @@ def save_product_data(
     }
 
 
-def mark_url_failed(product_url_id: int, error: Exception) -> None:
+def mark_url_failed(product_url_id: int, error: Exception, *, workspace=None) -> None:
+    ParserProductUrl = workspace.model("ParserProductUrl") if workspace else globals()["ParserProductUrl"]
     ParserProductUrl.objects.filter(id=product_url_id).update(
         is_loaded=False,
         last_error=str(error),
@@ -498,7 +503,8 @@ def mark_url_failed(product_url_id: int, error: Exception) -> None:
     )
 
 
-def mark_url_not_found(product_url_id: int, error: Exception) -> None:
+def mark_url_not_found(product_url_id: int, error: Exception, *, workspace=None) -> None:
+    ParserProductUrl = workspace.model("ParserProductUrl") if workspace else globals()["ParserProductUrl"]
     ParserProductUrl.objects.filter(id=product_url_id).update(
         status=ParserProductUrl.STATUS_INACTIVE,
         is_loaded=False,
@@ -507,7 +513,8 @@ def mark_url_not_found(product_url_id: int, error: Exception) -> None:
     )
 
 
-def parse_one_url(product_url_id: int) -> dict:
+def parse_one_url(product_url_id: int, *, workspace=None) -> dict:
+    ParserProductUrl = workspace.model("ParserProductUrl") if workspace else globals()["ParserProductUrl"]
     product_url = ParserProductUrl.objects.get(id=product_url_id)
 
     logger.info(
@@ -551,6 +558,7 @@ def parse_one_url(product_url_id: int) -> dict:
         price_rows=price_rows,
         properties=properties,
         base_data=base_data,
+        workspace=workspace,
     )
 
     return {
@@ -561,15 +569,18 @@ def parse_one_url(product_url_id: int) -> dict:
     }
 
 
+@standalone("tt")
 def parse_tt_products(
     limit: int | None = None,
     retry_failed: bool = False,
     blocked_only: bool = False,
     workers: int | None = None,
     product_keys: set[int] | None = None,
+    *, workspace=None,
 ) -> dict:
+    ParserProductUrl = workspace.model("ParserProductUrl") if workspace else globals()["ParserProductUrl"]
     workers = workers or settings.TARA_PARSER_WORKERS
-    today = date.today()
+    today = timezone.localdate() if workspace else date.today()
 
     queryset = ParserProductUrl.objects.filter(
         source=SOURCE,
@@ -638,7 +649,7 @@ def parse_tt_products(
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         future_map = {
-            executor.submit(parse_one_url, product_url_id): product_url_id
+            executor.submit(parse_one_url, product_url_id, workspace=workspace): product_url_id
             for product_url_id in product_url_ids
         }
 
@@ -664,7 +675,7 @@ def parse_tt_products(
                 failed += 1
                 not_found += 1
 
-                mark_url_not_found(product_url_id, exc)
+                mark_url_not_found(product_url_id, exc, workspace=workspace)
 
                 logger.warning(
                     "TT product not found: product_url_id=%s error=%s",
@@ -676,7 +687,7 @@ def parse_tt_products(
                 failed += 1
                 blocked += 1
 
-                mark_url_failed(product_url_id, exc)
+                mark_url_failed(product_url_id, exc, workspace=workspace)
 
                 logger.warning(
                     "TT product blocked: product_url_id=%s error=%s",
@@ -687,7 +698,7 @@ def parse_tt_products(
             except Exception as exc:
                 failed += 1
 
-                mark_url_failed(product_url_id, exc)
+                mark_url_failed(product_url_id, exc, workspace=workspace)
 
                 logger.exception(
                     "TT product parse failed: product_url_id=%s error=%s",

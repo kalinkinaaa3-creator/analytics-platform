@@ -18,9 +18,10 @@ def _real_prefix(value):
     return None if value.endswith("_withoutprefix") else value
 
 
-def get_prefixes_by_source():
+def get_prefixes_by_source(*, workspace=None):
+    model = workspace.model("ParserPrefix") if workspace else ParserPrefix
     result = defaultdict(set)
-    rows = ParserPrefix.objects.exclude(
+    rows = model.objects.exclude(
         source__isnull=True,
     ).exclude(source="").exclude(prefix__isnull=True).exclude(prefix="").values(
         "source", "prefix"
@@ -60,12 +61,13 @@ def _normalized_url(url, prefixes):
     return normalized.lstrip("/") if hostname else None
 
 
-def build_competitor_url_groups(*, prefixes_by_source):
+def build_competitor_url_groups(*, prefixes_by_source, workspace=None):
+    model = workspace.model("ParserProductUrl") if workspace else ParserProductUrl
     groups = defaultdict(set)
     group_by_product = {}
     if not prefixes_by_source:
         return groups, group_by_product
-    rows = ParserProductUrl.objects.filter(
+    rows = model.objects.filter(
         status=ParserProductUrl.STATUS_ACTIVE,
         source__in=set(prefixes_by_source),
     ).exclude(source="base").only("id", "source", "url")

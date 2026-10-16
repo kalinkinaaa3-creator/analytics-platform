@@ -9,11 +9,15 @@ from django.conf import settings
 logger = logging.getLogger("parsers.master")
 
 
-def launch_parser_master_pipeline(run_id: int) -> int:
+def launch_parser_master_pipeline(run_id: int, *, workspace=None) -> int:
+    from .queue_execution import enabled, register_master
+    if enabled():
+        register_master(run_id, workspace=workspace)
     log_dir = settings.BASE_DIR / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    log_path = log_dir / f"parser_master_run_{run_id}.log"
+    prefix = "select-market_" if workspace and workspace.code == "select-market" else ""
+    log_path = log_dir / f"{prefix}parser_master_run_{run_id}.log"
 
     command = [
         sys.executable,
@@ -22,6 +26,9 @@ def launch_parser_master_pipeline(run_id: int) -> int:
         "--run-id",
         str(run_id),
     ]
+
+    if workspace:
+        command.extend(["--organization", workspace.code])
 
     log_file = open(
         log_path,

@@ -34,6 +34,11 @@ class IPriceCompetitorSelectionError(ValueError):
 
 
 def ensure_selection_editable(snapshot: IPriceSnapshot) -> None:
+    from datasets.services.iprice_snapshot_builder import _snapshot_workspace
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshot = workspace.model('IPriceSnapshot') if workspace else globals()['IPriceSnapshot']
+    if workspace and IPriceSnapshot.objects.filter(status='building').exists():
+        raise IPriceCompetitorSelectionError('Дождитесь завершения текущего расчёта перед изменением аналогов.')
     if snapshot.status != IPriceSnapshot.STATUS_SUCCESS:
         raise IPriceCompetitorSelectionError(
             "Состав конкурентов можно менять только в успешно рассчитанном снапшоте"
@@ -56,6 +61,9 @@ def ensure_selection_editable(snapshot: IPriceSnapshot) -> None:
 
 
 def is_selection_editable(snapshot: IPriceSnapshot) -> bool:
+    from datasets.services.iprice_snapshot_builder import _snapshot_workspace
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshot = workspace.model('IPriceSnapshot') if workspace else globals()['IPriceSnapshot']
     try:
         ensure_selection_editable(snapshot)
     except IPriceCompetitorSelectionError:
@@ -71,7 +79,13 @@ def _same_class(left, right) -> bool:
     )
 
 
-def _automatic_keys(base_product_key: int) -> set[int]:
+def _automatic_keys(base_product_key: int, *, workspace=None) -> set[int]:
+    ParserProductMatch = workspace.model('ParserProductMatch') if workspace else globals()['ParserProductMatch']
+    if workspace:
+        from django.db.models import Q
+        return set(ParserProductMatch.objects.filter(product_key_base=base_product_key).filter(
+            Q(status=ParserProductMatch.STATUS_ACTIVE) | Q(match_type=ParserProductMatch.MATCH_TYPE_AUTO)
+        ).values_list('product_key_competitor', flat=True))
     return set(
         ParserProductMatch.objects.filter(
             product_key_base=base_product_key,
@@ -80,8 +94,9 @@ def _automatic_keys(base_product_key: int) -> set[int]:
     )
 
 
-def _effective_keys(base_product_key: int) -> tuple[set[int], dict[int, str]]:
-    automatic = _automatic_keys(base_product_key)
+def _effective_keys(base_product_key: int, *, workspace=None) -> tuple[set[int], dict[int, str]]:
+    IPriceCompetitorSelectionOverride = workspace.model('IPriceCompetitorSelectionOverride') if workspace else globals()['IPriceCompetitorSelectionOverride']
+    automatic = _automatic_keys(base_product_key, workspace=workspace)
     modes = dict(
         IPriceCompetitorSelectionOverride.objects.filter(
             product_key_base=base_product_key,
@@ -102,7 +117,10 @@ def _effective_keys(base_product_key: int) -> tuple[set[int], dict[int, str]]:
 def _replace_operational_matches(
     *, base_product_key: int, competitor_keys: set[int], modes: dict[int, str],
     manual_keys: set[int] | None = None,
+    workspace=None,
 ) -> None:
+    IPriceCompetitorSelectionOverride = workspace.model('IPriceCompetitorSelectionOverride') if workspace else globals()['IPriceCompetitorSelectionOverride']
+    ParserProductMatch = workspace.model('ParserProductMatch') if workspace else globals()['ParserProductMatch']
     manual_keys = manual_keys or set()
     ParserProductMatch.objects.filter(
         product_key_base=base_product_key,
@@ -135,8 +153,11 @@ def _replace_operational_matches(
 
 
 def _replace_snapshot_competitors(
-    *, product: IPriceSnapshotProduct, competitor_keys: set[int]
+    *, product: IPriceSnapshotProduct, competitor_keys: set[int], workspace=None,
 ) -> list[Decimal]:
+    IPriceSnapshotCompetitor = workspace.model('IPriceSnapshotCompetitor') if workspace else globals()['IPriceSnapshotCompetitor']
+    IPriceSnapshotProduct = workspace.model('IPriceSnapshotProduct') if workspace else globals()['IPriceSnapshotProduct']
+    ParserProductUrl = workspace.model('ParserProductUrl') if workspace else globals()['ParserProductUrl']
     urls = {
         row.id: row
         for row in ParserProductUrl.objects.filter(
@@ -153,8 +174,9 @@ def _replace_snapshot_competitors(
         price_data = get_competitor_price_data(
             product_key=key,
             calculation_date=product.snapshot.calculation_date,
+            workspace=workspace,
         )
-        region_data = get_competitor_regions(source=url.source, prefix=url.prefix)
+        region_data = get_competitor_regions(source=url.source, prefix=url.prefix, workspace=workspace)
         calculation_price = price_data["calculation_price"] if price_data else None
         error_codes = []
         warning_codes = []
@@ -195,7 +217,15 @@ def _replace_snapshot_competitors(
 def apply_competitor_selection(
     *, snapshot_id: int, product_id: int, competitor_product_keys: list[int],
     selection_mode: str, user=None, reason: str = "",
+    workspace=None, expected_revision=None,
 ) -> dict:
+    IPriceCompetitorSelectionChange = workspace.model('IPriceCompetitorSelectionChange') if workspace else globals()['IPriceCompetitorSelectionChange']
+    IPriceCompetitorSelectionOverride = workspace.model('IPriceCompetitorSelectionOverride') if workspace else globals()['IPriceCompetitorSelectionOverride']
+    IPriceSnapshot = workspace.model('IPriceSnapshot') if workspace else globals()['IPriceSnapshot']
+    IPriceSnapshotProduct = workspace.model('IPriceSnapshotProduct') if workspace else globals()['IPriceSnapshotProduct']
+    ParserProductClassification = workspace.model('ParserProductClassification') if workspace else globals()['ParserProductClassification']
+    ParserProductMatch = workspace.model('ParserProductMatch') if workspace else globals()['ParserProductMatch']
+    ParserProductUrl = workspace.model('ParserProductUrl') if workspace else globals()['ParserProductUrl']
     allowed_modes = {
         IPriceCompetitorSelectionOverride.MODE_AUTO,
         IPriceCompetitorSelectionOverride.MODE_INCLUDE,
@@ -208,8 +238,12 @@ def apply_competitor_selection(
         raise IPriceCompetitorSelectionError("Не переданы товары конкурента")
 
     with transaction.atomic():
+        from datasets.services.iprice_snapshot_builder import _lock_snapshot_workspace
+        _lock_snapshot_workspace(workspace)
         snapshot = IPriceSnapshot.objects.select_for_update().get(pk=snapshot_id)
         ensure_selection_editable(snapshot)
+        if workspace and expected_revision is not None and snapshot.parameters.get('edit_revision', 0) != expected_revision:
+            raise IPriceCompetitorSelectionError('Расчёт изменён. Обновите карточку товара.')
         product = IPriceSnapshotProduct.objects.select_for_update().select_related(
             "snapshot"
         ).get(pk=product_id, snapshot=snapshot)
@@ -259,7 +293,7 @@ def apply_competitor_selection(
                 ),
             )
 
-        effective_keys, modes = _effective_keys(product.base_product_key)
+        effective_keys, modes = _effective_keys(product.base_product_key, workspace=workspace)
         effective_classifications = {
             row.product_key: row
             for row in ParserProductClassification.objects.filter(
@@ -282,12 +316,18 @@ def apply_competitor_selection(
             competitor_keys=effective_keys,
             modes=modes,
             manual_keys=manual_keys,
+            workspace=workspace,
         )
 
-        saved_approvals = _approval_snapshot(snapshot, product_ids={product.id})
+        if workspace and workspace.code == 'select-market':
+            saved_approvals = list(workspace.model('IPriceSnapshotApproval').objects.filter(
+                snapshot_region__snapshot_product=product).values('is_current'))
+        else:
+            saved_approvals = _approval_snapshot(snapshot, product_ids={product.id})
         prices = _replace_snapshot_competitors(
             product=product,
             competitor_keys=effective_keys,
+            workspace=workspace,
         )
         previous_method = product.pricing_method
         product.pricing_method = (
@@ -323,21 +363,33 @@ def apply_competitor_selection(
             "warning_codes", "error_codes",
         ))
 
-        original_status = snapshot.status
-        snapshot.status = IPriceSnapshot.STATUS_BUILDING
-        snapshot.save(update_fields=("status",))
-        build_iprice_snapshot_regions(
-            snapshot=snapshot,
-            snapshot_product_ids={product.id},
-        )
-        if saved_approvals:
-            _restore_approvals(
-                snapshot,
-                saved_approvals,
-                invalidate_current=True,
+        if workspace and workspace.code == 'select-market':
+            from select_market.iprice_regional_calculation import build_regions
+            from datasets.services.iprice_snapshot_approval import refresh_iprice_product_approval_summary
+            build_regions(snapshot=snapshot, snapshot_product_ids={product.id}, input_overrides={})
+            workspace.model('IPriceSnapshotApproval').objects.filter(
+                snapshot_region__snapshot_product=product, is_current=True).update(is_current=False)
+            refresh_iprice_product_approval_summary(product.id, workspace=workspace)
+        else:
+            original_status = snapshot.status
+            snapshot.status = IPriceSnapshot.STATUS_BUILDING
+            snapshot.save(update_fields=("status",))
+            build_iprice_snapshot_regions(
+                snapshot=snapshot,
+                snapshot_product_ids={product.id},
             )
-        snapshot.status = original_status
-        snapshot.save(update_fields=("status",))
+            if saved_approvals:
+                _restore_approvals(
+                    snapshot,
+                    saved_approvals,
+                    invalidate_current=True,
+                )
+            snapshot.status = original_status
+            snapshot.save(update_fields=("status",))
+
+        if workspace:
+            snapshot.parameters = {**snapshot.parameters, 'edit_revision': snapshot.parameters.get('edit_revision', 0) + 1}
+            snapshot.save(update_fields=['parameters'])
 
     return {
         "snapshot_id": snapshot.id,

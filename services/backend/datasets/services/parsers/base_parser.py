@@ -1,3 +1,4 @@
+from .queue_execution import standalone
 import logging
 import xml.etree.ElementTree as ET
 from datetime import date
@@ -21,10 +22,18 @@ SOURCE = "base"
 MISSING_FROM_MAP = "missing_from_map"
 
 YML_URL = "https://iplast.com/bitrix/catalog_export/iPrice-9j9dpp0l4w7lh.xml"
+SELECT_MARKET_YML_URL = "https://selectmarket.ru/bitrix/catalog_export/iPrice-8j9dewr42w7lh.xml"
 
 
 class BaseParserError(Exception):
     pass
+
+
+def _model(name, workspace):
+    if workspace is not None:
+        return workspace.model(name)
+    return {"BaseProductPrice": BaseProductPrice, "ParserProductProperty": ParserProductProperty,
+            "ParserProductUrl": ParserProductUrl}[name]
 
 
 def clean_text(value: Any) -> str | None:
@@ -85,11 +94,12 @@ def calc_vat_and_final_price(price: Decimal | None) -> tuple[Decimal | None, Dec
     return vat, final_price
 
 
-def fetch_yml_root():
-    logger.info("Base YML request: %s", YML_URL)
+def fetch_yml_root(*, url=None):
+    url = url or YML_URL
+    logger.info("Base YML request: %s", url)
 
     response = requests.get(
-        YML_URL,
+        url,
         timeout=120,
         headers={
             "User-Agent": "Mozilla/5.0",
@@ -112,7 +122,7 @@ def fetch_yml_root():
         raise BaseParserError(f"XML parsing failed: {exc}") from exc
 
 
-def parse_offer(offer) -> dict | None:
+def parse_offer(offer, *, workspace=None) -> dict | None:
     offer_id = clean_int(offer.get("id"))
 
     if not offer_id:
@@ -154,7 +164,7 @@ def parse_offer(offer) -> dict | None:
             continue
 
         if param_name_lower == "код товара":
-            code_1c = clean_int(param_value)
+            code_1c = workspace.product_code(param_value) if workspace is not None and workspace.code == "select-market" else clean_int(param_value)
             continue
 
         properties.append(
@@ -190,7 +200,8 @@ def parse_offer(offer) -> dict | None:
     }
 
 
-def sync_base_urls(parsed_offers: list[dict]) -> dict:
+def sync_base_urls(parsed_offers: list[dict], *, workspace=None, deactivate_missing=True) -> dict:
+    ParserProductUrl = _model("ParserProductUrl", workspace)
     active_ids = set()
 
     created = 0
@@ -224,7 +235,7 @@ def sync_base_urls(parsed_offers: list[dict]) -> dict:
             id__in=active_ids,
         )
 
-        inactivated = inactive_qs.update(
+        inactivated = (inactive_qs if deactivate_missing else inactive_qs.none()).update(
             status=ParserProductUrl.STATUS_INACTIVE,
             last_error=MISSING_FROM_MAP,
         )
@@ -237,10 +248,13 @@ def sync_base_urls(parsed_offers: list[dict]) -> dict:
     }
 
 
-def save_base_offer_data(item: dict) -> dict:
+def save_base_offer_data(item: dict, *, workspace=None) -> dict:
+    ParserProductUrl = _model("ParserProductUrl", workspace)
+    ParserProductProperty = _model("ParserProductProperty", workspace)
+    BaseProductPrice = _model("BaseProductPrice", workspace)
     product_url = item["product_url_obj"]
     product_key = product_url.id
-    today = date.today()
+    today = timezone.localdate() if workspace is not None and workspace.code == "select-market" else date.today()
     now = timezone.now()
 
     property_objects = [
@@ -314,7 +328,8 @@ def save_base_offer_data(item: dict) -> dict:
     }
 
 
-def mark_base_offer_failed(product_url: ParserProductUrl, error: Exception) -> None:
+def mark_base_offer_failed(product_url: ParserProductUrl, error: Exception, *, workspace=None) -> None:
+    ParserProductUrl = _model("ParserProductUrl", workspace)
     ParserProductUrl.objects.filter(id=product_url.id).update(
         is_loaded=False,
         last_error=str(error),
@@ -322,8 +337,19 @@ def mark_base_offer_failed(product_url: ParserProductUrl, error: Exception) -> N
     )
 
 
-def load_base_products(limit: int | None = None) -> dict:
-    root = fetch_yml_root()
+@standalone("base")
+def load_base_products(limit: int | None = None, *, workspace=None) -> dict:
+    if workspace is not None and workspace.code == "select-market":
+        from django.conf import settings
+        root = fetch_yml_root(url=getattr(settings, "SELECT_MARKET_IPRICE_YML_URL", "") or SELECT_MARKET_YML_URL)
+        with transaction.atomic():
+            from organizations.models import Organization
+            Organization.objects.select_for_update().get(code=workspace.code)
+            return _load_base_products(root, limit=limit, workspace=workspace)
+    return _load_base_products(fetch_yml_root(), limit=limit, workspace=workspace)
+
+
+def _load_base_products(root, *, limit=None, workspace=None):
 
     offers = root.findall(".//offer")
 
@@ -333,7 +359,7 @@ def load_base_products(limit: int | None = None) -> dict:
     skipped = 0
 
     for offer in offers:
-        item = parse_offer(offer)
+        item = parse_offer(offer, workspace=workspace)
 
         if not item:
             skipped += 1
@@ -341,10 +367,19 @@ def load_base_products(limit: int | None = None) -> dict:
 
         parsed_offers.append(item)
 
+    is_select_market = workspace is not None and workspace.code == "select-market"
+    if is_select_market:
+        if not parsed_offers or skipped or any(not item["code_1c"] for item in parsed_offers):
+            raise BaseParserError("YML must contain a complete nonempty catalog with product codes")
+        urls = [item["url"] for item in parsed_offers]
+        if len(set(urls)) != len(urls):
+            raise BaseParserError("YML contains duplicate product URLs")
+        if limit is not None and limit <= 0:
+            raise BaseParserError("Limit must be positive")
     if limit:
         parsed_offers = parsed_offers[:limit]
 
-    sync_result = sync_base_urls(parsed_offers)
+    sync_result = sync_base_urls(parsed_offers, workspace=workspace, deactivate_missing=not (is_select_market and limit is not None))
 
     success = 0
     failed = 0
@@ -356,15 +391,17 @@ def load_base_products(limit: int | None = None) -> dict:
         product_url = item["product_url_obj"]
 
         try:
-            saved = save_base_offer_data(item)
+            saved = save_base_offer_data(item, workspace=workspace)
 
             success += 1
             properties_total += saved["properties"]
             prices_total += saved["prices"]
 
         except Exception as exc:
+            if is_select_market:
+                raise
             failed += 1
-            mark_base_offer_failed(product_url, exc)
+            mark_base_offer_failed(product_url, exc, workspace=workspace)
 
             logger.exception(
                 "Base product save failed: product_key=%s url=%s error=%s",
@@ -389,6 +426,13 @@ def load_base_products(limit: int | None = None) -> dict:
 
     logger.info("Base products load finished: %s", result)
 
-    from sales_calculator.refresh import source_updated
-    source_updated()
+    if is_select_market:
+        from select_market.models import Product
+        codes = {item["code_1c"] for item in parsed_offers}
+        matched = Product.objects.filter(sku__in=codes).count()
+        result["matched_sps_codes"] = matched
+        result["unmatched_sps_codes"] = len(codes) - matched
+    else:
+        from sales_calculator.refresh import source_updated
+        source_updated()
     return result

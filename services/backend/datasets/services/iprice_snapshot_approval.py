@@ -61,21 +61,22 @@ def calculate_discount_price(
 
 def refresh_iprice_product_approval_summary(
     product_id: int,
+    *, workspace=None,
 ) -> IPriceSnapshotProduct:
+    IPriceSnapshotProduct = workspace.model('IPriceSnapshotProduct') if workspace else globals()['IPriceSnapshotProduct']
+    IPriceSnapshotRegion = workspace.model('IPriceSnapshotRegion') if workspace else globals()['IPriceSnapshotRegion']
+    IPriceSnapshotApproval = workspace.model('IPriceSnapshotApproval') if workspace else globals()['IPriceSnapshotApproval']
     product = IPriceSnapshotProduct.objects.get(
         pk=product_id,
     )
+    tiers = ('small', 'medium', 'large') if workspace else ('distr', 'distr_1', 'small', 'medium', 'large')
     regions = list(
         IPriceSnapshotRegion.objects.filter(
             snapshot_product_id=product_id,
         ).values(
             "id",
             "default_approved_rrp",
-            "discount_distr",
-            "discount_distr_1",
-            "discount_small",
-            "discount_medium",
-            "discount_large",
+            *('discount_' + tier for tier in tiers),
         )
     )
     approval_by_region = dict(
@@ -124,13 +125,8 @@ def refresh_iprice_product_approval_summary(
     )
     product.current_vs_approved_amount = delta
     details = dict(product.calculation_details or {})
-    for suffix, field in (
-        ("distr", "discount_distr"),
-        ("distr_1", "discount_distr_1"),
-        ("small", "discount_small"),
-        ("medium", "discount_medium"),
-        ("large", "discount_large"),
-    ):
+    for suffix in tiers:
+        field = 'discount_' + suffix
         discounts = [
             region[field]
             for region in regions
@@ -157,6 +153,11 @@ def refresh_iprice_product_approval_summary(
             str(round_price(Decimal(median(discounts))))
             if discounts else None
         )
+        if workspace:
+            from select_market.iprice_prices import whole_rubles
+            derived = [whole_rubles(Decimal(approval_by_region.get(region['id'], region['default_approved_rrp'])) * (1 - region[field]))
+                       for region in regions if approval_by_region.get(region['id'], region['default_approved_rrp']) is not None
+                       and region[field] is not None]
         details[f"effective_{suffix}_median"] = (
             str(round_price(Decimal(median(derived))))
             if derived else None
@@ -178,6 +179,7 @@ def create_iprice_snapshot_approval(
     approved_rrp: Decimal,
     approved_by: User | None = None,
     comment: str = "",
+    expected_revision: int | None = None,
 ) -> IPriceSnapshotApproval:
     """
     Создаёт новую версию ручного утверждения цены.
@@ -193,16 +195,25 @@ def create_iprice_snapshot_approval(
        через скидки, сохранённые в snapshot_region.
     """
 
+    from datasets.services.iprice_snapshot_builder import _snapshot_workspace, _lock_snapshot_workspace
+    workspace = _snapshot_workspace(snapshot_region.snapshot_product.snapshot)
+    if workspace and snapshot_region.historical_variant:
+        raise IPriceSnapshotApprovalError('Историческая строка с маршрутом доступна только для просмотра. Создайте новый расчёт.')
+    IPriceSnapshotRegion = workspace.model('IPriceSnapshotRegion') if workspace else globals()['IPriceSnapshotRegion']
+    IPriceSnapshotApproval = workspace.model('IPriceSnapshotApproval') if workspace else globals()['IPriceSnapshotApproval']
     approved_rrp = Decimal(
         approved_rrp
     )
 
-    if approved_rrp <= ZERO:
+    if not approved_rrp.is_finite() or approved_rrp <= ZERO or approved_rrp >= Decimal('100000000000000'):
         raise IPriceSnapshotApprovalError(
             "Утверждённая РРЦ должна быть больше 0"
         )
 
     with transaction.atomic():
+        _lock_snapshot_workspace(workspace)
+        if workspace and workspace.model('IPriceSnapshot').objects.filter(status='building').exists():
+            raise IPriceSnapshotApprovalError('Дождитесь завершения текущего расчёта перед изменением цены.')
         locked_region = (
             IPriceSnapshotRegion.objects
             .select_for_update()
@@ -239,6 +250,11 @@ def create_iprice_snapshot_approval(
                 )
             )
 
+        if workspace and (snapshot.is_active or snapshot.was_active):
+            raise IPriceSnapshotApprovalError('Утверждённую версию менять нельзя. Создайте новый расчёт.')
+        if workspace and (locked_region.error_codes or locked_region.calculation_status == 'error'):
+            raise IPriceSnapshotApprovalError('Сначала устраните ошибки исходных данных и пересчитайте цены.')
+
         max_revision = (
             IPriceSnapshotApproval.objects
             .filter(
@@ -249,6 +265,9 @@ def create_iprice_snapshot_approval(
             )["value"]
             or 0
         )
+
+        if expected_revision is not None and max_revision != expected_revision:
+            raise IPriceSnapshotApprovalError('Цена уже изменена другим пользователем. Обновите строку.')
 
         (
             IPriceSnapshotApproval.objects
@@ -265,6 +284,11 @@ def create_iprice_snapshot_approval(
         approved_rrp = round_price(
             approved_rrp
         )
+        if workspace:
+            from select_market.iprice_prices import whole_rubles
+            approved_rrp = whole_rubles(approved_rrp)
+            if approved_rrp <= 0:
+                raise IPriceSnapshotApprovalError('После округления цена должна быть больше нуля.')
 
         approval = (
             IPriceSnapshotApproval.objects
@@ -272,55 +296,32 @@ def create_iprice_snapshot_approval(
                 snapshot_region=locked_region,
                 revision=max_revision + 1,
                 approved_rrp=approved_rrp,
-                approved_distr=(
-                    calculate_discount_price(
-                        rrp=approved_rrp,
-                        discount=(
-                            locked_region
-                            .discount_distr
-                        ),
-                    )
-                ),
-                approved_distr_1=(
-                    calculate_discount_price(
-                        rrp=approved_rrp,
-                        discount=(
-                            locked_region
-                            .discount_distr_1
-                        ),
-                    )
-                ),
-                approved_small=(
-                    calculate_discount_price(
-                        rrp=approved_rrp,
-                        discount=(
-                            locked_region
-                            .discount_small
-                        ),
-                    )
-                ),
-                approved_medium=(
-                    calculate_discount_price(
-                        rrp=approved_rrp,
-                        discount=(
-                            locked_region
-                            .discount_medium
-                        ),
-                    )
-                ),
-                approved_large=(
-                    calculate_discount_price(
-                        rrp=approved_rrp,
-                        discount=(
-                            locked_region
-                            .discount_large
-                        ),
-                    )
-                ),
+                **{'approved_' + tier: calculate_discount_price(rrp=approved_rrp, discount=getattr(locked_region, 'discount_' + tier))
+                   for tier in (('small', 'medium', 'large') if workspace else ('distr', 'distr_1', 'small', 'medium', 'large'))},
                 approved_by=approved_by,
                 comment=comment or "",
                 is_current=True,
             )
         )
+
+        if workspace:
+            for tier in ('small', 'medium', 'large'):
+                discount = getattr(locked_region, 'discount_' + tier)
+                value = whole_rubles(approved_rrp * (1 - discount)) if discount is not None else None
+                if value is None or value <= 0:
+                    raise IPriceSnapshotApprovalError('После округления все оптовые цены должны быть больше нуля.')
+                setattr(approval, 'approved_' + tier, value)
+            from select_market.iprice_regional_calculation import prices_meet_margin
+            if not prices_meet_margin(locked_region, [approval.approved_rrp, approval.approved_small, approval.approved_medium, approval.approved_large]):
+                raise IPriceSnapshotApprovalError('После округления цена нарушает минимальную маржу.')
+            approval.save(update_fields=['approved_small', 'approved_medium', 'approved_large'])
+            if 'REAPPROVAL_REQUIRED' in locked_region.warning_codes:
+                locked_region.warning_codes = [code for code in locked_region.warning_codes if code != 'REAPPROVAL_REQUIRED']
+                locked_region.calculation_status = 'warning' if locked_region.warning_codes else 'success'
+                locked_region.save(update_fields=['warning_codes', 'calculation_status'])
+            snapshot.parameters = {**snapshot.parameters,
+                'edit_revision': snapshot.parameters.get('edit_revision', 0) + 1}
+            snapshot.save(update_fields=['parameters'])
+            refresh_iprice_product_approval_summary(locked_region.snapshot_product_id, workspace=workspace)
 
     return approval

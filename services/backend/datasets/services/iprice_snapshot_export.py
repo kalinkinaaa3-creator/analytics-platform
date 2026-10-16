@@ -98,6 +98,7 @@ def get_effective_prices(
     approval = get_current_approval(
         region
     )
+    tiers = ('small', 'medium', 'large') if region._meta.app_label == 'select_market' else ('distr', 'distr_1', 'small', 'medium', 'large')
 
     if approval is not None:
         return {
@@ -118,13 +119,7 @@ def get_effective_prices(
                 approval.comment
             ),
             "rrp": approval.approved_rrp,
-            "distr": approval.approved_distr,
-            "distr_1": (
-                approval.approved_distr_1
-            ),
-            "small": approval.approved_small,
-            "medium": approval.approved_medium,
-            "large": approval.approved_large,
+            **{tier: getattr(approval, 'approved_' + tier) for tier in tiers},
         }
 
     return {
@@ -135,11 +130,7 @@ def get_effective_prices(
         "approved_at": None,
         "approval_comment": "",
         "rrp": region.default_approved_rrp,
-        "distr": region.calculated_distr,
-        "distr_1": region.calculated_distr_1,
-        "small": region.calculated_small,
-        "medium": region.calculated_medium,
-        "large": region.calculated_large,
+        **{tier: getattr(region, 'calculated_' + tier) for tier in tiers},
     }
 
 
@@ -600,8 +591,17 @@ def export_iprice_snapshot_to_excel(
     Формирует итоговую XLSX-выгрузку snapshot.
     """
 
+    approval_model = IPriceSnapshotApproval
+    region_model = IPriceSnapshotRegion
+    is_select_market = snapshot._meta.app_label == "select_market"
+    if is_select_market:
+        from select_market.iprice_domain_models import (
+            IPriceSnapshotApproval as approval_model,
+            IPriceSnapshotRegion as region_model,
+        )
+
     current_approvals_queryset = (
-        IPriceSnapshotApproval.objects
+        approval_model.objects
         .filter(
             is_current=True,
         )
@@ -615,7 +615,7 @@ def export_iprice_snapshot_to_excel(
     )
 
     regions = list(
-        IPriceSnapshotRegion.objects
+        region_model.objects
         .filter(
             snapshot_product__snapshot=(
                 snapshot
@@ -641,7 +641,7 @@ def export_iprice_snapshot_to_excel(
         .order_by(
             "snapshot_product__code_1c",
             "sale_region",
-            "departure",
+            "historical_variant" if is_select_market else "departure",
             "id",
         )
     )
@@ -662,21 +662,27 @@ def export_iprice_snapshot_to_excel(
         regions_count=len(regions),
     )
 
-    append_prices_sheet(
-        workbook=workbook,
-        regions=regions,
-    )
-
-    append_errors_sheet(
-        workbook=workbook,
-        regions=regions,
-    )
+    if is_select_market:
+        from select_market.iprice_export import append_prices
+        append_prices(workbook=workbook, regions=regions)
+    else:
+        append_prices_sheet(workbook=workbook, regions=regions)
+        append_errors_sheet(workbook=workbook, regions=regions)
 
     file_obj = BytesIO()
 
-    workbook.save(
-        file_obj
-    )
+    if is_select_market:
+        # Source strings (including textual 1C codes) are never Excel formulas.
+        for sheet in workbook:
+            for row in sheet:
+                for cell in row:
+                    if isinstance(cell.value, str):
+                        cell.data_type = "s"
+
+    try:
+        workbook.save(file_obj)
+    finally:
+        workbook.close()
 
     file_obj.seek(0)
 

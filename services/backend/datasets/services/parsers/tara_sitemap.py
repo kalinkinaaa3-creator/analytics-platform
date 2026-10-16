@@ -1,3 +1,4 @@
+from .queue_execution import standalone
 import logging
 import re
 import xml.etree.ElementTree as ET
@@ -134,10 +135,10 @@ def is_product_url(url):
     return not any(part in path for part in ignored_parts)
 
 
-def fetch_sitemap_xml():
+def fetch_sitemap_xml(*, workspace=None, run_id=None, run_lease=None):
     from .tara_remote import fetch
     from .tara_product_parser import BrowserBlockedError, BrowserServiceError
-    payload = fetch(TARA_SITEMAP_URL)
+    payload = fetch(TARA_SITEMAP_URL, workspace=workspace, run_id=run_id, run_lease=run_lease)
     if payload.get('status') in (401,403,429,502) or payload.get('blocked') or payload.get('error'):
         raise BrowserBlockedError('Windows sitemap access unavailable')
     if payload.get('status') != 200:
@@ -183,8 +184,11 @@ def extract_urls_from_sitemap(xml_content):
     return result
 
 
-def sync_tara_sitemap_to_product_urls():
-    xml_content = fetch_sitemap_xml()
+@standalone("links")
+def sync_tara_sitemap_to_product_urls(*, workspace=None, run_id=None, run_lease=None):
+    ParserPrefix = workspace.model("ParserPrefix") if workspace else globals()["ParserPrefix"]
+    ParserProductUrl = workspace.model("ParserProductUrl") if workspace else globals()["ParserProductUrl"]
+    xml_content = fetch_sitemap_xml(workspace=workspace, run_id=run_id, run_lease=run_lease)
     sitemap_items = extract_urls_from_sitemap(xml_content)
     if not sitemap_items:
         raise RuntimeError('Sitemap contains no product URLs; existing links preserved')
@@ -212,6 +216,10 @@ def sync_tara_sitemap_to_product_urls():
     skipped = 0
 
     with transaction.atomic():
+        if workspace and run_id is not None:
+            owner = workspace.model('TaraRun').objects.select_for_update().get(pk=run_id)
+            if owner.lease != run_lease or owner.status != 'running':
+                raise RuntimeError('Tara sitemap owner changed; existing links preserved')
         for item in sitemap_items:
             base_url = item["base_url"]
             lastmod = item["lastmod"]

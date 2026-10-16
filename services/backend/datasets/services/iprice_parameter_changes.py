@@ -69,6 +69,8 @@ def parse_changes(values, fields):
             raise IPriceParameterChangeError(
                 f"Поле {field} должно быть числом"
             ) from exc
+        if not value.is_finite() or abs(value) >= Decimal('1000000'):
+            raise IPriceParameterChangeError(f'Недопустимое значение {field}')
         result[field] = value
     return result
 
@@ -102,7 +104,12 @@ def validate_changes(coefficients, discounts):
 
 
 def ensure_snapshot_parameters_editable(snapshot):
-    if snapshot.is_active:
+    from datasets.services.iprice_snapshot_builder import _snapshot_workspace
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshot = workspace.model('IPriceSnapshot') if workspace else globals()['IPriceSnapshot']
+    if workspace and IPriceSnapshot.objects.filter(status='building').exists():
+        raise IPriceParameterChangeError('Дождитесь завершения текущего расчёта перед изменением параметров.')
+    if snapshot.is_active or (workspace and snapshot.was_active):
         raise IPriceParameterChangeError(
             "Настройки ценообразования активированной версии изменять нельзя"
         )
@@ -116,6 +123,10 @@ def ensure_snapshot_parameters_editable(snapshot):
 
 
 def resolve_regions(snapshot, mode, filters, search):
+    from datasets.services.iprice_snapshot_builder import _snapshot_workspace
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshotProduct = workspace.model('IPriceSnapshotProduct') if workspace else globals()['IPriceSnapshotProduct']
+    IPriceSnapshotRegion = workspace.model('IPriceSnapshotRegion') if workspace else globals()['IPriceSnapshotRegion']
     if not filters and not str(search or "").strip():
         raise IPriceParameterChangeError(
             "Перед применением выберите хотя бы один фильтр"
@@ -145,6 +156,9 @@ def resolve_regions(snapshot, mode, filters, search):
 
 
 def preview_iprice_parameter_changes(*, snapshot, mode, filters, search):
+    if snapshot._meta.app_label == 'select_market':
+        from select_market.iprice_regional_edits import preview
+        return preview(snapshot, filters, search)
     ensure_snapshot_parameters_editable(snapshot)
     regions = resolve_regions(snapshot, mode, filters, search)
     routes = {
@@ -175,6 +189,9 @@ def preview_iprice_parameter_changes(*, snapshot, mode, filters, search):
 
 
 def _approval_snapshot(snapshot, *, product_ids=None):
+    from datasets.services.iprice_snapshot_builder import _snapshot_workspace
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshotApproval = workspace.model('IPriceSnapshotApproval') if workspace else globals()['IPriceSnapshotApproval']
     result = []
     approvals = IPriceSnapshotApproval.objects.filter(
         snapshot_region__snapshot_product__snapshot=snapshot,
@@ -208,6 +225,10 @@ def _approval_snapshot(snapshot, *, product_ids=None):
 
 
 def _restore_approvals(snapshot, saved, *, invalidate_current=False):
+    from datasets.services.iprice_snapshot_builder import _snapshot_workspace
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshotApproval = workspace.model('IPriceSnapshotApproval') if workspace else globals()['IPriceSnapshotApproval']
+    IPriceSnapshotRegion = workspace.model('IPriceSnapshotRegion') if workspace else globals()['IPriceSnapshotRegion']
     saved_keys = {values["key"] for values in saved}
     regions = {
         route_key(
@@ -274,7 +295,7 @@ def _restore_approvals(snapshot, saved, *, invalidate_current=False):
             date_add=date_add,
         )
     for product_id in regions_for_products(regions.values()):
-        refresh_iprice_product_approval_summary(product_id)
+        refresh_iprice_product_approval_summary(product_id, workspace=workspace)
 
 
 def regions_for_products(regions):
@@ -283,8 +304,19 @@ def regions_for_products(regions):
 
 def apply_iprice_parameter_changes(
     *, snapshot, mode, filters, search, coefficient_values,
-    discount_values, user,
+    discount_values, user, expected_revision=None,
 ):
+    from datasets.services.iprice_snapshot_builder import _snapshot_workspace
+    workspace = _snapshot_workspace(snapshot)
+    if workspace and workspace.code == 'select-market':
+        from select_market.iprice_regional_edits import apply
+        return apply(snapshot=snapshot, filters=filters, search=search, coefficients=coefficient_values,
+                     discounts=discount_values, user=user, expected_revision=expected_revision)
+
+    DepartureDiscount = workspace.model('DepartureDiscount') if workspace else globals()['DepartureDiscount']
+    IPriceCalculationConfig = workspace.model('IPriceCalculationConfig') if workspace else globals()['IPriceCalculationConfig']
+    IPriceParameterChangeLog = workspace.model('IPriceParameterChangeLog') if workspace else globals()['IPriceParameterChangeLog']
+    IPriceSnapshot = workspace.model('IPriceSnapshot') if workspace else globals()['IPriceSnapshot']
     coefficients = parse_changes(coefficient_values, COEFFICIENT_FIELDS)
     discounts = parse_changes(discount_values, DISCOUNT_FIELDS)
     validate_changes(coefficients, discounts)
@@ -303,8 +335,12 @@ def apply_iprice_parameter_changes(
     )
     try:
         with transaction.atomic():
+            from datasets.services.iprice_snapshot_builder import _lock_snapshot_workspace
+            _lock_snapshot_workspace(workspace)
             locked_snapshot = IPriceSnapshot.objects.select_for_update().get(pk=snapshot.pk)
             ensure_snapshot_parameters_editable(locked_snapshot)
+            if workspace and expected_revision is not None and locked_snapshot.parameters.get('edit_revision', 0) != expected_revision:
+                raise IPriceParameterChangeError('Расчёт изменён другим пользователем. Обновите предварительный просмотр.')
             selected = list(resolve_regions(
                 locked_snapshot, mode, filters, search,
             ))
@@ -406,6 +442,10 @@ def apply_iprice_parameter_changes(
                 "discounts_changed": discounts_changed,
                 "approvals_preserved": len(saved_approvals),
             }
+            if workspace:
+                locked_snapshot.parameters = {**locked_snapshot.parameters,
+                    'edit_revision': locked_snapshot.parameters.get('edit_revision', 0) + 1}
+                locked_snapshot.save(update_fields=['parameters'])
         log.affected = affected
         log.status = IPriceParameterChangeLog.STATUS_SUCCESS
         log.finished_at = timezone.now()

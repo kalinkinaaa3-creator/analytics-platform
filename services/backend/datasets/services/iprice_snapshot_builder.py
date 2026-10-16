@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import partial
+
 import traceback
 
 from datetime import date
@@ -46,6 +48,25 @@ from datasets.services.iprice_source_selector import (
 
 
 User = get_user_model()
+
+
+def _snapshot_workspace(snapshot):
+    from datasets.services.iprice_workspace import IPriceWorkspace
+    return IPriceWorkspace("select-market") if snapshot._meta.app_label == "select_market" else None
+
+
+def _lock_snapshot_workspace(workspace):
+    if workspace and workspace.code == "select-market":
+        from organizations.models import Organization
+        Organization.objects.select_for_update().get(code=workspace.code, postgres_schema="select_market")
+
+
+def _publish_snapshot(snapshot, event, **kwargs):
+    if _snapshot_workspace(snapshot):
+        return
+    from datasets.services.iprice_runtime import sync_snapshot_and_publish
+    sync_snapshot_and_publish(snapshot.pk, event, **kwargs)
+
 
 
 class IPriceSnapshotBuildError(Exception):
@@ -120,7 +141,10 @@ OUR_OFFER_PROPERTY_NAME = (
 
 def get_sam_by_product_key(
     product_keys,
+    workspace=None,
 ) -> dict[int, str | None]:
+    ParserProductProperty = workspace.model("ParserProductProperty") if workspace else globals()["ParserProductProperty"]
+
     if not product_keys:
         return {}
 
@@ -163,7 +187,10 @@ def get_sam_by_product_key(
 
 def get_our_offer_by_product_key(
     product_keys,
+    workspace=None,
 ) -> dict[int, str | None]:
+    ParserProductProperty = workspace.model("ParserProductProperty") if workspace else globals()["ParserProductProperty"]
+
     if not product_keys:
         return {}
 
@@ -388,6 +415,7 @@ def create_iprice_snapshot(
     calculation_date: date,
     created_by: User | None = None,
     parameters: dict | None = None,
+    workspace=None,
 ) -> IPriceSnapshot:
     """
     Создает новую техническую версию snapshot для calculation_date.
@@ -412,6 +440,8 @@ def create_iprice_snapshot(
        Активный окончательный snapshot назначается отдельно
        пользователем.
     """
+    IPriceSnapshot = workspace.model("IPriceSnapshot") if workspace else globals()["IPriceSnapshot"]
+
 
     if not isinstance(calculation_date, date):
         raise IPriceSnapshotBuildError(
@@ -424,6 +454,9 @@ def create_iprice_snapshot(
     with transaction.atomic():
         # Блокируем существующие snapshot, чтобы два параллельных
         # запуска не получили одинаковые номера версий.
+        _lock_snapshot_workspace(workspace)
+        if workspace and IPriceSnapshot.objects.filter(status=IPriceSnapshot.STATUS_BUILDING).exists():
+            raise IPriceSnapshotBuildError("A Select Market calculation is already building")
         existing_snapshots = (
             IPriceSnapshot.objects
             .select_for_update()
@@ -481,8 +514,12 @@ def complete_iprice_snapshot(
 
     Активный окончательный snapshot не меняется.
     """
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshot = workspace.model("IPriceSnapshot") if workspace else globals()["IPriceSnapshot"]
+
 
     with transaction.atomic():
+        _lock_snapshot_workspace(workspace)
         locked_snapshot = (
             IPriceSnapshot.objects
             .select_for_update()
@@ -548,6 +585,9 @@ def fail_iprice_snapshot(
     Предыдущий успешный is_current snapshot за эту дату
     не изменяется.
     """
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshot = workspace.model("IPriceSnapshot") if workspace else globals()["IPriceSnapshot"]
+
 
     error_text = str(error)
 
@@ -582,6 +622,7 @@ def activate_iprice_snapshot(
     *,
     snapshot: IPriceSnapshot,
     activated_by: User | None = None,
+    expected_revision: int | None = None,
 ) -> IPriceSnapshot:
     """
     Назначает snapshot единственным активным окончательным
@@ -591,8 +632,12 @@ def activate_iprice_snapshot(
     Он необязательно должен быть последним по дате расчета,
     но должен быть текущей технической версией своей даты.
     """
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshot = workspace.model("IPriceSnapshot") if workspace else globals()["IPriceSnapshot"]
+
 
     with transaction.atomic():
+        _lock_snapshot_workspace(workspace)
         locked_snapshot = (
             IPriceSnapshot.objects
             .select_for_update()
@@ -617,6 +662,15 @@ def activate_iprice_snapshot(
                     "calculation date can be activated"
                 )
             )
+
+        if workspace:
+            from select_market.iprice_activation import validate_activation
+            if expected_revision is not None and locked_snapshot.parameters.get('edit_revision', 0) != expected_revision:
+                raise IPriceSnapshotBuildError('Расчёт изменён другим пользователем. Обновите данные перед утверждением.')
+            validate_activation(locked_snapshot)
+            if locked_snapshot.is_active:
+                return locked_snapshot
+            previous_ids = list(IPriceSnapshot.objects.filter(is_active=True).values_list('pk', flat=True))
 
         (
             IPriceSnapshot.objects
@@ -648,16 +702,32 @@ def activate_iprice_snapshot(
             ]
         )
 
+        if workspace:
+            parameters = dict(locked_snapshot.parameters or {})
+            history = list(parameters.get('activation_history', []))
+            history.append({'at': locked_snapshot.activated_at.isoformat(),
+                'user_id': activated_by.pk if activated_by else None,
+                'username': activated_by.get_username() if activated_by else None,
+                'previous_snapshot_ids': previous_ids})
+            parameters['activation_history'] = history
+            locked_snapshot.parameters = parameters
+            locked_snapshot.save(update_fields=['parameters'])
+
     return locked_snapshot
 
 
 def deactivate_iprice_snapshot(
     *,
     snapshot: IPriceSnapshot,
+    deactivated_by: User | None = None,
 ) -> IPriceSnapshot:
     """Снимает с snapshot признак окончательной активной версии."""
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshot = workspace.model("IPriceSnapshot") if workspace else globals()["IPriceSnapshot"]
+
 
     with transaction.atomic():
+        _lock_snapshot_workspace(workspace)
         locked_snapshot = (
             IPriceSnapshot.objects
             .select_for_update()
@@ -680,13 +750,24 @@ def deactivate_iprice_snapshot(
             ]
         )
 
+        if workspace:
+            parameters = dict(locked_snapshot.parameters or {})
+            history = list(parameters.get('activation_history', []))
+            history.append({'action': 'deactivate', 'at': timezone.now().isoformat(),
+                'user_id': deactivated_by.pk if deactivated_by else None,
+                'username': deactivated_by.get_username() if deactivated_by else None,
+                'previous_snapshot_ids': [locked_snapshot.pk]})
+            locked_snapshot.parameters = {**parameters, 'activation_history': history}
+            locked_snapshot.save(update_fields=['parameters'])
+
     return locked_snapshot
 
 
 def get_current_retail_summary(
     *,
-    code_1c: int,
+    code_1c: int | str,
     calculation_date: date,
+    workspace=None,
 ) -> dict:
     """
     Берет retail только для регионов продажи,
@@ -698,6 +779,9 @@ def get_current_retail_summary(
 
     Возвращает min/max/median и исходные значения.
     """
+    get_all_sale_regions = partial(globals()["get_all_sale_regions"], workspace=workspace)
+    get_nomenclature_price = partial(globals()["get_nomenclature_price"], workspace=workspace)
+
 
     sale_regions = get_all_sale_regions()
 
@@ -756,6 +840,24 @@ def build_iprice_snapshot_products(
 
     Региональные строки здесь не создаются.
     """
+    workspace = _snapshot_workspace(snapshot)
+    if workspace and workspace.code == 'select-market':
+        from select_market.iprice_catalog import build_products
+        return build_products(snapshot)
+    IPriceSnapshot = workspace.model("IPriceSnapshot") if workspace else globals()["IPriceSnapshot"]
+    IPriceSnapshotCompetitor = workspace.model("IPriceSnapshotCompetitor") if workspace else globals()["IPriceSnapshotCompetitor"]
+    IPriceSnapshotProduct = workspace.model("IPriceSnapshotProduct") if workspace else globals()["IPriceSnapshotProduct"]
+    Nomenclature = workspace.model("Nomenclature") if workspace else globals()["Nomenclature"]
+    ParserProductClassification = workspace.model("ParserProductClassification") if workspace else globals()["ParserProductClassification"]
+    ParserProductMatch = workspace.model("ParserProductMatch") if workspace else globals()["ParserProductMatch"]
+    ParserProductUrl = workspace.model("ParserProductUrl") if workspace else globals()["ParserProductUrl"]
+    get_base_product_price = partial(globals()["get_base_product_price"], workspace=workspace)
+    get_competitor_price_data = partial(globals()["get_competitor_price_data"], workspace=workspace)
+    get_competitor_regions = partial(globals()["get_competitor_regions"], workspace=workspace)
+    get_current_retail_summary = partial(globals()["get_current_retail_summary"], workspace=workspace)
+    get_our_offer_by_product_key = partial(globals()["get_our_offer_by_product_key"], workspace=workspace)
+    get_sam_by_product_key = partial(globals()["get_sam_by_product_key"], workspace=workspace)
+
 
     if (
         snapshot.status
@@ -1432,11 +1534,14 @@ def get_product_departures(
     *,
     product_key: int,
     calculation_date: date,
+    workspace=None,
 ) -> list[str]:
     """
     Возвращает производства товара из конфигураций,
     применимых на дату расчёта.
     """
+    IPriceCalculationConfig = workspace.model("IPriceCalculationConfig") if workspace else globals()["IPriceCalculationConfig"]
+
 
     queryset = IPriceCalculationConfig.objects.filter(
         product_key=product_key,
@@ -1511,6 +1616,23 @@ def build_iprice_snapshot_regions(
     8. Рассчитываем предварительную и итоговую РРЦ.
     9. Рассчитываем типы цен.
     """
+    workspace = _snapshot_workspace(snapshot)
+    if workspace and workspace.code == 'select-market':
+        from select_market.iprice_regional_calculation import build_regions
+        return build_regions(snapshot=snapshot, snapshot_product_ids=snapshot_product_ids)
+    IPriceSnapshot = workspace.model("IPriceSnapshot") if workspace else globals()["IPriceSnapshot"]
+    IPriceSnapshotCompetitor = workspace.model("IPriceSnapshotCompetitor") if workspace else globals()["IPriceSnapshotCompetitor"]
+    IPriceSnapshotProduct = workspace.model("IPriceSnapshotProduct") if workspace else globals()["IPriceSnapshotProduct"]
+    IPriceSnapshotRegion = workspace.model("IPriceSnapshotRegion") if workspace else globals()["IPriceSnapshotRegion"]
+    Nomenclature = workspace.model("Nomenclature") if workspace else globals()["Nomenclature"]
+    get_all_sale_regions = partial(globals()["get_all_sale_regions"], workspace=workspace)
+    get_departure_discount = partial(globals()["get_departure_discount"], workspace=workspace)
+    get_iprice_config = partial(globals()["get_iprice_config"], workspace=workspace)
+    get_nomenclature_price = partial(globals()["get_nomenclature_price"], workspace=workspace)
+    get_product_cost = partial(globals()["get_product_cost"], workspace=workspace)
+    get_product_departures = partial(globals()["get_product_departures"], workspace=workspace)
+    get_transport_cost = partial(globals()["get_transport_cost"], workspace=workspace)
+
 
     if (
         snapshot.status
@@ -2538,6 +2660,10 @@ def validate_iprice_snapshot_result(
     - товаров snapshot;
     - региональных строк snapshot.
     """
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshot = workspace.model("IPriceSnapshot") if workspace else globals()["IPriceSnapshot"]
+    IPriceSnapshotRegion = workspace.model("IPriceSnapshotRegion") if workspace else globals()["IPriceSnapshotRegion"]
+
 
     products_count = (
         snapshot.products.count()
@@ -2620,6 +2746,11 @@ def send_iprice_snapshot_success_message(
     """
     Отправляет итог успешного построения snapshot.
     """
+    if _snapshot_workspace(snapshot):
+        return
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshot = workspace.model("IPriceSnapshot") if workspace else globals()["IPriceSnapshot"]
+
 
     validation = result["validation"]
 
@@ -2655,6 +2786,11 @@ def send_iprice_snapshot_error_message(
     """
     Отправляет сообщение об ошибке построения snapshot.
     """
+    if _snapshot_workspace(snapshot):
+        return
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshot = workspace.model("IPriceSnapshot") if workspace else globals()["IPriceSnapshot"]
+
 
     message = (
         "Ошибка построения iPrice snapshot\n"
@@ -2680,6 +2816,9 @@ def build_created_iprice_snapshot(
 
     Snapshot должен находиться в статусе building.
     """
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshot = workspace.model("IPriceSnapshot") if workspace else globals()["IPriceSnapshot"]
+
 
     if (
         snapshot.status
@@ -2788,12 +2927,8 @@ def build_created_iprice_snapshot(
             snapshot=snapshot,
         )
 
-        from datasets.services.iprice_runtime import (
-            sync_snapshot_and_publish,
-        )
-
-        sync_snapshot_and_publish(
-            snapshot.id,
+        _publish_snapshot(
+            snapshot,
             "snapshot_finished",
         )
 
@@ -2858,12 +2993,8 @@ def build_created_iprice_snapshot(
             error=exc,
         )
 
-        from datasets.services.iprice_runtime import (
-            sync_snapshot_and_publish,
-        )
-
-        sync_snapshot_and_publish(
-            snapshot.id,
+        _publish_snapshot(
+            snapshot,
             "snapshot_failed",
             metadata_only=True,
         )
@@ -2889,6 +3020,7 @@ def build_iprice_snapshot(
     calculation_date: date,
     created_by=None,
     parameters: dict | None = None,
+    workspace=None,
 ) -> dict:
     """
     Создает snapshot и выполняет полный расчет.
@@ -2896,6 +3028,8 @@ def build_iprice_snapshot(
     Используется management-командой при ручном запуске
     только по дате.
     """
+    create_iprice_snapshot = partial(globals()["create_iprice_snapshot"], workspace=workspace)
+
 
     if parameters is None:
         parameters = {}

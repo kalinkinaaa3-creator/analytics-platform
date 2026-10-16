@@ -8,6 +8,7 @@ from django.conf import settings
 def launch_iprice_snapshot(
     *,
     snapshot_id: int,
+    workspace=None,
 ) -> int:
     """
     Запускает расчет snapshot отдельным процессом.
@@ -26,9 +27,10 @@ def launch_iprice_snapshot(
         exist_ok=True,
     )
 
+    is_select_market = workspace is not None and workspace.code == 'select-market'
     log_path = (
         log_dir
-        / f"snapshot_{snapshot_id}.log"
+        / f"{'select-market_' if is_select_market else ''}snapshot_{snapshot_id}.log"
     )
 
     command = [
@@ -37,7 +39,7 @@ def launch_iprice_snapshot(
             settings.BASE_DIR
             / "manage.py"
         ),
-        "build_iprice_snapshot",
+        "build_select_market_snapshot" if is_select_market else "build_iprice_snapshot",
         "--snapshot-id",
         str(snapshot_id),
     ]
@@ -59,8 +61,7 @@ def launch_iprice_snapshot(
             env=os.environ.copy(),
         )
 
-    except Exception:
+    finally:
         log_file.close()
-        raise
 
     return process.pid

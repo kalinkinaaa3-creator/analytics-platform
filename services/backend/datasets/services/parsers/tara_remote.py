@@ -11,6 +11,31 @@ from django.utils import timezone
 from datasets.models import TaraFetch, TaraWorker, TaraRun
 
 
+def worker_workspace():
+    """The server chooses the organization from the occupied slot, never the worker."""
+    if not getattr(settings, 'PARSER_SHARED_QUEUE_ENABLED', False):
+        return None
+    from datasets.parser_queue_models import ParserQueueEntry
+    from datasets.services.iprice_workspace import workspace_for
+    entry = ParserQueueEntry.objects.filter(status__in=('running', 'waiting_remote')).select_related('organization').first()
+    return workspace_for(entry.organization) if entry and entry.organization.code == 'select-market' else None
+
+
+def result_workspace(task_id, token):
+    """Old workers echo the token; it disambiguates equal IDs without protocol changes."""
+    if not isinstance(token, str) or len(token) != 32:
+        raise ValueError('Invalid task token')
+    if not getattr(settings, 'PARSER_SHARED_QUEUE_ENABLED', False):
+        return None
+    from datasets.services.iprice_workspace import IPriceWorkspace
+    local = IPriceWorkspace('select-market')
+    matches = [workspace for workspace, model in ((None, TaraFetch), (local, local.model('TaraFetch')))
+               if model.objects.filter(pk=task_id, token=token).exists()]
+    if len(matches) != 1:
+        raise ValueError('Unknown or ambiguous task token')
+    return matches[0]
+
+
 
 
 def allowed_url(url):
@@ -26,13 +51,31 @@ def available():
     return TaraWorker.objects.filter(pk=1, ready=True, heartbeat__gt=timezone.now()-timedelta(seconds=90)).exists()
 
 
-def fetch(url):
+def _require_capacity(run, workspace):
+    if workspace is None or workspace.code == 'iplast':
+        return
+    from datasets.parser_queue_models import ParserQueueEntry
+    if not getattr(settings, 'PARSER_SHARED_QUEUE_ENABLED', False):
+        raise ValueError('Shared parser queue is disabled')
+    kind, run_id = ('master', run.master_id) if run.master_id else ('tara', run.pk)
+    if not ParserQueueEntry.objects.filter(organization__code=workspace.code,
+            kind=kind, run_id=run_id, status__in=('running', 'waiting_remote')).exists():
+        raise ValueError('Tara run does not own shared parser capacity')
+
+
+def fetch(url, *, workspace=None, run_id=None, run_lease=None):
+    TaraRun = workspace.model("TaraRun") if workspace else globals()["TaraRun"]
+    TaraFetch = workspace.model("TaraFetch") if workspace else globals()["TaraFetch"]
     from .tara_product_parser import BrowserBlockedError
     if not allowed_url(url) or not available():
         raise BrowserBlockedError('Windows executor is unavailable')
-    run = TaraRun.objects.filter(status='running').first()
+    runs = TaraRun.objects.filter(status='running')
+    if run_id is not None:
+        runs = runs.filter(pk=run_id, lease=run_lease)
+    run = runs.first()
     if not run:
         raise BrowserBlockedError('No active Tara run')
+    _require_capacity(run, workspace)
     task = TaraFetch.objects.create(run=run, run_lease=run.lease, url=url,
                                    expires_at=timezone.now()+timedelta(seconds=360))
     try:
@@ -40,6 +83,7 @@ def fetch(url):
         while time.monotonic() < deadline:
             if not TaraRun.objects.filter(pk=run.pk, lease=run.lease, status='running').exists():
                 raise BrowserBlockedError('Run no longer active')
+            _require_capacity(run, workspace)
             task.refresh_from_db()
             if task.status == 'done':
                 return task.payload
@@ -52,7 +96,9 @@ def fetch(url):
 
 
 @transaction.atomic
-def claim(owner, ready, pull=True):
+def claim(owner, ready, pull=True, *, workspace=None):
+    TaraRun = workspace.model("TaraRun") if workspace else globals()["TaraRun"]
+    TaraFetch = workspace.model("TaraFetch") if workspace else globals()["TaraFetch"]
     from .tara_jobs import coordinator_lock
     coordinator_lock()
     now = timezone.now()
@@ -70,10 +116,15 @@ def claim(owner, ready, pull=True):
     # Resume the same run, never replace its progress or extend the waiting deadline.
     TaraRun.objects.filter(status='waiting_session', wait_until__gt=now).update(status='queued', error='')
     count = TaraFetch.objects.filter(status='claimed', expires_at__gt=now).count()
+    if getattr(settings, 'PARSER_SHARED_QUEUE_ENABLED', False):
+        from datasets.services.iprice_workspace import IPriceWorkspace
+        other = IPriceWorkspace('iplast' if workspace and workspace.code == 'select-market' else 'select-market')
+        count += other.model('TaraFetch').objects.filter(status='claimed', expires_at__gt=now).count()
     tasks = list(TaraFetch.objects.select_for_update().filter(status='pending', expires_at__gt=now,
                  run__status='running').order_by('id')[:max(0,5-count)])
     result = []
     for task in tasks:
+        _require_capacity(task.run, workspace)
         if task.run.lease != task.run_lease:
             task.status = 'expired'
         else:
@@ -84,9 +135,12 @@ def claim(owner, ready, pull=True):
 
 
 @transaction.atomic
-def complete(task_id, token, payload):
+def complete(task_id, token, payload, *, workspace=None):
+    TaraRun = workspace.model("TaraRun") if workspace else globals()["TaraRun"]
+    TaraFetch = workspace.model("TaraFetch") if workspace else globals()["TaraFetch"]
     task = TaraFetch.objects.select_for_update().get(pk=task_id)
     run = TaraRun.objects.select_for_update().get(pk=task.run_id)
+    _require_capacity(run, workspace)
     if task.token != token or task.expires_at <= timezone.now() or run.status != 'running' or run.lease != task.run_lease:
         raise ValueError('Expired task')
     if task.status == 'done':

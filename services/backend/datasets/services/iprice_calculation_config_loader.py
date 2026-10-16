@@ -36,6 +36,10 @@ REQUIRED_COLUMNS = (
 )
 
 
+def _model(name, workspace):
+    return workspace.model(name) if workspace is not None else globals()[name]
+
+
 def clean_text(value):
     if value is None:
         return None
@@ -62,7 +66,7 @@ def clean_product_key(value):
         decimal_value = Decimal(str(value).strip())
     except (InvalidOperation, TypeError, ValueError):
         return None
-    if decimal_value != decimal_value.to_integral_value():
+    if not decimal_value.is_finite() or decimal_value != decimal_value.to_integral_value():
         return None
     result = int(decimal_value)
     return result if result > 0 else None
@@ -122,22 +126,22 @@ def get_row_value(row, header_map, column_name):
     return row[column_index] if column_index < len(row) else None
 
 
-def build_validation_context(product_keys):
+def build_validation_context(product_keys, *, workspace=None):
     classifications = {
         row.product_key: row
-        for row in ParserProductClassification.objects.filter(
+        for row in _model("ParserProductClassification", workspace).objects.filter(
             product_key__in=product_keys,
             status=ParserProductClassification.STATUS_ACTIVE,
         )
     }
     urls = {
         row.id: row
-        for row in ParserProductUrl.objects.filter(id__in=product_keys)
+        for row in _model("ParserProductUrl", workspace).objects.filter(id__in=product_keys)
     }
 
     code_by_product = {}
     price_rows = (
-        BaseProductPrice.objects.filter(product_key__in=product_keys)
+        _model("BaseProductPrice", workspace).objects.filter(product_key__in=product_keys)
         .exclude(code_1c__isnull=True)
         .order_by("product_key", "-date_add", "-id")
         .values_list("product_key", "code_1c")
@@ -147,18 +151,18 @@ def build_validation_context(product_keys):
 
     arrivals = {
         normalize_key(value): value
-        for value in get_all_sale_regions()
+        for value in get_all_sale_regions(workspace=workspace)
     }
     costs = {
         (code, normalize_key(departure)): departure
-        for code, departure in ProductCost.objects.filter(
+        for code, departure in _model("ProductCost", workspace).objects.filter(
             code__in=set(code_by_product.values())
         ).values_list("code", "departure")
         if normalize_key(departure)
     }
     routes = {
         (normalize_key(departure), normalize_key(arrival))
-        for departure, arrival in TransportCost.objects.filter(
+        for departure, arrival in _model("TransportCost", workspace).objects.filter(
             is_active=True,
         ).values_list("departure", "arrival")
         if normalize_key(departure) and normalize_key(arrival)
@@ -188,7 +192,7 @@ def validate_row(row, context):
         errors.append("arrival должен быть заполнен и не равен '-'")
 
     classification = context["classifications"].get(product_key)
-    if product_key is not None and classification is None:
+    if classification is None:
         errors.append("нет активной строки parser_product_classification")
     elif classification.item_type not in {
         ParserProductClassification.ITEM_TYPE_PRODUCT,
@@ -197,7 +201,7 @@ def validate_row(row, context):
         errors.append("item_type в parser_product_classification некорректен")
 
     url = context["urls"].get(product_key)
-    if product_key is not None and url is None:
+    if url is None:
         errors.append("product_key отсутствует в parser_product_url")
     elif url.status != ParserProductUrl.STATUS_ACTIVE:
         errors.append("parser_product_url не активен")
@@ -249,7 +253,7 @@ def validate_row(row, context):
     row["code_1c"] = code_1c
 
 
-def read_config_rows_from_xlsx(file_obj):
+def read_config_rows_from_xlsx(file_obj, *, workspace=None):
     validate_file_extension(file_obj)
     try:
         if hasattr(file_obj, "seek"):
@@ -287,7 +291,7 @@ def read_config_rows_from_xlsx(file_obj):
             raise ValueError("Excel не содержит строк конфигурации")
 
         product_keys = {row["product_key"] for row in rows if row["product_key"]}
-        context = build_validation_context(product_keys)
+        context = build_validation_context(product_keys, workspace=workspace)
         configs = {}
         for row in rows:
             validate_row(row, context)
@@ -304,9 +308,9 @@ def read_config_rows_from_xlsx(file_obj):
             configs[key] = row
 
         active_base_keys = set(
-            ParserProductClassification.objects.filter(
+            _model("ParserProductClassification", workspace).objects.filter(
                 status=ParserProductClassification.STATUS_ACTIVE,
-                product_key__in=ParserProductUrl.objects.filter(
+                product_key__in=_model("ParserProductUrl", workspace).objects.filter(
                     status=ParserProductUrl.STATUS_ACTIVE,
                     source="base",
                 ).values_list("id", flat=True),
@@ -359,8 +363,8 @@ def discount_values_equal(discount, row):
     )
 
 
-def load_iprice_calculation_config_from_xlsx(file_obj) -> dict:
-    configs = read_config_rows_from_xlsx(file_obj)
+def load_iprice_calculation_config_from_xlsx(file_obj, *, workspace=None) -> dict:
+    configs = read_config_rows_from_xlsx(file_obj, workspace=workspace)
     created = []
     unchanged = []
     deactivated = 0
@@ -370,10 +374,10 @@ def load_iprice_calculation_config_from_xlsx(file_obj) -> dict:
 
     with transaction.atomic():
         active_rows = list(
-            IPriceCalculationConfig.objects.select_for_update().filter(is_active=True)
+            _model("IPriceCalculationConfig", workspace).objects.select_for_update().filter(is_active=True)
         )
         active_discounts = list(
-            DepartureDiscount.objects.select_for_update().filter(
+            _model("DepartureDiscount", workspace).objects.select_for_update().filter(
                 is_active=True,
             )
         )
@@ -405,7 +409,7 @@ def load_iprice_calculation_config_from_xlsx(file_obj) -> dict:
                 continue
             if current is not None:
                 deactivate_ids.append(current.id)
-            create_rows.append(IPriceCalculationConfig(
+            create_rows.append(_model("IPriceCalculationConfig", workspace)(
                 product_key=config["product_key"],
                 departure=config["departure"],
                 arrival=config["arrival"],
@@ -423,7 +427,7 @@ def load_iprice_calculation_config_from_xlsx(file_obj) -> dict:
             else:
                 if current_discount is not None:
                     discount_deactivate_ids.append(current_discount.id)
-                discount_create_rows.append(DepartureDiscount(
+                discount_create_rows.append(_model("DepartureDiscount", workspace)(
                     product_key=config["product_key"],
                     departure=config["departure"],
                     arrival=config["arrival"],
@@ -463,7 +467,7 @@ def load_iprice_calculation_config_from_xlsx(file_obj) -> dict:
                 continue
             if current_discount is not None:
                 discount_deactivate_ids.append(current_discount.id)
-            discount_create_rows.append(DepartureDiscount(
+            discount_create_rows.append(_model("DepartureDiscount", workspace)(
                 product_key=config["product_key"],
                 departure=config["departure"],
                 arrival=config["arrival"],
@@ -486,23 +490,23 @@ def load_iprice_calculation_config_from_xlsx(file_obj) -> dict:
         )
         deactivate_ids = sorted(set(deactivate_ids))
         if deactivate_ids:
-            deactivated = IPriceCalculationConfig.objects.filter(
+            deactivated = _model("IPriceCalculationConfig", workspace).objects.filter(
                 id__in=deactivate_ids,
                 is_active=True,
             ).update(is_active=False)
         if create_rows:
-            created = IPriceCalculationConfig.objects.bulk_create(
+            created = _model("IPriceCalculationConfig", workspace).objects.bulk_create(
                 create_rows,
                 batch_size=1000,
             )
         discount_deactivate_ids = sorted(set(discount_deactivate_ids))
         if discount_deactivate_ids:
-            discounts_deactivated = DepartureDiscount.objects.filter(
+            discounts_deactivated = _model("DepartureDiscount", workspace).objects.filter(
                 id__in=discount_deactivate_ids,
                 is_active=True,
             ).update(is_active=False)
         if discount_create_rows:
-            discounts_created = DepartureDiscount.objects.bulk_create(
+            discounts_created = _model("DepartureDiscount", workspace).objects.bulk_create(
                 discount_create_rows,
                 batch_size=1000,
             )

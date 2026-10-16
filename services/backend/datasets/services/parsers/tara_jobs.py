@@ -17,9 +17,20 @@ from django.utils import timezone
 
 from analytics.services.bitrix_notify import send_bitrix_message
 from datasets.models import ParserMasterPipelineRun, ParserProductUrl, TaraCoordinator, TaraItem, TaraRun
+from .queue_execution import tara as queue_tara, tara_can_dispatch, dispatch_waiting_masters, enabled as shared_queue_enabled, register_tara
 
 logger = logging.getLogger('parsers.tara')
 TERMINAL = ('success', 'failed', 'cancelled')
+
+
+def _workspace(run):
+    from datasets.services.iprice_workspace import IPriceWorkspace
+    return IPriceWorkspace('select-market') if run._meta.app_label == 'select_market' else None
+
+
+def _model(name, workspace):
+    return workspace.model(name) if workspace else globals()[name]
+
 
 
 class TaraPending(Exception):
@@ -27,7 +38,8 @@ class TaraPending(Exception):
 
 
 @contextmanager
-def keep_alive(run_id, lease):
+def keep_alive(run_id, lease, *, workspace=None):
+    TaraRun = _model("TaraRun", workspace)
     """Keep synchronous sitemap/image work from being reclaimed as a dead job."""
     stopped = Event()
 
@@ -61,6 +73,9 @@ def coordinator_lock():
 
 
 def notify(run, message):
+    if _workspace(run):
+        logger.info("Select Market Tara run %s: %s", run.pk, message)
+        return
     try:
         send_bitrix_message(
             f'[b]Тара: запуск #{run.pk}[/b]\n{message}\n{settings.TARA_DASHBOARD_URL}',
@@ -71,6 +86,8 @@ def notify(run, message):
 
 
 def publish(run):
+    if _workspace(run):
+        return  # Organization-local events are connected with the React integration.
     from datasets.services.iprice_runtime import publish_iprice_update
     try:
         publish_iprice_update('parser_tara_progress', run_id=run.master_id,
@@ -91,8 +108,19 @@ def progress(run):
             'classified_only': bool(run.options.get('classified_only'))}
 
 
-def create_run(*, request_key, origin='cli', master_id=None, options=None):
+def create_run(*, request_key, origin='cli', master_id=None, options=None, workspace=None):
+    TaraRun = _model('TaraRun', workspace)
+    if workspace and workspace.code == 'select-market':
+        if not shared_queue_enabled():
+            raise ValueError('Shared parser queue is disabled')
+        if master_id is not None and not workspace.model('ParserMasterPipelineRun').objects.filter(pk=master_id, status='running').exists():
+            raise ValueError('Active Select Market master is required')
     options = dict(options or {})
+    if workspace:
+        if options.get('limit') is not None and (type(options['limit']) is not int or options['limit'] <= 0):
+            raise ValueError('limit must be a positive integer')
+        if options.get('workers') is not None and (type(options['workers']) is not int or not 1 <= options['workers'] <= 5):
+            raise ValueError('workers must be between 1 and 5')
     with transaction.atomic():
         coordinator_lock()
         existing = TaraRun.objects.filter(request_key=request_key).first()
@@ -105,16 +133,21 @@ def create_run(*, request_key, origin='cli', master_id=None, options=None):
                                      phase='sitemap' if options.get('sitemap') else 'products')
         if run.phase == 'products':
             populate(run)
+        register_tara(run)
         return run
 
 
 def populate(run):
     """Exactly the existing daily/classification selection; evaluated once."""
     from datasets.services.parsers.product_key_selector import get_active_classified_product_keys
+    workspace = _workspace(run)
+    ParserProductUrl = _model("ParserProductUrl", workspace)
+    TaraRun = _model("TaraRun", workspace)
+    TaraItem = _model("TaraItem", workspace)
     qs = ParserProductUrl.objects.filter(source='tara', status=ParserProductUrl.STATUS_ACTIVE)
     opts = run.options
     if opts.get('classified_only'):
-        qs = qs.filter(id__in=get_active_classified_product_keys('tara'))
+        qs = qs.filter(id__in=get_active_classified_product_keys('tara', workspace=workspace))
     if opts.get('retry_failed'):
         qs = qs.filter(is_loaded=False, last_error__isnull=False)
         if run.master_id:
@@ -132,6 +165,8 @@ def populate(run):
 
 
 def set_waiting(run, message):
+    TaraRun = type(run)
+    ParserMasterPipelineRun = _model("ParserMasterPipelineRun", _workspace(run))
     message = 'Ожидается Windows-исполнитель. Откройте служебную вкладку Chromium и запустите исполнитель.'
     with transaction.atomic():
         current = TaraRun.objects.select_for_update().get(pk=run.pk)
@@ -152,6 +187,8 @@ def set_waiting(run, message):
 
 
 def finish(run, status, error='', *, force=False):
+    TaraRun = type(run)
+    ParserMasterPipelineRun = _model("ParserMasterPipelineRun", _workspace(run))
     with transaction.atomic():
         current = TaraRun.objects.select_for_update().get(pk=run.pk)
         if current.status in TERMINAL:
@@ -193,7 +230,10 @@ def kick():
 
 
 
-def recover_master_processes():
+def recover_master_processes(*, workspace=None):
+    ParserMasterPipelineRun = _model("ParserMasterPipelineRun", workspace)
+    TaraRun = _model("TaraRun", workspace)
+    prefix = "select-market-" if workspace else ""
     """A released OS lock distinguishes a crashed master from a slow live one."""
     if os.name != 'posix':
         return
@@ -201,7 +241,7 @@ def recover_master_processes():
     lock_dir = Path(settings.BASE_DIR) / 'private' / 'parser-locks'
     lock_dir.mkdir(parents=True, exist_ok=True)
     for parent in ParserMasterPipelineRun.objects.filter(status='running', current_step__startswith='tara_'):
-        with (lock_dir / f'master-{parent.pk}.lock').open('a') as lock:
+        with (lock_dir / f'{prefix}master-{parent.pk}.lock').open('a') as lock:
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
@@ -215,30 +255,52 @@ def recover_master_processes():
                 ParserMasterPipelineRun.objects.filter(pk=parent.pk, status='running').update(status=status)
 
 
-def dispatch():
+def dispatch(*, workspace=None):
+    TaraRun = _model("TaraRun", workspace)
+    ParserMasterPipelineRun = _model("ParserMasterPipelineRun", workspace)
+    if workspace and not shared_queue_enabled():
+        return
     """Called when executor connects and by the maintenance DAG."""
+    dispatch_waiting_masters()
     now = timezone.now()
     for run in TaraRun.objects.filter(status='waiting_session', wait_until__lte=now):
         finish(run, 'failed', 'Истекли 4 часа ожидания Windows-исполнителя Тары. Сохранённые данные остаются доступными.')
+    if workspace:
+        # A parked standalone executor has returned and drained its threads.
+        # Running/recovery slots must never be released by a status change alone.
+        from datasets.parser_queue_models import ParserQueueEntry
+        from . import global_queue as queue
+        parked = ParserQueueEntry.objects.filter(organization__code=workspace.code,
+            kind='tara', status='waiting_remote', run_id__in=TaraRun.objects.filter(status__in=TERMINAL).values('pk'))
+        for entry in parked:
+            try:
+                owner = queue.resume(entry.pk, entry.token, executor='tara-terminal-maintenance')
+                queue.finish(owner.pk, owner.token, success=False)
+            except queue.QueueOwnershipError:
+                pass  # Another dispatcher/explicit recovery already changed ownership.
     with transaction.atomic():
         coordinator_lock()
         # Recover dispatch after container failure; requests have bounded timeouts.
-        for stale in TaraRun.objects.select_for_update().filter(status__in=('running', 'dispatching'), heartbeat__lt=now - timedelta(minutes=6)):
+        stale_jobs = TaraRun.objects.select_for_update().filter(status__in=('running', 'dispatching'), heartbeat__lt=now - timedelta(minutes=6))
+        if shared_queue_enabled():
+            stale_jobs = stale_jobs.none()
+        for stale in stale_jobs:
             stale.items.filter(status='running').update(status='pending')
             stale.status, stale.lease = 'queued', ''
             stale.save()
     with transaction.atomic():
         coordinator_lock()
         run = TaraRun.objects.select_for_update().filter(status='queued').filter(Q(resume_at__isnull=True) | Q(resume_at__lte=timezone.now())).order_by('id').first()
-        if run:
+        if run and tara_can_dispatch(run):
             run.status, run.lease, run.heartbeat = 'dispatching', uuid.uuid4().hex, timezone.now()
             run.save()
-            transaction.on_commit(lambda: launch('run_tara_job', '--run-id', run.pk, '--lease', run.lease))
+            extra = ('--organization', workspace.code) if workspace else ()
+            transaction.on_commit(lambda: launch('run_tara_job', '--run-id', run.pk, '--lease', run.lease, *extra))
     # Masters park at the Tara step. Resume only when their child is terminal or
     # no child could be created because a different origin owned Tara.
     from datasets.services.parsers.master_pipeline_launcher import launch_parser_master_pipeline
     from django.utils.dateparse import parse_datetime
-    recover_master_processes()
+    recover_master_processes(workspace=workspace)
     for parent in ParserMasterPipelineRun.objects.filter(status='queued', current_step__startswith='tara_'):
         last = parse_datetime(parent.result.get('resume_dispatched_at', ''))
         if last and last < timezone.now() - timedelta(minutes=6):
@@ -254,7 +316,7 @@ def dispatch():
             master.result = {**master.result, 'resume_dispatched_at': timezone.now().isoformat()}
             ParserMasterPipelineRun.objects.filter(pk=master.pk).update(result=master.result)
             try:
-                launch_parser_master_pipeline(master.pk)
+                launch_parser_master_pipeline(master.pk, **({"workspace": workspace} if workspace else {}))
             except Exception:
                 ParserMasterPipelineRun.objects.filter(pk=master.pk, status='queued').update(status='waiting_tara')
                 logger.exception('Master resume launch failed')
@@ -262,22 +324,24 @@ def dispatch():
 
 
 
-def process_item(item_id, run_id, lease):
+def process_item(item_id, run_id, lease, *, workspace=None):
+    TaraRun = _model("TaraRun", workspace)
+    TaraItem = _model("TaraItem", workspace)
     from datasets.services.parsers.tara_product_parser import (
         fetch_html_via_browser, parse_properties, parse_price_rows, save_product_data,
         BrowserBlockedError, BrowserTransportError, ProductNotFoundError, mark_url_not_found, mark_url_failed,
     )
     close_old_connections()
-    item = TaraItem.objects.select_related('product').get(pk=item_id)
+    item = TaraItem.objects.select_related('product').get(pk=item_id, run_id=run_id)
     try:
-        html = fetch_html_via_browser(item.product.url)
+        html = fetch_html_via_browser(item.product.url, workspace=workspace, run_id=run_id, run_lease=lease)
         properties = parse_properties(html)
         prices = parse_price_rows(html, item.product.url)
         with transaction.atomic():
             run = TaraRun.objects.select_for_update().get(pk=run_id)
             if run.lease != lease or run.status != 'running':
                 return 'stale'
-            save_product_data(item.product, properties, prices)
+            save_product_data(item.product, properties, prices, workspace=workspace)
             item.status, item.finished_at = 'success', timezone.now()
             item.error = ''
             item.save()
@@ -290,10 +354,10 @@ def process_item(item_id, run_id, lease):
             if isinstance(exc, (BrowserBlockedError, BrowserTransportError)):
                 item.status = 'pending'
             elif isinstance(exc, ProductNotFoundError):
-                mark_url_not_found(item.product_id, exc)
+                mark_url_not_found(item.product_id, exc, workspace=workspace)
                 item.status = 'not_found'
             else:
-                mark_url_failed(item.product_id, exc)
+                mark_url_failed(item.product_id, exc, workspace=workspace)
                 item.status = 'error'
             item.error = str(exc)[:1000]
             item.save()
@@ -304,7 +368,9 @@ def process_item(item_id, run_id, lease):
         close_old_connections()
 
 
-def execute(run_id, lease):
+@queue_tara
+def execute(run_id, lease, *, workspace=None):
+    TaraRun = _model("TaraRun", workspace)
     from .tara_remote import available
     from datasets.services.parsers.product_image_sync import sync_parser_source_images
     run = TaraRun.objects.get(pk=run_id)
@@ -321,8 +387,8 @@ def execute(run_id, lease):
             return
         if run.phase == 'sitemap':
             from datasets.services.parsers.tara_sitemap import sync_tara_sitemap_to_product_urls
-            with keep_alive(run.pk, lease):
-                sync_tara_sitemap_to_product_urls()
+            with keep_alive(run.pk, lease, workspace=workspace):
+                sync_tara_sitemap_to_product_urls(workspace=workspace, run_id=run.pk, run_lease=lease)
             with transaction.atomic():
                 current = TaraRun.objects.select_for_update().get(pk=run.pk)
                 if current.lease != lease or current.status != 'running':
@@ -351,7 +417,7 @@ def execute(run_id, lease):
                             break
                         item.status, item.attempts = 'running', item.attempts + 1
                         item.save(update_fields=['status', 'attempts'])
-                    pending.add(pool.submit(process_item, item.pk, run.pk, lease))
+                    pending.add(pool.submit(process_item, item.pk, run.pk, lease, workspace=workspace))
                 if not pending:
                     break
                 done, pending = wait(pending, timeout=5, return_when=FIRST_COMPLETED)
@@ -375,8 +441,15 @@ def execute(run_id, lease):
             run.resume_at = timezone.now() + timedelta(minutes=20)
             run.save()
             return
-        with keep_alive(run.pk, lease):
-            sync_parser_source_images('tara')
+        with keep_alive(run.pk, lease, workspace=workspace):
+            if workspace:
+                from .product_image_sync import sync_iprice_product_images
+                sync_iprice_product_images(source='tara', workspace=workspace)
+            else:
+                sync_parser_source_images('tara')
+        if workspace and not (run.master_id and not run.options.get('retry_failed')) and run.items.filter(status='error').exists():
+            finish(run, 'failed', 'Some Tara products could not be collected')
+            return
         finish(run, 'success')
         if not run.master_id:
             counts = progress(run)['counts']

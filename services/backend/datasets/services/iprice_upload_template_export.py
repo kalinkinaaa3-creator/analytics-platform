@@ -11,6 +11,7 @@ EXCEL_CONTENT_TYPE = (
 
 
 UPLOAD_TEMPLATE_HEADERS = {
+    "nomenclature": ("nom_code", "nom", "nom_view", "nom_category", "nom_group", "nom_hier", "quantity_eurotruck"),
     "transport_cost": (
         "departure",
         "arrival",
@@ -55,7 +56,7 @@ UPLOAD_TEMPLATE_HEADERS = {
 }
 
 
-def export_iprice_upload_template(upload_type: str) -> BytesIO:
+def export_iprice_upload_template(upload_type: str, *, text_codes=False) -> BytesIO:
     headers = UPLOAD_TEMPLATE_HEADERS.get(upload_type)
 
     if headers is None:
@@ -69,6 +70,10 @@ def export_iprice_upload_template(upload_type: str) -> BytesIO:
     worksheet.append(headers)
     worksheet.freeze_panes = "A2"
     worksheet.auto_filter.ref = worksheet.dimensions
+    if text_codes and ("code" in headers or "nom_code" in headers):
+        column = headers.index("code" if "code" in headers else "nom_code") + 1
+        for row in worksheet.iter_rows(min_row=2, max_row=1001, min_col=column, max_col=column):
+            row[0].number_format = "@"
 
     for index, cell in enumerate(worksheet[1], start=1):
         cell.font = Font(bold=True)

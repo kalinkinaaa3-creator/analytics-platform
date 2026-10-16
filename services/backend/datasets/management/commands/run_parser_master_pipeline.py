@@ -11,6 +11,7 @@ class Command(BaseCommand):
     help = "Run complete parser master pipeline"
 
     def add_arguments(self, parser):
+        parser.add_argument('--organization', choices=('iplast', 'select-market'), default='iplast')
         parser.add_argument(
             "--run-id",
             type=int,
@@ -24,7 +25,8 @@ class Command(BaseCommand):
         from django.conf import settings
         lock_dir = Path(settings.BASE_DIR) / 'private' / 'parser-locks'
         lock_dir.mkdir(parents=True, exist_ok=True)
-        with (lock_dir / f"master-{options['run_id']}.lock").open('a') as lock:
+        prefix = 'select-market-' if options['organization'] == 'select-market' else ''
+        with (lock_dir / f"{prefix}master-{options['run_id']}.lock").open('a') as lock:
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
@@ -33,6 +35,10 @@ class Command(BaseCommand):
 
     def _run(self, options):
         run_id = options["run_id"]
+        from organizations.models import Organization
+        from datasets.services.iprice_workspace import workspace_for
+        workspace = workspace_for(Organization.objects.get(code='select-market')) if options.get('organization') == 'select-market' else None
+        ParserMasterPipelineRun = workspace.model('ParserMasterPipelineRun') if workspace else globals()['ParserMasterPipelineRun']
 
         if not ParserMasterPipelineRun.objects.filter(
             pk=run_id,
@@ -44,6 +50,7 @@ class Command(BaseCommand):
         try:
             result = run_parser_master_pipeline(
                 run_id=run_id,
+                workspace=workspace,
             )
 
         except ParserMasterPipelineError as exc:
@@ -51,7 +58,7 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                "Parser master pipeline completed: "
+                "Parser master pipeline state: "
                 f"run_id={result['run_id']}, "
                 f"status={result['status']}"
             )

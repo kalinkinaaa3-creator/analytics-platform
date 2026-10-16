@@ -1715,6 +1715,9 @@ class ParserMasterPipelineRunView(APIView):
         )
 
         stale_runs = stale_runs.exclude(current_step__startswith="tara_")
+        if getattr(settings, "PARSER_SHARED_QUEUE_ENABLED", False):
+            # An old timestamp does not prove the executor has stopped.
+            stale_runs = stale_runs.none()
 
         stale_runs.update(
             status=ParserMasterPipelineRun.STATUS_FAILED,
@@ -1827,7 +1830,9 @@ class ParserMasterPipelineRunView(APIView):
 
     @staticmethod
     def _serialize_run(run):
+        from datasets.services.parsers.queue_execution import master_queue_status
         return {
+            "queue": master_queue_status(run.pk),
             "id": run.pk,
             "status": run.status,
             "current_step": run.current_step,

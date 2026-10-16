@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from openpyxl import load_workbook
 
-from datasets.models import ProductCost
+from datasets.models import ProductCost as LegacyProductCost
 
 
 logger = logging.getLogger("datasets")
@@ -129,13 +129,17 @@ def clean_month(value):
     return None
 
 
-def load_product_cost_from_excel(file_obj) -> dict:
-    workbook = load_workbook(
-        file_obj,
-        read_only=True,
-        data_only=True,
-    )
+def load_product_cost_from_excel(file_obj, *, workspace=None) -> dict:
+    workbook = load_workbook(file_obj, read_only=True, data_only=True)
+    try:
+        return _load_workbook(workbook, workspace=workspace)
+    finally:
+        workbook.close()
 
+
+def _load_workbook(workbook, *, workspace=None):
+    ProductCost = workspace.model("ProductCost") if workspace is not None else LegacyProductCost
+    strict = workspace is not None and workspace.code == "select-market"
     worksheet = workbook.active
 
     # key:
@@ -154,14 +158,15 @@ def load_product_cost_from_excel(file_obj) -> dict:
     ):
         if row_index == 1:
             continue
+        if strict and not any(value is not None and str(value).strip() for value in row):
+            continue
 
         month = clean_month(
             row[0] if len(row) > 0 else None
         )
 
-        code = clean_int(
-            row[1] if len(row) > 1 else None
-        )
+        raw_code = row[1] if len(row) > 1 else None
+        code = workspace.product_code(raw_code) if strict else clean_int(raw_code)
 
         name = clean_text(
             row[2] if len(row) > 2 else None
@@ -181,8 +186,13 @@ def load_product_cost_from_excel(file_obj) -> dict:
             or not departure
             or cost is None
         ):
+            if strict:
+                raise ValueError(f"Invalid source data at row {row_index}")
             skipped += 1
             continue
+
+        if strict and (not cost.is_finite() or cost < 0):
+            raise ValueError(f"Invalid cost at row {row_index}")
 
         key = (
             month,

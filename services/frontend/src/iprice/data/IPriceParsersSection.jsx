@@ -360,6 +360,12 @@ export function IPriceParsersSection({
         </div>
       )}
 
+      {displayedRun?.queue?.message && (
+        <p role="status">
+          {displayedRun.queue.message}
+        </p>
+      )}
+
       {message && (
         <div className="iprice-data-operation-success">
           {message}

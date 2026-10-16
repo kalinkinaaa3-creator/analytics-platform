@@ -266,7 +266,8 @@ def _serialize_snapshot(snapshot: IPriceSnapshot) -> dict[str, Any]:
     }
 
 
-def _get_snapshot(snapshot_id: int) -> IPriceSnapshot:
+def _get_snapshot(snapshot_id: int, *, workspace=None) -> IPriceSnapshot:
+    IPriceSnapshot = workspace.model('IPriceSnapshot') if workspace else globals()['IPriceSnapshot']
     try:
         snapshot = IPriceSnapshot.objects.get(pk=snapshot_id)
     except IPriceSnapshot.DoesNotExist as exc:
@@ -285,6 +286,7 @@ def _get_snapshot(snapshot_id: int) -> IPriceSnapshot:
 def _validate_snapshots(
     base_snapshot_id: int,
     comparison_snapshot_id: int,
+    *, workspace=None,
 ) -> tuple[IPriceSnapshot, IPriceSnapshot]:
     if base_snapshot_id == comparison_snapshot_id:
         raise IPriceSnapshotCompareError(
@@ -292,8 +294,8 @@ def _validate_snapshots(
         )
 
     return (
-        _get_snapshot(base_snapshot_id),
-        _get_snapshot(comparison_snapshot_id),
+        _get_snapshot(base_snapshot_id, workspace=workspace),
+        _get_snapshot(comparison_snapshot_id, workspace=workspace),
     )
 
 
@@ -313,8 +315,8 @@ def _effective_region_values(
                 "id": approval.id,
                 "revision": approval.revision,
                 "approved_rrp": approval.approved_rrp,
-                "approved_distr": approval.approved_distr,
-                "approved_distr_1": approval.approved_distr_1,
+                "approved_distr": getattr(approval, 'approved_distr', None),
+                "approved_distr_1": getattr(approval, 'approved_distr_1', None),
                 "approved_small": approval.approved_small,
                 "approved_medium": approval.approved_medium,
                 "approved_large": approval.approved_large,
@@ -334,14 +336,14 @@ def _effective_region_values(
             )
         ),
         "effective_distr": (
-            approval.approved_distr
+            getattr(approval, 'approved_distr', None)
             if approval is not None
-            else region.calculated_distr
+            else getattr(region, 'calculated_distr', None)
         ),
         "effective_distr_1": (
-            approval.approved_distr_1
+            getattr(approval, 'approved_distr_1', None)
             if approval is not None
-            else region.calculated_distr_1
+            else getattr(region, 'calculated_distr_1', None)
         ),
         "effective_small": (
             approval.approved_small
@@ -466,13 +468,16 @@ def _serialize_region(
     }
 
     for field_name in REGION_COMPARE_FIELDS:
-        result[field_name] = getattr(region, field_name)
+        result[field_name] = getattr(region, field_name, None)
 
     result.update(_effective_region_values(region))
     return result
 
 
 def _product_queryset(snapshot: IPriceSnapshot) -> QuerySet:
+    from datasets.services.iprice_snapshot_builder import _snapshot_workspace
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshotProduct = workspace.model('IPriceSnapshotProduct') if workspace else globals()['IPriceSnapshotProduct']
     return (
         IPriceSnapshotProduct.objects
         .filter(snapshot=snapshot)
@@ -481,6 +486,10 @@ def _product_queryset(snapshot: IPriceSnapshot) -> QuerySet:
 
 
 def _region_queryset(snapshot: IPriceSnapshot) -> QuerySet:
+    from datasets.services.iprice_snapshot_builder import _snapshot_workspace
+    workspace = _snapshot_workspace(snapshot)
+    IPriceSnapshotApproval = workspace.model('IPriceSnapshotApproval') if workspace else globals()['IPriceSnapshotApproval']
+    IPriceSnapshotRegion = workspace.model('IPriceSnapshotRegion') if workspace else globals()['IPriceSnapshotRegion']
     current_approval_queryset = (
         IPriceSnapshotApproval.objects
         .filter(is_current=True)
@@ -501,7 +510,7 @@ def _region_queryset(snapshot: IPriceSnapshot) -> QuerySet:
         .order_by(
             "snapshot_product__base_product_key",
             "sale_region",
-            "departure",
+            "historical_variant" if workspace else "departure",
         )
     )
 
@@ -510,7 +519,7 @@ def _build_product_index(
     snapshot: IPriceSnapshot,
 ) -> dict[int, dict[str, Any]]:
     return {
-        product.base_product_key: _serialize_product(product)
+        (product.code_1c if product._meta.app_label == 'select_market' else product.base_product_key): _serialize_product(product)
         for product in _product_queryset(snapshot)
     }
 
@@ -522,9 +531,9 @@ def _build_region_index(
 
     for region in _region_queryset(snapshot):
         key = (
-            region.snapshot_product.base_product_key,
+            region.snapshot_product.code_1c if region._meta.app_label == 'select_market' else region.snapshot_product.base_product_key,
             region.sale_region,
-            region.departure,
+            region.historical_variant if region._meta.app_label == 'select_market' else region.departure,
         )
         index[key] = _serialize_region(region)
 
@@ -863,6 +872,7 @@ def compare_iprice_snapshots(
     search: str = "",
     filters: dict[str, list[str]] | None = None,
     change_type: str = CHANGE_ALL,
+    workspace=None,
 ) -> dict[str, Any]:
     """
     Compare two successful iPrice snapshots by stable business keys.
@@ -883,6 +893,7 @@ def compare_iprice_snapshots(
     base_snapshot, comparison_snapshot = _validate_snapshots(
         base_snapshot_id,
         comparison_snapshot_id,
+        workspace=workspace,
     )
 
     if normalized_mode == MODE_PRODUCTS:
@@ -914,6 +925,16 @@ def compare_iprice_snapshots(
         allowed_filter_fields = REGION_FILTER_FIELDS
 
     summary = _build_summary(rows)
+
+    if workspace and workspace.code == 'select-market':
+        from select_market.iprice_filters import PRODUCT_FILTERS, filter_products
+        source_filters = {key: value for key, value in (filters or {}).items() if key in PRODUCT_FILTERS}
+        if any(source_filters.values()):
+            products = workspace.model('IPriceSnapshotProduct').objects.filter(snapshot_id__in=[base_snapshot.pk, comparison_snapshot.pk])
+            selected_ids = set(filter_products(products, source_filters).values_list('pk', flat=True))
+            product_key = 'snapshot_product_id' if normalized_mode == MODE_REGIONS else 'id'
+            rows = [row for row in rows if (row.get('comparison') or row.get('base') or {}).get(product_key) in selected_ids]
+        filters = {key: value for key, value in (filters or {}).items() if key not in PRODUCT_FILTERS}
 
     filtered_rows = _filter_rows(
         rows=rows,

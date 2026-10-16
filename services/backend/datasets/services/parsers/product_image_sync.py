@@ -1,3 +1,4 @@
+from .queue_execution import standalone
 from collections.abc import Iterable
 
 from django.db import transaction
@@ -117,6 +118,7 @@ def sync_iprice_product_images(
     *,
     source: str | None = None,
     product_keys: Iterable[int] | None = None,
+    workspace=None,
 ):
     """
     Refresh mutable image links without changing product URLs or product keys.
@@ -126,11 +128,15 @@ def sync_iprice_product_images(
       MAX(final_price); MIN(id). If no positive final_price exists,
       use MIN(id) from the latest available calendar day.
     """
+    ParserProductUrl = workspace.model("ParserProductUrl") if workspace else globals()["ParserProductUrl"]
+    ParserProductClassification = workspace.model("ParserProductClassification") if workspace else globals()["ParserProductClassification"]
+    IPriceSnapshotProduct = workspace.model("IPriceSnapshotProduct") if workspace else globals()["IPriceSnapshotProduct"]
+    price_models = {source: workspace.model(model.__name__) for source, model in PRICE_MODELS.items()} if workspace else PRICE_MODELS
     requested_keys = set(product_keys or ())
     url_rows = ParserProductUrl.objects.all()
     if source is not None:
         source = str(source).strip().casefold()
-        if source not in PRICE_MODELS:
+        if source not in price_models:
             raise ValueError(f"Unsupported parser source: {source}")
         url_rows = url_rows.filter(source=source)
     if requested_keys:
@@ -141,12 +147,12 @@ def sync_iprice_product_images(
         chunk_size=1000
     ):
         source_key = str(row_source or "").strip().casefold()
-        if source_key in PRICE_MODELS:
+        if source_key in price_models:
             keys_by_source.setdefault(source_key, set()).add(product_key)
 
     images = {}
     for source_key, source_keys in keys_by_source.items():
-        images.update(_selected_images(PRICE_MODELS[source_key], source_keys))
+        images.update(_selected_images(price_models[source_key], source_keys))
 
     if not images:
         return {
@@ -177,6 +183,7 @@ def sync_iprice_product_images(
     }
 
 
+@standalone("images")
 def sync_parser_source_images(source):
     """Synchronize one completed parser source and refresh iPrice clients."""
     from datasets.services.iprice_runtime import publish_iprice_update

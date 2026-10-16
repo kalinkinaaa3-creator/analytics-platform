@@ -3,7 +3,7 @@ import logging
 from django.db import transaction
 from openpyxl import load_workbook
 
-from datasets.models import ParserPrefix
+from datasets.models import ParserPrefix as LegacyParserPrefix
 
 
 logger = logging.getLogger("parsers.prefix_loader")
@@ -21,13 +21,16 @@ def clean_value(value):
     return value
 
 
-def load_parser_prefixes_from_excel(file_obj) -> dict:
-    workbook = load_workbook(
-        file_obj,
-        read_only=True,
-        data_only=True,
-    )
+def load_parser_prefixes_from_excel(file_obj, *, workspace=None) -> dict:
+    workbook = load_workbook(file_obj, read_only=True, data_only=True)
+    try:
+        return _load_workbook(workbook, workspace=workspace)
+    finally:
+        workbook.close()
 
+
+def _load_workbook(workbook, *, workspace=None):
+    ParserPrefix = workspace.model("ParserPrefix") if workspace is not None else LegacyParserPrefix
     worksheet = workbook.active
 
     rows_by_key = {}
@@ -38,6 +41,8 @@ def load_parser_prefixes_from_excel(file_obj) -> dict:
         start=1,
     ):
         if row_index == 1:
+            continue
+        if workspace is not None and not any(value is not None and str(value).strip() for value in row):
             continue
 
         source = clean_value(

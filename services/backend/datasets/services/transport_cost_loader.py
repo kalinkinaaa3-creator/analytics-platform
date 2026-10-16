@@ -4,7 +4,7 @@ from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from openpyxl import load_workbook
 
-from datasets.models import TransportCost
+from datasets.models import TransportCost as LegacyTransportCost
 
 
 logger = logging.getLogger("datasets")
@@ -59,13 +59,17 @@ def clean_decimal(value):
         return None
 
 
-def load_transport_cost_from_excel(file_obj) -> dict:
-    workbook = load_workbook(
-        file_obj,
-        read_only=True,
-        data_only=True,
-    )
+def load_transport_cost_from_excel(file_obj, *, workspace=None) -> dict:
+    workbook = load_workbook(file_obj, read_only=True, data_only=True)
+    try:
+        return _load_workbook(workbook, workspace=workspace)
+    finally:
+        workbook.close()
 
+
+def _load_workbook(workbook, *, workspace=None):
+    TransportCost = workspace.model("TransportCost") if workspace is not None else LegacyTransportCost
+    strict = workspace is not None and workspace.code == "select-market"
     worksheet = workbook.active
 
     # key = (departure, arrival)
@@ -81,6 +85,8 @@ def load_transport_cost_from_excel(file_obj) -> dict:
     ):
         if row_index == 1:
             continue
+        if strict and not any(value is not None and str(value).strip() for value in row):
+            continue
 
         departure = first_word(
             row[0] if len(row) > 0 else None
@@ -95,8 +101,13 @@ def load_transport_cost_from_excel(file_obj) -> dict:
         )
 
         if not departure or not arrival or cost is None:
+            if strict:
+                raise ValueError(f"Invalid source data at row {row_index}")
             skipped += 1
             continue
+
+        if strict and (not cost.is_finite() or cost < 0):
+            raise ValueError(f"Invalid cost at row {row_index}")
 
         key = (
             departure,

@@ -1,0 +1,91 @@
+"""Atomic edits of regional inputs and snapshot rows, preserving price history."""
+from decimal import Decimal
+from types import SimpleNamespace
+from django.db import transaction
+from django.utils import timezone
+from .iprice_models import IPriceRegionalInput
+from .iprice_domain_models import IPriceSnapshot, IPriceSnapshotRegion, IPriceParameterChangeLog
+from .iprice_filters import PRODUCT_FILTERS, filter_products
+from .iprice_regional_calculation import INPUT_FIELDS, build_regions
+
+
+def resolve(snapshot, filters, search=''):
+    from datasets.services.iprice_parameter_changes import IPriceParameterChangeError
+    if not any(filters.values()) and not search.strip():
+        raise IPriceParameterChangeError('Выберите хотя бы один фильтр.')
+    if set(filters) - set(PRODUCT_FILTERS) - {'code_1c', 'sale_region'}:
+        raise IPriceParameterChangeError('Неизвестный фильтр.')
+    rows = IPriceSnapshotRegion.objects.filter(snapshot_product__snapshot=snapshot).select_related('snapshot_product')
+    if rows.exclude(historical_variant='').exists():
+        raise IPriceParameterChangeError('Историческая версия с маршрутами доступна только для просмотра. Создайте новый расчёт.')
+    for key, path in (('code_1c', 'snapshot_product__code_1c'), ('sale_region', 'sale_region')):
+        if filters.get(key):
+            rows = rows.filter(**{path + '__in': filters[key]})
+    return filter_products(rows, {key: value for key, value in filters.items() if key in PRODUCT_FILTERS}, search, prefix='snapshot_product__')
+
+
+def preview(snapshot, filters, search=''):
+    from datasets.services.iprice_parameter_changes import ensure_snapshot_parameters_editable
+    ensure_snapshot_parameters_editable(snapshot)
+    rows = resolve(snapshot, filters, search)
+    return {'products': rows.values('snapshot_product_id').distinct().count(), 'regions': rows.count(), 'routes': rows.count()}
+
+
+@transaction.atomic
+def apply(*, snapshot, filters, search='', coefficients=None, discounts=None, delivery=None, user=None, expected_revision=None):
+    from datasets.services.iprice_snapshot_builder import _lock_snapshot_workspace
+    from datasets.services.iprice_workspace import IPriceWorkspace
+    from datasets.services.iprice_parameter_changes import ensure_snapshot_parameters_editable, IPriceParameterChangeError
+    workspace = IPriceWorkspace('select-market')
+    _lock_snapshot_workspace(workspace)
+    snapshot = IPriceSnapshot.objects.select_for_update().get(pk=snapshot.pk)
+    ensure_snapshot_parameters_editable(snapshot)
+    if expected_revision is not None and expected_revision != snapshot.parameters.get('edit_revision', 0):
+        raise IPriceParameterChangeError('Расчёт изменён другим пользователем. Повторите предварительный просмотр.')
+    changes = {**(coefficients or {}), **(discounts or {}), **(delivery or {})}
+    if not changes or set(changes) - set(INPUT_FIELDS):
+        raise IPriceParameterChangeError('Укажите поддерживаемые параметры.')
+    for field, value in changes.items():
+        try:
+            if field == 'include_transport':
+                if not isinstance(value, bool):
+                    raise ValueError()
+                continue
+            value = Decimal(str(value))
+            if not value.is_finite() or value < 0 or (field in ('small', 'medium', 'large', 'base_exclusive', 'minimum_margin') and value >= 1):
+                raise ValueError()
+            IPriceRegionalInput._meta.get_field(field).clean(value, None)
+            changes[field] = value
+        except Exception as exc:
+            raise IPriceParameterChangeError(f'Некорректный параметр {field}') from exc
+    rows = list(resolve(snapshot, filters, search))
+    if not rows:
+        raise IPriceParameterChangeError('Нет строк для изменения.')
+    overrides = {}
+    for row in rows:
+        values = {**row.calculation_details.get('regional_input', {}), **changes}
+        if values.get('include_transport') and values.get('logistics_unit') is None:
+            raise IPriceParameterChangeError('Укажите расходы на доставку на единицу.')
+        pair = (row.snapshot_product.code_1c, row.sale_region.casefold())
+        source = IPriceRegionalInput.objects.filter(month=snapshot.calculation_date.replace(day=1),
+            code=pair[0], region__iexact=row.sale_region).first()
+        if source is None:
+            source = IPriceRegionalInput(month=snapshot.calculation_date.replace(day=1),
+                code=pair[0], region=row.sale_region)
+        for field, value in changes.items():
+            setattr(source, field, value)
+        source.save()
+        overrides[pair] = SimpleNamespace(pk=source.pk, **values)
+    # Keep the old monetary decision intact; a new decision gets a new revision.
+    for row in rows:
+        if row.approvals.filter(is_current=True).update(is_current=False):
+            row.warning_codes = list(dict.fromkeys([*row.warning_codes, 'REAPPROVAL_REQUIRED']))
+            row.save(update_fields=['warning_codes'])
+    build_regions(snapshot=snapshot, snapshot_product_ids={row.snapshot_product_id for row in rows}, input_overrides=overrides)
+    snapshot.parameters = {**snapshot.parameters, 'edit_revision': snapshot.parameters.get('edit_revision', 0) + 1}
+    snapshot.save(update_fields=['parameters'])
+    affected = {'products': len({row.snapshot_product_id for row in rows}), 'regions': len(rows), 'routes': len(rows)}
+    IPriceParameterChangeLog.objects.create(snapshot_id=snapshot.pk, user=user, mode='regions', filters=filters, search=search,
+        changes={field: value if isinstance(value, bool) else str(value) for field, value in changes.items()},
+        affected=affected, status='success', finished_at=timezone.now())
+    return affected

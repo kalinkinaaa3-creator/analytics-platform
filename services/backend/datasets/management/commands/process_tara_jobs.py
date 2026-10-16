@@ -7,3 +7,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dispatch()
+        from datasets.services.parsers.queue_execution import enabled
+        from datasets.services.iprice_workspace import workspace_for
+        from organizations.models import Organization
+        if enabled():
+            organization = Organization.objects.filter(code='select-market').first()
+            if organization:
+                dispatch(workspace=workspace_for(organization))

@@ -117,7 +117,8 @@ def _read_rows(file_obj):
         workbook.close()
 
 
-def _prepare(file_obj):
+def _prepare(file_obj, *, workspace=None):
+    ParserProductUrl = workspace.model("ParserProductUrl") if workspace else globals()["ParserProductUrl"]
     rows = _read_rows(file_obj)
     requested_keys = {row["product_key"] for row in rows}
     urls = {
@@ -128,7 +129,8 @@ def _prepare(file_obj):
         ).only("id", "source", "url", "prefix")
     }
     regional_groups, group_by_product = build_competitor_url_groups(
-        prefixes_by_source=get_prefixes_by_source(),
+        prefixes_by_source=get_prefixes_by_source(workspace=workspace),
+        workspace=workspace,
     )
     classifications = {}
     groups = defaultdict(lambda: {"base": defaultdict(set), "competitor": defaultdict(set)})
@@ -171,6 +173,9 @@ def _prepare(file_obj):
             classifications[product_key] = values
             groups[group_key][side][row["color"]].add(product_key)
 
+    if workspace and skipped:
+        raise ProductClassificationMatchLoadError("В файле есть неизвестные или неактивные product_key: " + ", ".join(str(row["product_key"]) for row in skipped[:100]))
+
     pairs = set()
     for item in groups.values():
         for base_color, base_keys in item["base"].items():
@@ -183,8 +188,12 @@ def _prepare(file_obj):
     return classifications, pairs, skipped, len(rows)
 
 
-def load_product_classification_matches(file_obj, *, filename=""):
-    classifications, automatic_pairs, skipped, input_rows = _prepare(file_obj)
+def load_product_classification_matches(file_obj, *, filename="", workspace=None):
+    ParserProductUrl = workspace.model("ParserProductUrl") if workspace else globals()["ParserProductUrl"]
+    ParserProductClassification = workspace.model("ParserProductClassification") if workspace else globals()["ParserProductClassification"]
+    ParserProductMatch = workspace.model("ParserProductMatch") if workspace else globals()["ParserProductMatch"]
+    IPriceCompetitorSelectionOverride = workspace.model("IPriceCompetitorSelectionOverride") if workspace else globals()["IPriceCompetitorSelectionOverride"]
+    classifications, automatic_pairs, skipped, input_rows = _prepare(file_obj, workspace=workspace)
     now = timezone.now()
     excluded_pairs = set(
         IPriceCompetitorSelectionOverride.objects.filter(
@@ -277,6 +286,7 @@ def load_product_classification_matches(file_obj, *, filename=""):
             )
         images_updated = sync_iprice_product_images(
             product_keys=product_keys,
+            workspace=workspace,
         )["classifications_updated"]
 
     return {

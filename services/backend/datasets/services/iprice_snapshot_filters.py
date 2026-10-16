@@ -466,6 +466,10 @@ def filter_iprice_products_queryset(
     к строкам режима products.
     """
 
+    if queryset.model._meta.app_label == 'select_market':
+        from select_market.iprice_filters import PRODUCT_FILTERS, filter_products
+        queryset = filter_products(queryset, {key: value for key, value in (filters or {}).items() if key in PRODUCT_FILTERS})
+        filters = {key: value for key, value in (filters or {}).items() if key not in PRODUCT_FILTERS}
     normalized_filters = normalize_filters(
         filters=filters,
         allowed_fields=(
@@ -477,7 +481,7 @@ def filter_iprice_products_queryset(
         queryset=queryset,
         filters=normalized_filters,
         field_map=PRODUCT_FILTER_FIELDS,
-        type_map=PRODUCT_FILTER_TYPES,
+        type_map={**PRODUCT_FILTER_TYPES, 'code_1c': FILTER_TYPE_TEXT} if queryset.model._meta.app_label == 'select_market' else PRODUCT_FILTER_TYPES,
     )
 
 
@@ -491,6 +495,10 @@ def filter_iprice_regions_queryset(
     к строкам режима regions.
     """
 
+    if queryset.model._meta.app_label == 'select_market':
+        from select_market.iprice_filters import PRODUCT_FILTERS, filter_products
+        queryset = filter_products(queryset, {key: value for key, value in (filters or {}).items() if key in PRODUCT_FILTERS}, prefix='snapshot_product__')
+        filters = {key: value for key, value in (filters or {}).items() if key not in PRODUCT_FILTERS}
     normalized_filters = normalize_filters(
         filters=filters,
         allowed_fields=(
@@ -502,7 +510,7 @@ def filter_iprice_regions_queryset(
         queryset=queryset,
         filters=normalized_filters,
         field_map=REGION_FILTER_FIELDS,
-        type_map=REGION_FILTER_TYPES,
+        type_map={**REGION_FILTER_TYPES, 'code_1c': FILTER_TYPE_TEXT} if queryset.model._meta.app_label == 'select_market' else REGION_FILTER_TYPES,
     )
 
 
