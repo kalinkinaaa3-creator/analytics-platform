@@ -33,20 +33,20 @@ function CalculationRows({ id, canEdit, canEditParameters, onSaved }) {
   const loading = !result || result.page !== page || result.query !== query || result.filters !== serializedFilters;
   return <div aria-busy={loading}>
     <SelectMarketFilters snapshotId={id} search={query} filters={filters} onChange={value => { setFilters(value); setPage(1); setEditing(null); setProduct(null); }} />
-    <form onSubmit={event => { event.preventDefault(); setPage(1); setEditing(null); setProduct(null); setQuery(search); }}><label>Поиск по коду или наименованию<input value={search} onChange={event => setSearch(event.target.value)} maxLength={200} /></label><button>Найти</button></form>
+    <form className="sm-iprice-toolbar sm-iprice-search" onSubmit={event => { event.preventDefault(); setPage(1); setEditing(null); setProduct(null); setQuery(search); }}><label>Поиск по коду или наименованию<input value={search} onChange={event => setSearch(event.target.value)} maxLength={200} /></label><button>Найти</button></form>
     {error && <p role="alert">{error} <button onClick={() => { setError(""); setRetry(value => value + 1); }}>Повторить загрузку строк</button></p>}
-    {loading ? !error && <p role="status">Загружаем строки…</p> : <>
+    {loading ? !error && <p role="status" className="sm-iprice-loading">Загружаем строки…</p> : <>
       <p>Строк: {result.count}. Суммы в рублях. НДС — 22%. Статус версии «Рассчитано» не исключает ошибок отдельных строк.</p>
-      <div className="sm-iprice-table"><table><thead><tr>{["Код 1С", "Номенклатура", "Регион", "Текущая розница без НДС", "Закупка с доставкой без НДС", "Расчётная РРЦ без НДС", "Итоговая РРЦ без НДС", "Итоговая РРЦ с НДС", "Состояние"].map(title => <th key={title}>{title}</th>)}</tr></thead>
-        <tbody>{result.rows.map(row => <tr key={row.id}><td>{row.snapshot_product__code_1c}</td><td><button onClick={() => setProduct(row)}>{row.snapshot_product__nom}</button></td><td>{row.sale_region}</td>
+      <div className="sm-iprice-table"><table><thead><tr>{["Код 1С", "Номенклатура", "Регион", "Текущая розница без НДС", "Закупка с доставкой без НДС", "Расчётная РРЦ без НДС", "Итоговая РРЦ без НДС", "Итоговая РРЦ с НДС", "Состояние"].map((title, index) => <th className={index >= 3 && index <= 7 ? "sm-number" : undefined} key={title}>{title}</th>)}</tr></thead>
+        <tbody>{result.rows.map(row => <tr key={row.id}><td className="sm-iprice-code">{row.snapshot_product__code_1c}</td><td><button onClick={() => setProduct(row)}>{row.snapshot_product__nom}</button></td><td>{row.sale_region}</td>
           <td className="sm-number">{money(row.current_retail)}</td><td className="sm-number">{money(row.cost_with_logistics)}</td><td className="sm-number">{money(row.calculated_rrp)}</td>
-          <td className="sm-number">{money(row.effective.rrp)}{row.effective.approval_source === "manual" && <div>Ручная цена</div>}{canEdit && row.calculation_status !== "error" && <button onClick={() => setEditing(row)}>Своя цена</button>}</td>
+          <td className="sm-number">{money(row.effective.rrp)}{row.effective.approval_source === "manual" && <div><span className="sm-iprice-tag sm-iprice-tag--manual">Ручная цена</span></div>}{canEdit && row.calculation_status !== "error" && <button onClick={() => setEditing(row)}>Своя цена</button>}</td>
           <td className="sm-number">{money(row.effective_gross?.rrp)}</td>
-          <td>{status[row.calculation_status] || row.calculation_status}{[...row.error_codes, ...row.warning_codes].map(code => <div key={code}>{issues[code] || code}</div>)}</td></tr>)}</tbody></table></div>
-      {!result.count && <p>Региональные строки отсутствуют.</p>}
+          <td><span className={`sm-iprice-tag sm-iprice-tag--${row.calculation_status}`}>{status[row.calculation_status] || row.calculation_status}</span>{[...row.error_codes, ...row.warning_codes].map(code => <div className="sm-iprice-issue" key={code}>{issues[code] || code}</div>)}</td></tr>)}</tbody></table></div>
+      {!result.count && <p className="sm-iprice-empty">Региональные строки отсутствуют.</p>}
       <nav aria-label="Страницы расчёта"><button disabled={page === 1} onClick={() => { setEditing(null); setProduct(null); setPage(page - 1); }}>Назад</button> <span>{page} / {result.pages}</span> <button disabled={page >= result.pages} onClick={() => { setEditing(null); setProduct(null); setPage(page + 1); }}>Далее</button></nav>
-      {editing && canEdit && <section><h3>{editing.snapshot_product__nom} · {editing.sale_region}</h3><button onClick={() => setEditing(null)}>Закрыть редактор</button><PriceEditor key={editing.id} snapshotId={id} row={editing} onSaved={onSaved} /></section>}
-      {product && <section><button onClick={() => setProduct(null)}>Закрыть карточку</button><ProductDetails key={product.id} snapshotId={id} productId={product.product_id} region={product} canEdit={canEditParameters} onSaved={onSaved} />{canEditParameters && <ParameterEditor key={product.id} snapshotId={id} row={product} onSaved={onSaved} />}</section>}
+      {editing && canEdit && <section className="sm-iprice-detail"><h3>{editing.snapshot_product__nom} · {editing.sale_region}</h3><button onClick={() => setEditing(null)}>Закрыть редактор</button><PriceEditor key={editing.id} snapshotId={id} row={editing} onSaved={onSaved} /></section>}
+      {product && <section className="sm-iprice-detail"><button onClick={() => setProduct(null)}>Закрыть карточку</button><ProductDetails key={product.id} snapshotId={id} productId={product.product_id} region={product} canEdit={canEditParameters} onSaved={onSaved} />{canEditParameters && <ParameterEditor key={product.id} snapshotId={id} row={product} onSaved={onSaved} />}</section>}
     </>}
   </div>;
 }
@@ -170,19 +170,19 @@ export function SelectMarketCalculations({ canEdit, view = "prices" }) {
   }
   return <article className="sm-iprice-card" hidden={view === "data"}><h2>{view === "home" ? "Работа с ценами" : view === "market" ? "Сравнение цен" : "Сохранённые расчёты"}</h2>
     {view === "home" && <p>Загрузите исходные данные, обновите сайт и конкурентов, рассчитайте цены. Проверьте ошибки и итоговые цены, затем утвердите версию и скачайте Excel. Цены автоматически в 1С не передаются.</p>}
-    {canEdit && <form onSubmit={start}><label>Дата расчёта<input type="date" value={day} required disabled={starting || building} onChange={event => setDay(event.target.value)} /></label>
-      <button type="submit" disabled={!versions || starting || building}>{starting ? "Запускаем…" : building ? "Расчёт выполняется" : "Рассчитать цены"}</button></form>}
+    {canEdit && <form className="sm-iprice-toolbar" onSubmit={start}><label>Дата расчёта<input type="date" value={day} required disabled={starting || building} onChange={event => setDay(event.target.value)} /></label>
+      <button className="sm-iprice-primary" type="submit" disabled={!versions || starting || building}>{starting ? "Запускаем…" : building ? "Расчёт выполняется" : "Рассчитать цены"}</button></form>}
     {message && <p role="status">{message}</p>}
     {error && <p role="alert">{error}</p>}
     {versionsError && <p role="alert">{versionsError}</p>}
-    {!versions && !versionsError && <p role="status">Загружаем версии…</p>}
-    {versions?.length === 0 && <p>Сохранённых расчётов пока нет.</p>}
-    {!!versions?.length && <label>Последние 50 версий<select disabled={activating || starting || exporting} value={selected} onChange={event => { selectedRef.current = event.target.value; setSelected(event.target.value); setError(""); setMessage(""); setReviewedRevision(versions.find(version => String(version.id) === event.target.value)?.edit_revision || 0); }}><option value="">Выберите версию</option>{versions.map(version => <option key={version.id} value={version.id}>№{version.version_number} · {version.calculation_date} · {status[version.status] || version.status}{version.is_active ? " · Активная" : ""}</option>)}</select></label>}
+    {!versions && !versionsError && <p role="status" className="sm-iprice-loading">Загружаем версии…</p>}
+    {versions?.length === 0 && <p className="sm-iprice-empty">Сохранённых расчётов пока нет.</p>}
+    {!!versions?.length && <label className="sm-iprice-version">Последние 50 версий<select disabled={activating || starting || exporting} value={selected} onChange={event => { selectedRef.current = event.target.value; setSelected(event.target.value); setError(""); setMessage(""); setReviewedRevision(versions.find(version => String(version.id) === event.target.value)?.edit_revision || 0); }}><option value="">Выберите версию</option>{versions.map(version => <option key={version.id} value={version.id}>№{version.version_number} · {version.calculation_date} · {status[version.status] || version.status}{version.is_active ? " · Активная" : ""}</option>)}</select></label>}
     {stale && <p role="alert">Расчёт изменён другим пользователем. Обновите и проверьте данные перед утверждением. <button onClick={() => { setReviewedRevision(selectedVersion.edit_revision || 0); setRevision(value => value + 1); }}>Обновить расчёт</button></p>}
     {selectedVersion?.status === "success" && <div><button disabled={exporting} onClick={download}>{exporting ? "Готовим документ…" : "Скачать Excel"}</button><p>Выгрузка выбранного расчёта включает ошибки строк. Скачивание не утверждает версию и не отправляет цены в 1С.</p></div>}
     {historicalRoutes && <p role="status">Историческая версия с маршрутами: доступны просмотр и выгрузка. Для изменения цен создайте новый расчёт.</p>}
-    {canEdit && !historicalRoutes && selectedVersion?.status === "success" && selectedVersion.is_current && <button disabled={activating || building || stale || selectedVersion.is_active} onClick={activate}>{selectedVersion.is_active ? "Версия утверждена" : activating ? "Проверяем и утверждаем…" : "Утвердить внутри системы"}</button>}
-    {canEdit && selectedVersion?.is_active && <button disabled={activating} onClick={deactivate}>Снять утверждение</button>}
+    {canEdit && !historicalRoutes && selectedVersion?.status === "success" && selectedVersion.is_current && <button className="sm-iprice-primary" disabled={activating || building || stale || selectedVersion.is_active} onClick={activate}>{selectedVersion.is_active ? "Версия утверждена" : activating ? "Проверяем и утверждаем…" : "Утвердить внутри системы"}</button>}
+    {canEdit && selectedVersion?.is_active && <button className="sm-iprice-danger" disabled={activating} onClick={deactivate}>Снять утверждение</button>}
     {editableParameters && <ParameterEditor key={`${selected}-${revision}`} snapshotId={selected} onSaved={changed} />}
     {selected && view !== "market" && view !== "versions" && selectedVersion?.status === "success" && <CalculationRows key={`${selected}-${selectedVersion?.status}-${revision}`} id={selected} canEdit={editable} canEditParameters={editableParameters} onSaved={changed} />}
     {selected && view === "market" && selectedVersion?.status === "success" && <MarketAnalysis key={`${selected}-${revision}`} snapshotId={selected} versions={versions} canEdit={canEdit} />}

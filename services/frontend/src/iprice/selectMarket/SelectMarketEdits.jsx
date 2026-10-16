@@ -31,7 +31,7 @@ export function PriceEditor({ snapshotId, row, onSaved }) {
     {price !== "" && row.minimum_price != null && Number(price) < Number(row.minimum_price) && <p role="status">Цена ниже расчётной нижней границы. Проверьте маржинальность.</p>}
     <label>Причина<input required maxLength={2000} value={comment} onChange={e => setComment(e.target.value)} disabled={busy} /></label>
     <p>Оптовые цены пересчитаются по скидкам этой строки. Утверждение всей версии выполняется отдельно.</p>
-    <button disabled={busy}>{busy ? "Сохраняем…" : "Сохранить цену"}</button>
+    <button className="sm-iprice-primary" disabled={busy}>{busy ? "Сохраняем…" : "Сохранить цену"}</button>
     {error && <p role="alert">{error}</p>}
   </form>;
 }
@@ -79,7 +79,7 @@ export function ParameterEditor({ snapshotId, onSaved, row = null }) {
     <label>Доставка на единицу, руб. без НДС<input type="number" min="0" step="0.01" disabled={busy} value={deliveryCost} onChange={e => { setDeliveryCost(e.target.value); setPreview(null); }} placeholder="Не изменять" /></label>
     <div className="sm-iprice-sources">{fields.map(([, key, title]) => <label key={key}>{title}<input type="number" step="0.000001" disabled={busy} value={values[key] || ""} onChange={e => { setValues({ ...values, [key]: e.target.value }); setPreview(null); }} /></label>)}</div>
     <button disabled={busy} onClick={() => submit(false)}>Проверить выбор</button>
-    {preview && <p>Товаров: {preview.affected.products}, региональных строк: {preview.affected.regions}. <button disabled={busy || !preview.affected.regions} onClick={() => submit(true)}>Применить и пересчитать</button></p>}
+    {preview && <p>Товаров: {preview.affected.products}, региональных строк: {preview.affected.regions}. <button className="sm-iprice-primary" disabled={busy || !preview.affected.regions} onClick={() => submit(true)}>Применить и пересчитать</button></p>}
     <p>Параметры сохраняются для следующих расчётов. Текущий расчёт пересчитывается; прежние ручные цены остаются в истории и требуют повторного согласования.</p>
     {error && <p role="alert">{error}</p>}
   </details>;

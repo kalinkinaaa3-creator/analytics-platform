@@ -37,18 +37,18 @@ export function MarketAnalysis({ snapshotId, versions, canEdit }) {
     <label>Сравнение<select value={comparison} onChange={e => { setComparison(e.target.value); setPath({}); setPage(1); }}><option value="">С ценами конкурентов</option><option value="groups">По группам товаров</option>{versions.filter(version => version.status === "success" && String(version.id) !== String(snapshotId)).map(version => <option key={version.id} value={version.id}>С версией №{version.version_number} за {version.calculation_date}</option>)}</select></label>
     {canEdit && <ZoneEditor onSaved={() => setRefresh(value => value + 1)} />}
     {error && <p role="alert">{error}</p>}
-    {!ready && !error && <p role="status">Загружаем сравнение…</p>}
+    {!ready && !error && <p role="status" className="sm-iprice-loading">Загружаем сравнение…</p>}
     {ready && <>
       {(!comparison || grouped) && <p>Зона рынка определяется по текущей цене из загруженного прайса. Нижний порог: {priceText(data.price_zones.below_market_percent)}%, верхний: {priceText(data.price_zones.above_market_percent)}%, критический: {priceText(data.price_zones.critical_percent)}%. Итоговая РРЦ показана отдельно.</p>}
-      {grouped ? <><button onClick={() => { setPath({}); setPage(1); }}>Все группы</button><p>{Object.values(path).join(" → ")}</p><div className="sm-iprice-table"><table><thead><tr>{["Группа / товар", "Количество товаров", "Текущая цена (медиана)", "Итоговая РРЦ (медиана)", "Рынок (медиана)"].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>{data.results.map(item => <tr key={item.key || item.id}><td>{data.next_level ? <button onClick={() => { setPath({ ...path, [data.next_level]: item.key }); setPage(1); }}>{item.label}</button> : item.nom}</td><td>{item.product_count ?? 1}</td><td>{priceText(item.median_retail_price)}</td><td>{priceText(item.median_final_rrp)}</td><td>{priceText(item.median_market_price)}</td></tr>)}</tbody></table></div></> : <div className="sm-iprice-table"><table><thead><tr>{["Код 1С", "Номенклатура", "Регион", comparison ? "Было" : "Текущая цена", "Итоговая РРЦ", comparison ? "Изменение" : "Рынок", ...(comparison ? [] : ["Зона"])].map(label => <th key={label}>{label}</th>)}</tr></thead>
+      {grouped ? <><button onClick={() => { setPath({}); setPage(1); }}>Все группы</button><p>{Object.values(path).join(" → ")}</p><div className="sm-iprice-table"><table><thead><tr>{["Группа / товар", "Количество товаров", "Текущая цена (медиана)", "Итоговая РРЦ (медиана)", "Рынок (медиана)"].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>{data.results.map(item => <tr key={item.key || item.id}><td>{data.next_level ? <button onClick={() => { setPath({ ...path, [data.next_level]: item.key }); setPage(1); }}>{item.label}</button> : item.nom}</td><td className="sm-number">{item.product_count ?? 1}</td><td className="sm-number">{priceText(item.median_retail_price)}</td><td className="sm-number">{priceText(item.median_final_rrp)}</td><td className="sm-number">{priceText(item.median_market_price)}</td></tr>)}</tbody></table></div></> : <div className="sm-iprice-table"><table><thead><tr>{["Код 1С", "Номенклатура", "Регион", comparison ? "Было" : "Текущая цена", "Итоговая РРЦ", comparison ? "Изменение" : "Рынок", ...(comparison ? [] : ["Зона"])].map(label => <th key={label}>{label}</th>)}</tr></thead>
         <tbody>{data.results.map((item, i) => {
           const row = comparison ? item.comparison || item.base : item;
           const changes = { added: "Добавлена", removed: "Удалена", changed: "Изменена", unchanged: "Без изменений" };
-          return <tr key={i}><td>{row.code_1c}</td><td>{row.nom}</td><td>{row.sale_region}</td>
+          return <tr key={i}><td className="sm-iprice-code">{row.code_1c}</td><td>{row.nom}</td><td>{row.sale_region}</td>
             <td className="sm-number">{priceText(comparison ? item.base?.effective_approved_rrp : row.retail_price)}</td>
             <td className="sm-number">{priceText(comparison ? item.comparison?.effective_approved_rrp : row.final_rrp)}</td>
-            <td>{comparison ? changes[item.change_type] || item.change_type : priceText(row.market_price)}</td>
-            {!comparison && <td>{zones[row.zone] || row.zone}</td>}</tr>;
+            <td className={comparison ? undefined : "sm-number"}>{comparison ? changes[item.change_type] || item.change_type : priceText(row.market_price)}</td>
+            {!comparison && <td><span className={`sm-iprice-tag sm-iprice-tag--${row.zone}`}>{zones[row.zone] || row.zone}</span></td>}</tr>;
         })}</tbody></table></div>}
       {!data.results.length && <p>Строк нет.</p>}
       <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Назад</button> {page} / {pages} <button disabled={page >= pages} onClick={() => setPage(page + 1)}>Далее</button>
@@ -74,7 +74,7 @@ function ZoneEditor({ onSaved }) {
     } catch { setMessage("Проверьте пороги: нижний ≤ 0, верхний ≥ 0, критический больше верхнего."); }
     finally { setBusy(false); }
   }
-  return <details><summary>Настроить зоны рынка</summary><p>Доли: 0,03 = 3%. Пороги меняют оценку рынка, цены не пересчитываются.</p>{values && <form onSubmit={save}>{[["below_market_threshold", "Нижний порог"], ["above_market_threshold", "Верхний порог"], ["critical_threshold", "Критический порог"]].map(([key, label]) => <label key={key}>{label}<input type="number" step="0.000001" required disabled={busy} value={values[key]} onChange={event => setValues({ ...values, [key]: event.target.value })} /></label>)}<button disabled={busy}>Сохранить пороги</button></form>}{message && <p role="status">{message}</p>}</details>;
+  return <details><summary>Настроить зоны рынка</summary><p>Доли: 0,03 = 3%. Пороги меняют оценку рынка, цены не пересчитываются.</p>{values && <form className="sm-iprice-thresholds" onSubmit={save}>{[["below_market_threshold", "Нижний порог"], ["above_market_threshold", "Верхний порог"], ["critical_threshold", "Критический порог"]].map(([key, label]) => <label key={key}>{label}<input type="number" step="0.000001" required disabled={busy} value={values[key]} onChange={event => setValues({ ...values, [key]: event.target.value })} /></label>)}<button className="sm-iprice-primary" disabled={busy}>Сохранить пороги</button></form>}{message && <p role="status">{message}</p>}</details>;
 }
 
 export function ProductDetails({ snapshotId, productId, region, canEdit, onSaved }) {
@@ -93,11 +93,11 @@ export function ProductDetails({ snapshotId, productId, region, canEdit, onSaved
     <p>Учитывать транспортные расходы: {region.include_transport ? "Да" : "Нет"}. Все затраты ниже указаны без НДС.</p>
     <dl>{[["product_cost", "Закупочная цена"], ["quantity_eurotruck", "Количество в еврофуре (справочно)"], ["logistics_unit", "Учтённая доставка на единицу"], ["cost_with_logistics", "Закупка с доставкой"], ["base_analog", "Коэффициент аналога"], ["base_exclusive", "Маржа эксклюзива (доля)"], ["minimum_margin", "Минимальная маржа (доля)"], ["preliminary_rrp", "Предварительная РРЦ"], ["minimum_price", "Минимальная цена"], ["calculated_rrp", "Расчётная РРЦ"]].map(([key, title]) => <div key={key}><dt>{title}</dt><dd>{priceText(region[key])}</dd></div>)}</dl>
     <p>Прайс за {region.nomenclature_price_date || "—"}, себестоимость за {region.product_cost_month || "—"}.</p>
-    <h4>Итоговые цены, руб.</h4><table><thead><tr><th>Тип цены</th><th>Без НДС</th><th>С НДС 22%</th></tr></thead><tbody>{[["rrp", "Розница"], ["small", "Мелкий опт"], ["medium", "Средний опт"], ["large", "Крупный опт"]].map(([key, title]) => <tr key={key}><td>{title}</td><td>{priceText(region.effective[key])}</td><td>{priceText(region.effective_gross?.[key])}</td></tr>)}</tbody></table>
-    <h3>Конкуренты в расчёте</h3>{!data.competitors.length && <p>Данных конкурентов нет.</p>}
+    <h4>Итоговые цены, руб.</h4><table><thead><tr><th>Тип цены</th><th className="sm-number">Без НДС</th><th className="sm-number">С НДС 22%</th></tr></thead><tbody>{[["rrp", "Розница"], ["small", "Мелкий опт"], ["medium", "Средний опт"], ["large", "Крупный опт"]].map(([key, title]) => <tr key={key}><td>{title}</td><td className="sm-number">{priceText(region.effective[key])}</td><td className="sm-number">{priceText(region.effective_gross?.[key])}</td></tr>)}</tbody></table>
+    <h3>Конкуренты в расчёте</h3>{!data.competitors.length && <p className="sm-iprice-empty">Данных конкурентов нет.</p>}
     {data.competitors.map(item => <p key={item.id}>{item.source} · {priceText(item.competitor_final_price_max)} руб. без НДС · дата: {item.competitor_price_date || "—"} · регионы: {item.applicable_regions.join(", ") || "—"} {/^https?:\/\//i.test(item.url || "") && <a href={item.url} target="_blank" rel="noopener noreferrer">Посмотреть</a>}</p>)}
     <CompetitorEditor snapshotId={snapshotId} productId={productId} canEdit={canEdit} onSaved={onSaved} />
-  </> : !error && <p role="status">Загружаем карточку…</p>}</section>;
+  </> : !error && <p role="status" className="sm-iprice-loading">Загружаем карточку…</p>}</section>;
 }
 
 function CompetitorEditor({ snapshotId, productId, canEdit, onSaved }) {

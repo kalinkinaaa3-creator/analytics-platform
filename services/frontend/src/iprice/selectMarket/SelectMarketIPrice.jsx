@@ -76,7 +76,7 @@ export function SelectMarketIPrice({ dashboard }) {
     {error && <p role="alert" className="sm-iprice-error">{error}</p>}
     {statusError && <p role="alert" className="sm-iprice-error">{statusError}</p>}
     {message && <p role="status">{message}</p>}
-    {!state && <p role="status">Загружаем источники…</p>}
+    {!state && <p role="status" className="sm-iprice-loading">Загружаем источники…</p>}
     {state && <>
       <SelectMarketCalculations canEdit={state.can_edit} view={view} />
       <div hidden={view !== "data"}>
@@ -106,12 +106,12 @@ export function SelectMarketIPrice({ dashboard }) {
               });
             }} />
           </label>}
-          {busy === key && <p role="status">Проверяем и загружаем файл…</p>}
+          {busy === key && <p role="status" className="sm-iprice-loading">Проверяем и загружаем файл…</p>}
         </article>;
       })}</div>
       <article className="sm-iprice-card"><h2>Обновление сайта и конкурентов</h2>
         <p>Сайт загружается полностью. Товары конкурентов выбираются из активной классификации. Во время ожидания ТАРА остальные сборы ожидают освобождения общего слота.</p>
-        {state.can_edit && <button type="button" disabled={!!busy || active || !state.parsers_enabled} onClick={() => perform("parsers", async () => {
+        {state.can_edit && <button className="sm-iprice-primary" type="button" disabled={!!busy || active || !state.parsers_enabled} onClick={() => perform("parsers", async () => {
           await api.post(`${root}parsers/start/`, {});
           if (mounted.current) setMessage("Запуск зарегистрирован. Состояние обновляется автоматически.");
         })}>{active ? "Обновление выполняется" : "Обновить источники"}</button>}
@@ -121,7 +121,7 @@ export function SelectMarketIPrice({ dashboard }) {
         {state.queue.map(item => <p key={item.id}>{statuses[item.status] || item.status}{item.position ? ` · Место в очереди: ${item.position}` : ""}{item.message ? ` · ${item.message}` : ""}</p>)}
       </article>
       <article className="sm-iprice-card"><h2>Последние загрузки файлов</h2>
-        {!state.imports.length && !state.price_imports.length && <p>Файлы пока не загружались.</p>}
+        {!state.imports.length && !state.price_imports.length && <p className="sm-iprice-empty">Файлы пока не загружались.</p>}
         <ul>{state.price_imports.map(item => <li key={`price-${item.id}`}>Прайс за {item.date}: {item.filename} · {item.rows} строк · версия {item.revision}</li>)}
           {state.imports.map(item => <li key={item.id}>{sources.find(source => source[0] === item.kind)?.[1] || item.kind}: {item.filename} · {new Date(item.created_at).toLocaleString("ru-RU")}</li>)}</ul>
       </article>
