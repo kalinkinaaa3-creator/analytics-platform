@@ -12,6 +12,7 @@ services/parser-browser/tara-session/
 services/backend/private/
 staticfiles/
 *.log
+*.log.*
 
 # Environment
 .env

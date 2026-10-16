@@ -4,6 +4,7 @@ import xml.etree.ElementTree as ET
 from datetime import date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
+from urllib.parse import urlsplit
 
 import requests
 from django.db import transaction
@@ -20,10 +21,6 @@ logger = logging.getLogger("parsers.base")
 
 SOURCE = "base"
 MISSING_FROM_MAP = "missing_from_map"
-
-YML_URL = "https://iplast.com/bitrix/catalog_export/iPrice-9j9dpp0l4w7lh.xml"
-SELECT_MARKET_YML_URL = "https://selectmarket.ru/bitrix/catalog_export/iPrice-8j9dewr42w7lh.xml"
-
 
 class BaseParserError(Exception):
     pass
@@ -94,19 +91,42 @@ def calc_vat_and_final_price(price: Decimal | None) -> tuple[Decimal | None, Dec
     return vat, final_price
 
 
-def fetch_yml_root(*, url=None):
-    url = url or YML_URL
-    logger.info("Base YML request: %s", url)
+def configured_yml_url(setting_name):
+    from django.conf import settings
+    value = str(getattr(settings, setting_name, "") or "").strip()
+    if not value:
+        raise BaseParserError(f"Не задана переменная окружения {setting_name}")
+    return validate_yml_url(value)
 
-    response = requests.get(
-        url,
-        timeout=120,
-        headers={
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/xml,text/xml,*/*",
-        },
-    )
-    response.raise_for_status()
+
+def validate_yml_url(value):
+    try:
+        parsed = urlsplit(value)
+        valid = parsed.scheme in ("https", "http") and bool(parsed.hostname) and not any(c.isspace() for c in value)
+    except ValueError:
+        valid = False
+    if not valid:
+        raise BaseParserError("Некорректный адрес YML в настройках: требуется обычный HTTP(S) URL")
+    return value
+
+
+def fetch_yml_root(*, url=None):
+    url = configured_yml_url("IPLAST_IPRICE_YML_URL") if url is None else validate_yml_url(url)
+    logger.info("Base YML request")
+
+    try:
+        response = requests.get(
+            url,
+            timeout=120,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/xml,text/xml,*/*",
+            },
+        )
+        response.raise_for_status()
+    except requests.RequestException:
+        # Request exceptions include the private feed URL; do not persist it in logs/jobs.
+        raise BaseParserError("Не удалось загрузить YML: проверьте доступность источника и настройки подключения") from None
 
     xml_data = response.content
 
@@ -340,8 +360,7 @@ def mark_base_offer_failed(product_url: ParserProductUrl, error: Exception, *, w
 @standalone("base")
 def load_base_products(limit: int | None = None, *, workspace=None) -> dict:
     if workspace is not None and workspace.code == "select-market":
-        from django.conf import settings
-        root = fetch_yml_root(url=getattr(settings, "SELECT_MARKET_IPRICE_YML_URL", "") or SELECT_MARKET_YML_URL)
+        root = fetch_yml_root(url=configured_yml_url("SELECT_MARKET_IPRICE_YML_URL"))
         with transaction.atomic():
             from organizations.models import Organization
             Organization.objects.select_for_update().get(code=workspace.code)

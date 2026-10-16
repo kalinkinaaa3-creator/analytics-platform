@@ -87,15 +87,14 @@ class YmlTests(TestCase):
         self.assertEqual(parse_offer(offer)["code_1c"], 1)
         self.assertEqual(parse_offer(offer, workspace=self.workspace)["code_1c"], "001")
 
-    @override_settings(SELECT_MARKET_IPRICE_YML_URL="")
-    def test_default_feed_is_select_market_and_zero_price_is_not_a_missing_product(self):
-        from datasets.services.parsers.base_parser import SELECT_MARKET_YML_URL
+    @override_settings(SELECT_MARKET_IPRICE_YML_URL="https://select-market.example.test/catalog.xml")
+    def test_configured_feed_and_zero_price_is_not_a_missing_product(self):
         root = xml("8-000000212")
         root.find("offer").set("available", "false")
         root.find("offer/price").text = "0"
         with patch("datasets.services.parsers.base_parser.fetch_yml_root", return_value=root) as fetch:
             load_base_products(workspace=self.workspace)
-        fetch.assert_called_once_with(url=SELECT_MARKET_YML_URL)
+        fetch.assert_called_once_with(url="https://select-market.example.test/catalog.xml")
         self.assertEqual(BaseProductPrice.objects.get().code_1c, "8-000000212")
         self.assertEqual(ParserProductUrl.objects.get().status, "active")
 
@@ -112,3 +111,44 @@ class YmlTests(TestCase):
         with self.assertRaises(BaseParserError):
             self.load("001", "001")
         self.assertFalse(ParserProductUrl.objects.exists())
+
+    @override_settings(SELECT_MARKET_IPRICE_YML_URL="", IPLAST_IPRICE_YML_URL="https://iplast.example.test/private.xml")
+    def test_missing_select_market_url_never_falls_back_or_writes(self):
+        with patch("datasets.services.parsers.base_parser.requests.get") as get:
+            with self.assertRaisesMessage(BaseParserError, "SELECT_MARKET_IPRICE_YML_URL"):
+                load_base_products(workspace=self.workspace)
+        get.assert_not_called()
+        self.assertFalse(BaseProductPrice.objects.exists())
+
+    def test_legacy_url_is_required_and_uses_its_own_setting(self):
+        from datasets.services.parsers.base_parser import fetch_yml_root
+        with override_settings(IPLAST_IPRICE_YML_URL=""), patch("datasets.services.parsers.base_parser.requests.get") as get:
+            with self.assertRaisesMessage(BaseParserError, "IPLAST_IPRICE_YML_URL"):
+                fetch_yml_root()
+            get.assert_not_called()
+        with override_settings(IPLAST_IPRICE_YML_URL="https://iplast.example.test/private.xml"), patch("datasets.services.parsers.base_parser.requests.get") as get:
+            get.return_value.content = b"<yml_catalog/>"
+            self.assertEqual(fetch_yml_root().tag, "yml_catalog")
+            self.assertEqual(get.call_args.args[0], "https://iplast.example.test/private.xml")
+
+    def test_url_not_exposed_in_logs_or_request_exception(self):
+        import requests
+        import traceback
+        from datasets.services.parsers.base_parser import fetch_yml_root
+        private = "https://example.test/private-feed.xml"
+        with patch("datasets.services.parsers.base_parser.requests.get") as get, self.assertLogs("parsers.base", level="INFO") as logs:
+            get.side_effect = requests.HTTPError(f"Forbidden: {private}")
+            try:
+                fetch_yml_root(url=private)
+            except BaseParserError:
+                self.assertNotIn(private, traceback.format_exc())
+            else:
+                self.fail("HTTP error must fail the load")
+        self.assertNotIn(private, " ".join(logs.output))
+
+    def test_markdown_link_is_rejected_without_request(self):
+        from datasets.services.parsers.base_parser import fetch_yml_root
+        with patch("datasets.services.parsers.base_parser.requests.get") as get:
+            with self.assertRaises(BaseParserError):
+                fetch_yml_root(url="[https://example.test/feed.xml](https://example.test/feed.xml)")
+        get.assert_not_called()

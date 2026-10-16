@@ -62,7 +62,8 @@ INSTALLED_APPS = [
 # Enable after queue migration and coordinated drain of existing parser processes.
 # Select Market parser launches remain unavailable until all adapters are ready.
 PARSER_SHARED_QUEUE_ENABLED = os.environ.get("PARSER_SHARED_QUEUE_ENABLED", "0") == "1"
-# Empty means the temporarily agreed Iplast YML; override when SM feed is ready.
+# Feed URLs are private deployment settings. No built-in fallback.
+IPLAST_IPRICE_YML_URL = os.environ.get("IPLAST_IPRICE_YML_URL", "")
 SELECT_MARKET_IPRICE_YML_URL = os.environ.get("SELECT_MARKET_IPRICE_YML_URL", "")
 
 ASGI_APPLICATION = "config.asgi.application"
