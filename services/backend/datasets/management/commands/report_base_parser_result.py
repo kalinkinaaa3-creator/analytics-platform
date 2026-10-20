@@ -5,7 +5,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Q
 
 from analytics.services.bitrix_notify import send_bitrix_message
-from datasets.models import ParserProductUrl
+from datasets.services.iprice_workspace import IPriceWorkspace
 
 
 logger = logging.getLogger("parsers.base")
@@ -21,9 +21,11 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--limit", type=int, default=30)
         parser.add_argument("--skip-bitrix", action="store_true")
+        parser.add_argument("--organization", choices=("iplast", "select-market"), default="iplast")
 
     def handle(self, *args, **options):
         limit = options["limit"]
+        ParserProductUrl = IPriceWorkspace(options["organization"]).model("ParserProductUrl")
 
         total = ParserProductUrl.objects.filter(source="base").count()
         active = ParserProductUrl.objects.filter(
@@ -82,6 +84,7 @@ class Command(BaseCommand):
 
         lines = [
             "Base parser pipeline finished",
+            f"Organization: {options['organization']}",
             f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             "",
             f"Total URL: {total}",
