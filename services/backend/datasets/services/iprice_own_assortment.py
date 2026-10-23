@@ -40,11 +40,15 @@ def _validate(product):
 
 
 def build_iprice_own_assortment(
-    *, snapshot_product: IPriceSnapshotProduct,
+    *, snapshot_product: IPriceSnapshotProduct, workspace=None,
 ) -> dict:
     _validate(snapshot_product)
+    product_model = workspace.model('IPriceSnapshotProduct') if workspace else IPriceSnapshotProduct
+    region_model = workspace.model('IPriceSnapshotRegion') if workspace else IPriceSnapshotRegion
+    site_model = workspace.model('BaseProductPrice') if workspace else BaseProductPrice
+    classification_model = workspace.model('ParserProductClassification') if workspace else ParserProductClassification
     candidates = list(
-        IPriceSnapshotProduct.objects
+        product_model.objects
         .filter(
             snapshot_id=snapshot_product.snapshot_id,
             category__iexact=clean_text(snapshot_product.category),
@@ -57,7 +61,7 @@ def build_iprice_own_assortment(
         .exclude(pk=snapshot_product.pk)
         .annotate(
             site_name=Subquery(
-                BaseProductPrice.objects.filter(
+                site_model.objects.filter(
                     product_key=OuterRef("base_product_key"),
                 ).exclude(name__isnull=True).exclude(name="").order_by(
                     "-date_add", "-id",
@@ -68,13 +72,13 @@ def build_iprice_own_assortment(
     )
     prices_by_product_region = defaultdict(lambda: defaultdict(list))
     articles_by_product = dict(
-        ParserProductClassification.objects.filter(
+        classification_model.objects.filter(
             product_key__in=[candidate.base_product_key for candidate in candidates],
             status=ParserProductClassification.STATUS_ACTIVE,
         ).values_list("product_key", "article_number_analogs")
     )
     for row in (
-        IPriceSnapshotRegion.objects
+        region_model.objects
         .filter(snapshot_product_id__in=[candidate.id for candidate in candidates])
         .values("snapshot_product_id", "sale_region", "current_retail")
     ):
@@ -124,11 +128,12 @@ def build_iprice_own_assortment(
             "regional_prices": regional_prices,
             "market_price": candidate.competitor_rrp_median,
             "pricing_method": candidate.pricing_method,
+            **({'final_price': candidate.effective_approved_rrp_median} if workspace else {}),
             "calculation_status": candidate.calculation_status,
         })
 
     results.sort(key=lambda item: (
-        str(item["name"] or "").casefold(), item["product_key"],
+        str(item["name"] or "").casefold(), item["product_key"] if item["product_key"] is not None else -1, item["snapshot_product_id"],
     ))
     return {
         "snapshot_id": snapshot_product.snapshot_id,

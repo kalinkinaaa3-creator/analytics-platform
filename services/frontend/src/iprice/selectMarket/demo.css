@@ -1,0 +1,551 @@
+/* iPrice. Токены и компоненты дизайн-системы iPrice, редакция 1.
+   Всё ограничено корнем .sm-iprice, глобальных сбросов нет. */
+
+.sm-iprice {
+  /* палитра */
+  --blue-50: #F2F7FC; --blue-100: #E1EDF8; --blue-200: #C6DCF1; --blue-300: #A3C5E6; --blue-400: #7EABD8;
+  --blue-500: #5A8EC4; --blue-600: #3F72AA; --blue-700: #305A89; --blue-800: #25466A; --blue-900: #1B334D;
+  --orange-50: #FFF6EF; --orange-100: #FFE9D8; --orange-200: #FDD2B0; --orange-300: #F9B887; --orange-400: #F39F63;
+  --orange-500: #E4834A; --orange-600: #C66A33; --orange-700: #9E5227; --orange-800: #7A3F1F;
+  --gray-0: #FFFFFF; --gray-50: #F7F9FB; --gray-100: #EEF2F6; --gray-200: #DDE3EA; --gray-300: #C3CCD6; --gray-400: #98A4B2;
+  --gray-500: #6B7888; --gray-600: #4B5664; --gray-700: #323B46; --gray-800: #1F262E;
+  --green-100: #DDF1E6; --green-600: #2E7D5B; --green-800: #1D5A40;
+  --amber-100: #FBF0CF; --amber-600: #8A6A0F; --amber-800: #5E480A;
+  --red-100: #FBE3E3; --red-600: #B23B3B; --red-800: #7E2626;
+
+  /* семантика */
+  --bg: var(--gray-50); --surface: var(--gray-0); --surface-2: var(--gray-100);
+  --border: var(--gray-200); --border-strong: var(--gray-300);
+  --text: var(--gray-800); --text-2: var(--gray-600); --text-3: var(--gray-500);
+  --primary: var(--blue-600); --primary-hover: var(--blue-700); --primary-soft: var(--blue-100); --primary-soft-text: var(--blue-800);
+  --accent: var(--orange-400); --accent-hover: var(--orange-500); --accent-soft: var(--orange-50); --accent-line: var(--orange-500); --accent-text: var(--orange-700);
+  --link: var(--blue-700); --focus: var(--blue-500);
+  --success: var(--green-600); --success-bg: var(--green-100); --success-text: var(--green-800);
+  --warning: var(--amber-600); --warning-bg: var(--amber-100); --warning-text: var(--amber-800);
+  --danger: var(--red-600); --danger-bg: var(--red-100); --danger-text: var(--red-800);
+  --info-bg: var(--blue-50); --info-text: var(--blue-800);
+
+  /* цена */
+  --zone-below: var(--blue-800); --zone-below-bg: var(--blue-50);
+  --zone-market: var(--green-800); --zone-market-bg: var(--green-100);
+  --zone-above: var(--orange-700); --zone-above-bg: var(--orange-50);
+  --zone-critical: var(--red-800); --zone-critical-bg: var(--red-100);
+  --zone-none: var(--gray-600); --zone-none-bg: var(--gray-100);
+
+  --font: "Select Market Golos", "Golos Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", Consolas, "Courier New", monospace;
+  --r-xs: 2px; --r-s: 4px; --r-m: 6px; --r-l: 10px; --r-xl: 14px; --r-pill: 999px;
+  --shadow-2: 0 4px 12px rgba(22,27,33,.08), 0 1px 3px rgba(22,27,33,.06);
+  --shadow-3: 0 12px 32px rgba(22,27,33,.14), 0 2px 6px rgba(22,27,33,.08);
+
+  box-sizing: border-box;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/20px var(--font);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+.sm-iprice *, .sm-iprice *::before, .sm-iprice *::after { box-sizing: border-box; }
+.sm-iprice button, .sm-iprice input, .sm-iprice select, .sm-iprice textarea { font: inherit; color: inherit; }
+.sm-iprice a { color: var(--link); text-decoration: none; }
+.sm-iprice a:hover { text-decoration: underline; }
+.sm-iprice :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sm-iprice h1, .sm-iprice h2, .sm-iprice h3, .sm-iprice h4, .sm-iprice p { margin: 0; }
+.sm-iprice .mono { font-family: var(--font-mono); font-size: 12.5px; }
+.sm-iprice .num { text-align: right; white-space: nowrap; }
+.sm-iprice .muted { color: var(--text-2); }
+.sm-iprice .quiet { color: var(--text-3); }
+.sm-iprice .small { font-size: 12px; line-height: 16px; }
+.sm-iprice .nowrap { white-space: nowrap; }
+.sm-iprice .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- каркас модуля ---------- */
+:where(.sm-iprice) .ip-head { position: sticky; top: 0; z-index: 20; background: var(--surface); border-bottom: 1px solid var(--border); }
+:where(.sm-iprice) .ip-head-row { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 24px 0 20px; }
+:where(.sm-iprice) .ip-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; white-space: nowrap; color: var(--text) !important; text-decoration: none !important; margin-right: 12px; }
+:where(.sm-iprice) .ip-brand small { display: block; font-weight: 400; font-size: 12px; color: var(--text-2); line-height: 14px; }
+:where(.sm-iprice) .ip-head-spacer { flex: 1; }
+:where(.sm-iprice) .ip-head-row > .ip-row { flex-wrap: nowrap; }
+:where(.sm-iprice) .ip-head-row label { white-space: nowrap; }
+:where(.sm-iprice) .ip-nav { display: flex; gap: 2px; align-self: stretch; }
+:where(.sm-iprice) .ip-nav a { display: inline-flex; align-items: center; gap: 8px; height: 100%; padding: 2px 12px 0; color: var(--text-2); border-bottom: 2px solid transparent; font-weight: 500; white-space: nowrap; }
+:where(.sm-iprice) .ip-nav a:hover { color: var(--text); text-decoration: none; }
+:where(.sm-iprice) .ip-nav a.active { color: var(--text); border-bottom-color: var(--primary); }
+:where(.sm-iprice) .ip-main { padding: 24px; display: flex; flex-direction: column; gap: 20px; max-width: 1600px; }
+:where(.sm-iprice) .ip-page-head { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+:where(.sm-iprice) .ip-page-head > div:first-child { flex: 1; min-width: 260px; }
+:where(.sm-iprice) .ip-page-head h1 { font-size: 24px; line-height: 32px; font-weight: 600; }
+:where(.sm-iprice) .ip-page-head p { color: var(--text-2); margin-top: 4px; max-width: 760px; }
+:where(.sm-iprice) .ip-crumbs { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 13px; flex-wrap: wrap; }
+
+/* ---------- сетки и панели ---------- */
+:where(.sm-iprice) .ip-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+:where(.sm-iprice) .ip-row.between { justify-content: space-between; }
+:where(.sm-iprice) .ip-stack { display: flex; flex-direction: column; gap: 12px; }
+:where(.sm-iprice) .ip-grid { display: grid; gap: 16px; }
+:where(.sm-iprice) .ip-grid.k4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+:where(.sm-iprice) .ip-grid.k3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+:where(.sm-iprice) .ip-grid.k2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+:where(.sm-iprice) .ip-grid.side { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 1180px) { :where(.sm-iprice) .ip-grid.k4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } :where(.sm-iprice) .ip-grid.side, :where(.sm-iprice) .ip-grid.k3 { grid-template-columns: 1fr; } }
+:where(.sm-iprice) .ip-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); }
+:where(.sm-iprice) .ip-panel.pad { padding: 20px; }
+:where(.sm-iprice) .ip-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px 12px; flex-wrap: wrap; }
+:where(.sm-iprice) .ip-panel-title { flex: 1 1 260px; min-width: 0; }
+:where(.sm-iprice) .ip-panel-head h2 { font-size: 16px; line-height: 24px; font-weight: 600; }
+:where(.sm-iprice) .ip-panel-head p { color: var(--text-2); font-size: 13px; }
+:where(.sm-iprice) .ip-section-title { font-size: 16px; line-height: 24px; font-weight: 600; }
+:where(.sm-iprice) .ip-cap { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--text-2); }
+:where(.sm-iprice) .ip-divider { height: 1px; background: var(--border); border: 0; margin: 0; }
+
+/* ---------- кнопки ---------- */
+:where(.sm-iprice) .ip-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 32px; padding: 0 14px; border-radius: var(--r-m); border: 1px solid transparent; font-weight: 500; cursor: pointer; white-space: nowrap; background: var(--surface); text-decoration: none !important; transition: background-color 120ms, border-color 120ms; }
+:where(.sm-iprice) .ip-btn .ip-i { width: 16px; height: 16px; }
+:where(.sm-iprice) .ip-btn.primary { background: var(--primary); color: #fff; }
+:where(.sm-iprice) .ip-btn.primary:hover { background: var(--primary-hover); }
+:where(.sm-iprice) .ip-btn.accent { background: var(--accent); color: var(--gray-800); }
+:where(.sm-iprice) .ip-btn.accent:hover { background: var(--accent-hover); }
+:where(.sm-iprice) .ip-btn.secondary { border-color: var(--border-strong); color: var(--text); }
+:where(.sm-iprice) .ip-btn.secondary:hover { background: var(--surface-2); }
+:where(.sm-iprice) .ip-btn.ghost { background: transparent; color: var(--link); }
+:where(.sm-iprice) .ip-btn.ghost:hover { background: var(--blue-50); }
+:where(.sm-iprice) .ip-btn.danger { border-color: var(--danger); color: var(--danger); }
+:where(.sm-iprice) .ip-btn.danger:hover { background: var(--danger-bg); }
+:where(.sm-iprice) .ip-btn.s { height: 28px; padding: 0 10px; font-size: 13px; }
+:where(.sm-iprice) .ip-btn.l { height: 40px; padding: 0 18px; }
+:where(.sm-iprice) .ip-btn.icon { width: 32px; padding: 0; }
+:where(.sm-iprice) .ip-btn.icon.s { width: 28px; }
+:where(.sm-iprice) .ip-btn:disabled, :where(.sm-iprice) .ip-btn[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+:where(.sm-iprice) .ip-spin { width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: ip-rot .8s linear infinite; flex: none; }
+@keyframes ip-rot { to { transform: rotate(360deg); } }
+:where(.sm-iprice) .ip-seg { display: inline-flex; padding: 2px; background: var(--surface-2); border-radius: var(--r-m); gap: 2px; }
+:where(.sm-iprice) .ip-seg button { height: 28px; padding: 0 12px; border: 0; border-radius: var(--r-s); background: transparent; color: var(--text-2); cursor: pointer; font-weight: 500; white-space: nowrap; }
+:where(.sm-iprice) .ip-seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(22,27,33,.1); }
+
+/* ---------- метки ---------- */
+:where(.sm-iprice) .ip-tag { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: var(--r-s); font-size: 12px; font-weight: 500; white-space: nowrap; line-height: 16px; }
+:where(.sm-iprice) .ip-tag .ip-i { width: 13px; height: 13px; }
+:where(.sm-iprice) .ip-tag .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+:where(.sm-iprice) .ip-tag.gray { background: var(--surface-2); color: var(--text-2); }
+:where(.sm-iprice) .ip-tag.outline { border: 1px solid var(--border-strong); color: var(--text-2); }
+:where(.sm-iprice) .ip-tag.blue { background: var(--primary-soft); color: var(--primary-soft-text); }
+:where(.sm-iprice) .ip-tag.orange { background: var(--accent-soft); color: var(--accent-text); box-shadow: inset 0 0 0 1px var(--orange-200); }
+:where(.sm-iprice) .ip-tag.green { background: var(--success-bg); color: var(--success-text); }
+:where(.sm-iprice) .ip-tag.amber { background: var(--warning-bg); color: var(--warning-text); }
+:where(.sm-iprice) .ip-tag.red { background: var(--danger-bg); color: var(--danger-text); }
+:where(.sm-iprice) .ip-tag.red-solid { background: var(--danger); color: #fff; }
+:where(.sm-iprice) .ip-tag.z-below { background: var(--zone-below-bg); color: var(--zone-below); }
+:where(.sm-iprice) .ip-tag.z-market { background: var(--zone-market-bg); color: var(--zone-market); }
+:where(.sm-iprice) .ip-tag.z-above { background: var(--zone-above-bg); color: var(--zone-above); }
+:where(.sm-iprice) .ip-tag.z-critical { background: var(--zone-critical-bg); color: var(--zone-critical); }
+:where(.sm-iprice) .ip-tag.z-none { background: var(--zone-none-bg); color: var(--zone-none); }
+:where(.sm-iprice) .ip-src { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: var(--r-pill); border: 1px solid var(--border); font-size: 12px; color: var(--text-2); background: var(--surface); white-space: nowrap; }
+:where(.sm-iprice) .ip-src .ip-i { width: 13px; height: 13px; }
+:where(.sm-iprice) .ip-src.human { background: var(--accent-soft); border-color: var(--orange-200); color: var(--accent-text); }
+:where(.sm-iprice) .ip-src.system { background: var(--primary-soft); border-color: var(--primary-soft); color: var(--primary-soft-text); }
+:where(.sm-iprice) .ip-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--r-pill); background: var(--surface-2); color: var(--text-2); font-size: 12px; font-weight: 600; }
+:where(.sm-iprice) .ip-badge.accent { background: var(--accent); color: var(--gray-800); }
+:where(.sm-iprice) .ip-badge.red { background: var(--danger); color: #fff; }
+
+/* ---------- поля ---------- */
+:where(.sm-iprice) .ip-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+:where(.sm-iprice) .ip-field > label, :where(.sm-iprice) .ip-field > .ip-label { font-size: 13px; font-weight: 500; color: var(--text); }
+:where(.sm-iprice) .ip-field .req { color: var(--danger); margin-left: 2px; }
+:where(.sm-iprice) .ip-field .help { font-size: 12px; color: var(--text-2); }
+:where(.sm-iprice) .ip-field .err { font-size: 12px; color: var(--danger-text); display: flex; gap: 4px; align-items: center; }
+:where(.sm-iprice) .ip-input, :where(.sm-iprice) .ip-select, :where(.sm-iprice) .ip-textarea { height: 32px; width: 100%; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--r-m); background: var(--surface); color: var(--text); min-width: 0; }
+:where(.sm-iprice) .ip-textarea { height: auto; min-height: 64px; padding: 8px 10px; resize: vertical; }
+:where(.sm-iprice) .ip-input:hover, :where(.sm-iprice) .ip-select:hover, :where(.sm-iprice) .ip-textarea:hover { border-color: var(--gray-400); }
+:where(.sm-iprice) .ip-input:focus, :where(.sm-iprice) .ip-select:focus, :where(.sm-iprice) .ip-textarea:focus { outline: 2px solid var(--focus); outline-offset: 0; border-color: var(--focus); }
+:where(.sm-iprice) .ip-input.num { text-align: right; }
+:where(.sm-iprice) .ip-input.is-error { border-color: var(--danger); }
+:where(.sm-iprice) .ip-affix { position: relative; display: flex; align-items: center; }
+:where(.sm-iprice) .ip-affix .pre, :where(.sm-iprice) .ip-affix .suf { position: absolute; color: var(--text-3); font-size: 13px; display: flex; pointer-events: none; }
+:where(.sm-iprice) .ip-affix .pre { left: 10px; }
+:where(.sm-iprice) .ip-affix .suf { right: 10px; }
+:where(.sm-iprice) .ip-affix .pre ~ .ip-input { padding-left: 32px; }
+:where(.sm-iprice) .ip-affix .ip-input:has(+ .suf) { padding-right: 32px; }
+:where(.sm-iprice) .ip-check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+:where(.sm-iprice) .ip-check input { width: 16px; height: 16px; accent-color: var(--primary); margin: 0; }
+
+/* ---------- KPI ---------- */
+:where(.sm-iprice) .ip-kpi { display: flex; flex-direction: column; gap: 6px; padding: 16px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); color: var(--text); text-align: left; min-width: 0; }
+:where(.sm-iprice) button.ip-kpi, :where(.sm-iprice) a.ip-kpi { cursor: pointer; text-decoration: none !important; font: inherit; }
+:where(.sm-iprice) button.ip-kpi:hover, :where(.sm-iprice) a.ip-kpi:hover { border-color: var(--blue-400); background: var(--blue-50); }
+:where(.sm-iprice) .ip-kpi .l { font-size: 12px; line-height: 16px; color: var(--text-2); font-weight: 500; display: flex; align-items: center; gap: 6px; }
+:where(.sm-iprice) .ip-kpi .v { font-size: 28px; line-height: 36px; font-weight: 600; }
+:where(.sm-iprice) .ip-kpi .d { font-size: 12px; line-height: 16px; color: var(--text-2); }
+:where(.sm-iprice) .ip-kpi.is-bad .v { color: var(--danger-text); }
+:where(.sm-iprice) .ip-kpi.is-warn .v { color: var(--accent-text); }
+
+/* ---------- цикл ---------- */
+:where(.sm-iprice) .ip-cycle { display: flex; align-items: stretch; gap: 0; overflow-x: auto; }
+:where(.sm-iprice) .ip-step { flex: 1; min-width: 148px; display: flex; gap: 10px; padding: 14px 16px; position: relative; color: var(--text-2); }
+:where(.sm-iprice) .ip-step + .ip-step { border-left: 1px solid var(--border); }
+:where(.sm-iprice) .ip-step .n { width: 24px; height: 24px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--text-2); }
+:where(.sm-iprice) .ip-step .n .ip-i { width: 14px; height: 14px; }
+:where(.sm-iprice) .ip-step b { display: block; color: var(--text); font-weight: 500; }
+:where(.sm-iprice) .ip-step span.s { font-size: 12px; line-height: 16px; display: block; margin-top: 2px; }
+:where(.sm-iprice) .ip-step.done .n { background: var(--primary); color: #fff; }
+:where(.sm-iprice) .ip-step.cur { background: var(--accent-soft); }
+:where(.sm-iprice) .ip-step.cur .n { background: var(--accent); color: var(--gray-800); }
+:where(.sm-iprice) .ip-step.run .n { background: var(--primary-soft); color: var(--primary); }
+:where(.sm-iprice) .ip-step.bad .n { background: var(--danger); color: #fff; }
+:where(.sm-iprice) .ip-step.bad span.s { color: var(--danger-text); }
+
+/* ---------- уведомления ---------- */
+:where(.sm-iprice) .ip-alert { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; border-radius: var(--r-l); border: 1px solid transparent; }
+:where(.sm-iprice) .ip-alert > .ip-i { width: 18px; height: 18px; flex: none; margin-top: 1px; }
+:where(.sm-iprice) .ip-alert .body { flex: 1; min-width: 0; }
+:where(.sm-iprice) .ip-alert .body b { display: block; font-weight: 600; }
+:where(.sm-iprice) .ip-alert .act { flex: none; display: flex; gap: 8px; }
+:where(.sm-iprice) .ip-alert.info { background: var(--info-bg); border-color: var(--blue-200); color: var(--info-text); }
+:where(.sm-iprice) .ip-alert.success { background: var(--success-bg); border-color: #9ED3B8; color: var(--success-text); }
+:where(.sm-iprice) .ip-alert.warning { background: var(--warning-bg); border-color: #F2D38A; color: var(--warning-text); }
+:where(.sm-iprice) .ip-alert.error { background: var(--danger-bg); border-color: #EFA3A3; color: var(--danger-text); }
+:where(.sm-iprice) .ip-alert.action { background: var(--blue-800); color: #fff; border: 0; align-items: center; padding: 16px 20px; }
+:where(.sm-iprice) .ip-alert.action .body span { color: var(--blue-100); }
+:where(.sm-iprice) .ip-alert.action > .ip-i { width: 36px; height: 36px; padding: 8px; border-radius: var(--r-l); background: var(--accent); color: var(--gray-800); }
+:where(.sm-iprice) .ip-toasts { position: fixed; right: 24px; bottom: 24px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+:where(.sm-iprice) .ip-toast { display: flex; align-items: center; gap: 10px; min-width: 280px; max-width: 440px; padding: 12px 14px; background: var(--gray-800); color: #fff; border-radius: var(--r-l); box-shadow: var(--shadow-3); font-family: var(--font); font-size: 14px; animation: ip-in 160ms ease-out; }
+:where(.sm-iprice) .ip-toast .ip-i { width: 18px; height: 18px; flex: none; }
+:where(.sm-iprice) .ip-toast.ok .ip-i { color: #9ED3B8; }
+:where(.sm-iprice) .ip-toast.err { background: var(--red-800); }
+:where(.sm-iprice) .ip-toast button { margin-left: auto; background: transparent; border: 0; color: var(--blue-200); cursor: pointer; font-weight: 500; }
+@keyframes ip-in { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { :where(.sm-iprice) .ip-toast, :where(.sm-iprice) .ip-drawer, :where(.sm-iprice) .ip-spin { animation: none !important; } }
+
+/* ---------- таблицы ---------- */
+:where(.sm-iprice) .ip-table-wrap { overflow: auto; border-top: 1px solid var(--border); }
+:where(.sm-iprice) .ip-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; line-height: 18px; }
+:where(.sm-iprice) .ip-table th { position: sticky; top: 0; z-index: 1; background: var(--surface-2); color: var(--text-2); font-weight: 500; font-size: 12px; text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+:where(.sm-iprice) .ip-table th.num { text-align: right; }
+:where(.sm-iprice) .ip-table th button.sort { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+:where(.sm-iprice) .ip-table th button.sort:focus-visible { outline: 2px solid var(--focus); }
+:where(.sm-iprice) .ip-table th .arrow { color: var(--text-3); font-size: 11px; }
+:where(.sm-iprice) .ip-table th[aria-sort="ascending"] .arrow, :where(.sm-iprice) .ip-table th[aria-sort="descending"] .arrow { color: var(--primary); }
+:where(.sm-iprice) .ip-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; height: 44px; }
+:where(.sm-iprice) .ip-table.compact td { padding: 4px 12px; height: 32px; }
+:where(.sm-iprice) .ip-table tbody tr:hover td { background: var(--blue-50); }
+:where(.sm-iprice) .ip-table tbody tr.is-clickable { cursor: pointer; }
+:where(.sm-iprice) .ip-table tbody tr.is-sel td { background: var(--blue-50); }
+:where(.sm-iprice) .ip-table td.first, :where(.sm-iprice) .ip-table th.first { position: sticky; left: 0; background: var(--surface); z-index: 1; }
+:where(.sm-iprice) .ip-table th.first { z-index: 2; background: var(--surface-2); }
+:where(.sm-iprice) .ip-table tbody tr:hover td.first { background: var(--blue-50); }
+:where(.sm-iprice) .ip-table .sub { display: block; color: var(--text-3); font-size: 12px; line-height: 16px; }
+:where(.sm-iprice) .ip-table .name { font-weight: 500; color: var(--text); }
+:where(.sm-iprice) .ip-table td.manual { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent-line); font-weight: 600; }
+:where(.sm-iprice) .ip-table tfoot td { background: var(--surface-2); font-weight: 600; }
+:where(.sm-iprice) .ip-empty-row td { text-align: center; color: var(--text-2); padding: 40px 12px; height: auto; }
+:where(.sm-iprice) .ip-skel { display: block; height: 12px; border-radius: 3px; background: linear-gradient(90deg, var(--gray-100), var(--gray-200), var(--gray-100)); background-size: 200% 100%; animation: ip-sk 1.2s linear infinite; }
+@keyframes ip-sk { to { background-position: -200% 0; } }
+:where(.sm-iprice) .ip-pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; color: var(--text-2); font-size: 13px; flex-wrap: wrap; }
+:where(.sm-iprice) .ip-pager .pages { display: flex; gap: 4px; align-items: center; }
+:where(.sm-iprice) .ip-pager .pages button { min-width: 28px; height: 28px; padding: 0 6px; border: 1px solid var(--border); border-radius: var(--r-s); background: var(--surface); cursor: pointer; }
+:where(.sm-iprice) .ip-pager .pages button[aria-current="true"] { background: var(--primary); color: #fff; border-color: var(--primary); }
+:where(.sm-iprice) .ip-pager .pages button:disabled { opacity: .45; cursor: default; }
+
+/* ---------- фильтры ---------- */
+:where(.sm-iprice) .ip-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+:where(.sm-iprice) .ip-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--r-pill); background: var(--surface); cursor: pointer; white-space: nowrap; color: var(--text); max-width: 340px; }
+:where(.sm-iprice) .ip-chip:hover { background: var(--surface-2); }
+:where(.sm-iprice) .ip-chip .ip-i { width: 14px; height: 14px; color: var(--text-3); flex: none; }
+:where(.sm-iprice) .ip-chip.on { background: var(--primary-soft); border-color: var(--primary); color: var(--primary-soft-text); font-weight: 500; }
+:where(.sm-iprice) .ip-chip.on .ip-i { color: var(--primary); }
+:where(.sm-iprice) .ip-chip .val { overflow: hidden; text-overflow: ellipsis; }
+:where(.sm-iprice) .ip-chip .x { display: inline-flex; padding: 2px; margin-right: -4px; border-radius: 50%; }
+:where(.sm-iprice) .ip-chip .x:hover { background: var(--blue-200); }
+:where(.sm-iprice) .ip-pop { position: absolute; z-index: 60; min-width: 260px; max-width: 380px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); box-shadow: var(--shadow-2); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+:where(.sm-iprice) .ip-pop .list { max-height: 300px; overflow: auto; display: flex; flex-direction: column; }
+:where(.sm-iprice) .ip-pop .opt { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--r-s); cursor: pointer; }
+:where(.sm-iprice) .ip-pop .opt:hover { background: var(--surface-2); }
+:where(.sm-iprice) .ip-pop .opt .lbl { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+:where(.sm-iprice) .ip-pop .opt .cnt { color: var(--text-3); font-size: 12px; }
+:where(.sm-iprice) .ip-pop .foot { display: flex; justify-content: space-between; gap: 8px; padding-top: 6px; border-top: 1px solid var(--border); }
+
+/* ---------- модальные окна, панели ---------- */
+:where(.sm-iprice) .ip-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(22,27,33,.36); display: flex; align-items: center; justify-content: center; padding: 24px; }
+:where(.sm-iprice) .ip-modal { width: min(520px, 100%); max-height: calc(100vh - 48px); overflow: auto; background: var(--surface); border-radius: var(--r-xl); box-shadow: var(--shadow-3); padding: 24px; display: flex; flex-direction: column; gap: 16px; font: 14px/20px var(--font); color: var(--text); }
+:where(.sm-iprice) .ip-modal.wide { width: min(760px, 100%); }
+:where(.sm-iprice) .ip-modal h2 { font-size: 20px; line-height: 28px; font-weight: 600; }
+:where(.sm-iprice) .ip-modal .foot { display: flex; justify-content: flex-end; gap: 8px; }
+:where(.sm-iprice) .ip-overlay.right { justify-content: flex-end; align-items: stretch; padding: 0; }
+:where(.sm-iprice) .ip-drawer { width: min(560px, 100%); height: 100%; overflow: auto; background: var(--surface); box-shadow: var(--shadow-3); display: flex; flex-direction: column; animation: ip-slide 200ms ease-out; font: 14px/20px var(--font); color: var(--text); }
+:where(.sm-iprice) .ip-drawer-head { position: sticky; top: 0; background: var(--surface); padding: 20px 24px 12px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: flex-start; z-index: 1; }
+:where(.sm-iprice) .ip-drawer-head h2 { font-size: 18px; line-height: 26px; font-weight: 600; flex: 1; }
+:where(.sm-iprice) .ip-drawer-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+@keyframes ip-slide { from { transform: translateX(24px); opacity: 0; } }
+
+/* ---------- цена: пара, лестница, расчёт ---------- */
+:where(.sm-iprice) .ip-delta { display: inline-flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+:where(.sm-iprice) .ip-delta .old { color: var(--text-3); text-decoration: line-through; font-size: 12px; }
+:where(.sm-iprice) .ip-delta .new { font-weight: 600; }
+:where(.sm-iprice) .ip-delta .pct { font-size: 12px; font-weight: 600; color: var(--text-2); }
+:where(.sm-iprice) .ip-ladder { display: grid; grid-template-columns: minmax(140px, 1.2fr) repeat(3, minmax(90px, 1fr)); font-size: 13px; }
+:where(.sm-iprice) .ip-ladder > div:not([role="row"]), :where(.sm-iprice) .ip-ladder > [role="row"] > div { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+:where(.sm-iprice) .ip-ladder .disc { display: block; color: var(--text-3); font-size: 12px; line-height: 16px; font-weight: 400; }
+:where(.sm-iprice) .ip-ladder .h { color: var(--text-2); font-size: 12px; background: var(--surface-2); }
+:where(.sm-iprice) .ip-ladder .r { text-align: right; }
+:where(.sm-iprice) .ip-ladder .base { font-weight: 600; background: var(--blue-50); }
+:where(.sm-iprice) .ip-explain { display: flex; flex-direction: column; }
+:where(.sm-iprice) .ip-explain .st { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 0; border-bottom: 1px dashed var(--border); }
+:where(.sm-iprice) .ip-explain .st:last-child { border-bottom: 0; }
+:where(.sm-iprice) .ip-explain .st .n { width: 22px; height: 22px; border-radius: 50%; background: var(--primary-soft); color: var(--primary-soft-text); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+:where(.sm-iprice) .ip-explain .st.final .n { background: var(--accent); color: var(--gray-800); }
+:where(.sm-iprice) .ip-explain .st .f { color: var(--text-2); font-size: 12px; line-height: 16px; margin-top: 2px; }
+:where(.sm-iprice) .ip-explain .st .v { font-weight: 600; text-align: right; white-space: nowrap; }
+:where(.sm-iprice) .ip-explain .st.skip { opacity: .55; }
+:where(.sm-iprice) .ip-meter { position: relative; height: 8px; border-radius: var(--r-pill); background: var(--surface-2); }
+:where(.sm-iprice) .ip-meter .zone { position: absolute; top: 0; bottom: 0; background: var(--success-bg); border-left: 1px solid var(--success); border-right: 1px solid var(--success); }
+:where(.sm-iprice) .ip-meter .pin { position: absolute; top: -4px; width: 4px; height: 16px; border-radius: 2px; background: var(--gray-800); transform: translateX(-50%); }
+:where(.sm-iprice) .ip-bar { display: flex; height: 10px; border-radius: var(--r-pill); overflow: hidden; background: var(--surface-2); }
+:where(.sm-iprice) .ip-bar > span { display: block; height: 100%; }
+:where(.sm-iprice) .ip-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-2); }
+:where(.sm-iprice) .ip-legend span { display: inline-flex; align-items: center; gap: 6px; }
+:where(.sm-iprice) .ip-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; }
+
+/* ---------- карточки конкурентов ---------- */
+:where(.sm-iprice) .ip-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+:where(.sm-iprice) .ip-card { border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+:where(.sm-iprice) .ip-card.excluded { background: var(--surface-2); }
+:where(.sm-iprice) .ip-card.excluded .ip-card-title, :where(.sm-iprice) .ip-card.excluded .price { color: var(--text-3); text-decoration: line-through; }
+:where(.sm-iprice) .ip-card.included { box-shadow: inset 3px 0 0 var(--accent-line); }
+:where(.sm-iprice) .ip-card-top { display: flex; gap: 10px; }
+:where(.sm-iprice) .ip-thumb { width: 56px; height: 56px; flex: none; border-radius: var(--r-m); background: var(--surface-2); object-fit: contain; display: grid; place-items: center; color: var(--text-3); overflow: hidden; }
+:where(.sm-iprice) .ip-thumb img { width: 100%; height: 100%; object-fit: contain; }
+:where(.sm-iprice) .ip-card-title { font-weight: 500; overflow-wrap: anywhere; line-height: 18px; }
+:where(.sm-iprice) .ip-card .price { font-size: 18px; line-height: 24px; font-weight: 600; }
+:where(.sm-iprice) .ip-props { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* ---------- загрузки ---------- */
+:where(.sm-iprice) .ip-drop { border: 1.5px dashed var(--border-strong); border-radius: var(--r-l); padding: 16px; text-align: center; color: var(--text-2); background: var(--gray-50); cursor: pointer; }
+:where(.sm-iprice) .ip-drop:hover, :where(.sm-iprice) .ip-drop.over { border-color: var(--primary); background: var(--blue-50); }
+:where(.sm-iprice) .ip-progress { height: 6px; border-radius: var(--r-pill); background: var(--surface-2); overflow: hidden; }
+:where(.sm-iprice) .ip-progress > span { display: block; height: 100%; background: var(--primary); transition: width 200ms; }
+:where(.sm-iprice) .ip-progress.indet > span { width: 30%; animation: ip-ind 1.2s ease-in-out infinite; }
+@keyframes ip-ind { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+
+/* ---------- прочее ---------- */
+:where(.sm-iprice) .ip-empty { padding: 40px 24px; text-align: center; color: var(--text-2); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+:where(.sm-iprice) .ip-empty b { color: var(--text); font-size: 16px; }
+:where(.sm-iprice) .ip-kv { display: grid; grid-template-columns: minmax(120px, auto) 1fr; gap: 6px 16px; font-size: 13px; }
+:where(.sm-iprice) .ip-kv dt { color: var(--text-2); }
+:where(.sm-iprice) .ip-kv dd { margin: 0; }
+:where(.sm-iprice) .ip-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+:where(.sm-iprice) .ip-tabs button { height: 40px; padding: 0 12px; border: 0; background: transparent; color: var(--text-2); border-bottom: 2px solid transparent; cursor: pointer; font-weight: 500; display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; }
+:where(.sm-iprice) .ip-tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--primary); }
+:where(.sm-iprice) .ip-i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+:where(.sm-iprice) .ip-select-version { width: 300px; }
+:where(.sm-iprice) .ip-hint { display: inline-flex; color: var(--text-3); cursor: help; }
+:where(.sm-iprice) .ip-sticky-actions { position: sticky; bottom: 16px; z-index: 30; align-self: center; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 18px; border-radius: var(--r-xl); background: var(--blue-800); color: #fff; box-shadow: var(--shadow-3); flex-wrap: wrap; }
+:where(.sm-iprice) .ip-sticky-actions .muted { color: var(--blue-100); }
+:where(.sm-iprice) .ip-tree { display: flex; flex-direction: column; }
+:where(.sm-iprice) .ip-zonebar-row { display: grid; grid-template-columns: minmax(180px, 1.4fr) 70px minmax(200px, 2.4fr) 130px 120px; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+:where(.sm-iprice) .ip-zonebar-row.head { color: var(--text-2); font-size: 12px; background: var(--surface-2); padding: 8px 16px; }
+:where(.sm-iprice) .ip-zonebar-row.head .num { white-space: normal; }
+:where(.sm-iprice) .ip-zonebar-row button.link { all: unset; cursor: pointer; color: var(--link); font-weight: 500; }
+:where(.sm-iprice) .ip-zonebar-row button.link:hover { text-decoration: underline; }
+:where(.sm-iprice) .ip-zonebar-row button.link:focus-visible { outline: 2px solid var(--focus); }
+/* ===== Понятность для новичка: подсказки, справка, приветствие ===== */
+
+/* Слово с подсказкой */
+:where(.sm-iprice) .ip-term { border-bottom: 1px dashed var(--gray-400); cursor: help; display: inline-flex; align-items: center; gap: 4px; }
+:where(.sm-iprice) .ip-term:hover, :where(.sm-iprice) .ip-term:focus-visible { border-bottom-color: var(--primary); color: var(--primary-soft-text); }
+:where(.sm-iprice) .ip-term.has-icon { border-bottom: 0; color: var(--text-3); vertical-align: middle; }
+:where(.sm-iprice) .ip-term.has-icon:hover, :where(.sm-iprice) .ip-term.has-icon:focus-visible { color: var(--primary); }
+:where(.sm-iprice) .ip-term.has-icon .ip-i { width: 14px; height: 14px; }
+:where(.sm-iprice) .ip-tip { position: fixed; z-index: 1200; background: var(--gray-800); color: #fff; padding: 10px 12px; border-radius: var(--r-m); box-shadow: var(--shadow-3); font: 13px/18px var(--font); display: flex; flex-direction: column; gap: 4px; pointer-events: none; text-align: left; white-space: normal; font-weight: 400; }
+:where(.sm-iprice) .ip-tip b { font-weight: 600; }
+
+:where(.sm-iprice) .ip-linkbtn { background: none; border: 0; padding: 0; color: var(--link); cursor: pointer; font: inherit; text-decoration: underline; text-underline-offset: 2px; }
+:where(.sm-iprice) .ip-linkbtn:hover { color: var(--primary-hover); }
+
+:where(.sm-iprice) .ip-h2 { font-size: 18px; line-height: 26px; font-weight: 600; }
+:where(.sm-iprice) .ip-table th .th-in { display: inline-flex; align-items: center; gap: 4px; }
+:where(.sm-iprice) .ip-table th.num .th-in { justify-content: flex-end; }
+
+/* Справка */
+:where(.sm-iprice) .ip-help h3 { font-size: 16px; line-height: 24px; font-weight: 600; }
+:where(.sm-iprice) .ip-help p { color: var(--text-2); }
+:where(.sm-iprice) .ip-help-three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+:where(.sm-iprice) .ip-help-three > div { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: var(--r-l); background: var(--blue-50); }
+:where(.sm-iprice) .ip-help-three .ip-i { width: 20px; height: 20px; color: var(--primary); }
+:where(.sm-iprice) .ip-help-three span { font-size: 12px; line-height: 16px; color: var(--text-2); }
+:where(.sm-iprice) .ip-help-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+:where(.sm-iprice) .ip-help-steps li { display: flex; gap: 12px; }
+:where(.sm-iprice) .ip-help-steps .n, :where(.sm-iprice) .ip-welcome-steps .n { width: 26px; height: 26px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: #fff; font-weight: 600; font-size: 13px; }
+:where(.sm-iprice) .ip-help-steps p { margin-top: 2px; }
+:where(.sm-iprice) .ip-help-steps .where { font-size: 12px; color: var(--text-3); }
+:where(.sm-iprice) .ip-help-zones { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+:where(.sm-iprice) .ip-help-zones li { display: grid; grid-template-columns: 180px 1fr; gap: 12px; align-items: start; font-size: 13px; color: var(--text-2); }
+:where(.sm-iprice) .ip-help-zones .ip-tag { justify-self: start; }
+:where(.sm-iprice) .ip-help-faq { border: 1px solid var(--border); border-radius: var(--r-m); padding: 10px 12px; }
+:where(.sm-iprice) .ip-help-faq summary { cursor: pointer; font-weight: 500; }
+:where(.sm-iprice) .ip-help-faq p { margin-top: 6px; }
+:where(.sm-iprice) .ip-help-glossary { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+:where(.sm-iprice) .ip-help-glossary dt { font-weight: 600; }
+:where(.sm-iprice) .ip-help-glossary dd { margin: 2px 0 0; color: var(--text-2); }
+
+/* Приветствие */
+:where(.sm-iprice) .ip-welcome { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(240px, 1fr); gap: 24px; padding: 24px; border-radius: var(--r-xl); background: linear-gradient(135deg, var(--blue-50), var(--surface) 70%); border: 1px solid var(--blue-200); }
+:where(.sm-iprice) .ip-welcome h2 { font-size: 20px; line-height: 28px; font-weight: 600; }
+:where(.sm-iprice) .ip-welcome-text { display: flex; flex-direction: column; gap: 12px; }
+:where(.sm-iprice) .ip-welcome-text p { color: var(--text-2); max-width: 680px; }
+:where(.sm-iprice) .ip-welcome-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; align-self: center; }
+:where(.sm-iprice) .ip-welcome-steps li { display: flex; gap: 10px; align-items: center; }
+:where(.sm-iprice) .ip-welcome-steps b { font-weight: 500; }
+
+/* Следующий шаг */
+:where(.sm-iprice) .ip-next { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 20px; padding: 20px 24px; border-radius: var(--r-xl); background: var(--blue-800); color: #fff; align-items: start; }
+:where(.sm-iprice) .ip-next-badge { width: 44px; height: 44px; border-radius: var(--r-l); background: var(--accent); color: var(--gray-800); display: grid; place-items: center; }
+:where(.sm-iprice) .ip-next-badge .ip-i { width: 24px; height: 24px; }
+:where(.sm-iprice) .ip-next-kicker { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--orange-200); font-weight: 600; }
+:where(.sm-iprice) .ip-next h2 { font-size: 20px; line-height: 28px; font-weight: 600; margin-top: 2px; }
+:where(.sm-iprice) .ip-next p { color: var(--blue-100); margin-top: 6px; }
+:where(.sm-iprice) .ip-next-body { min-width: 0; }
+:where(.sm-iprice) .ip-next-steps { margin: 10px 0 0; padding-left: 20px; color: var(--blue-100); display: flex; flex-direction: column; gap: 4px; }
+:where(.sm-iprice) .ip-next-steps b { color: #fff; font-weight: 500; }
+:where(.sm-iprice) .ip-next-act { display: flex; flex-direction: column; gap: 8px; align-items: stretch; min-width: 220px; }
+:where(.sm-iprice) .ip-btn.ghost.on-dark { color: #fff; }
+:where(.sm-iprice) .ip-btn.ghost.on-dark:hover { background: rgba(255,255,255,.12); }
+
+/* Карточки «где цены требуют внимания» */
+:where(.sm-iprice) .ip-attn .v { display: flex; align-items: center; gap: 8px; }
+:where(.sm-iprice) .ip-attn .v .ip-i { color: var(--text-3); }
+:where(.sm-iprice) .ip-attn .l { font-size: 14px; line-height: 20px; color: var(--text); }
+:where(.sm-iprice) .ip-attn .go { margin-top: auto; padding-top: 4px; font-size: 13px; color: var(--link); display: inline-flex; align-items: center; gap: 2px; font-weight: 500; }
+:where(.sm-iprice) .ip-attn.is-bad .v .ip-i { color: var(--danger); }
+:where(.sm-iprice) .ip-attn.is-warn .v .ip-i { color: var(--accent-text); }
+
+:where(.sm-iprice) .ip-legend-btn { background: none; border: 0; padding: 2px 0; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 12px; }
+:where(.sm-iprice) .ip-legend-btn:hover { color: var(--link); }
+:where(.sm-iprice) .ip-legend-btn i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; }
+:where(.sm-iprice) .ip-facts { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+:where(.sm-iprice) .ip-facts li { display: flex; gap: 10px; align-items: flex-start; }
+:where(.sm-iprice) .ip-facts li > .ip-i { width: 18px; height: 18px; flex: none; color: var(--primary); margin-top: 1px; }
+:where(.sm-iprice) .ip-health-row { padding: 10px 0; border-bottom: 1px solid var(--border); color: var(--text) !important; text-decoration: none !important; }
+:where(.sm-iprice) .ip-health-row:hover { color: var(--link) !important; }
+
+/* Как читать таблицу */
+:where(.sm-iprice) .ip-reading { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 12px; line-height: 16px; color: var(--text-2); padding: 8px 12px; background: var(--surface-2); border-radius: var(--r-m); }
+:where(.sm-iprice) .ip-reading b { color: var(--text); font-weight: 600; }
+:where(.sm-iprice) .ip-reading span { display: inline-flex; align-items: center; gap: 6px; }
+:where(.sm-iprice) .ip-reading .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+:where(.sm-iprice) .ip-reading .sw.now { background: var(--gray-300); }
+:where(.sm-iprice) .ip-reading .sw.new { background: var(--gray-800); }
+:where(.sm-iprice) .ip-reading .sw.zone { background: linear-gradient(90deg, var(--blue-500), var(--green-600), var(--orange-400), var(--red-600)); width: 24px; }
+
+/* Новая цена с изменением */
+:where(.sm-iprice) .ip-newprice { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+:where(.sm-iprice) .ip-newprice b { font-weight: 600; }
+:where(.sm-iprice) .ip-newprice .chg { font-size: 12px; line-height: 16px; white-space: nowrap; }
+:where(.sm-iprice) .ip-newprice .chg.up { color: var(--accent-text); }
+:where(.sm-iprice) .ip-newprice .chg.down { color: var(--blue-700); }
+:where(.sm-iprice) .ip-newprice .chg.same { color: var(--text-3); }
+:where(.sm-iprice) .ip-newprice .sub { margin-top: 2px; }
+
+/* Цена товара коротко */
+:where(.sm-iprice) .ip-story { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 20px 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); }
+:where(.sm-iprice) .ip-story .cell { display: flex; flex-direction: column; gap: 2px; }
+:where(.sm-iprice) .ip-story .cell .l { font-size: 12px; line-height: 16px; color: var(--text-2); font-weight: 500; }
+:where(.sm-iprice) .ip-story .cell .v { font-size: 26px; line-height: 34px; font-weight: 600; }
+:where(.sm-iprice) .ip-story .cell .v.small-v { font-size: 14px; line-height: 34px; }
+:where(.sm-iprice) .ip-story .cell .d { font-size: 12px; line-height: 16px; color: var(--text-2); }
+:where(.sm-iprice) .ip-story .cell.main .v { color: var(--primary-soft-text); }
+:where(.sm-iprice) .ip-story .arrow { width: 22px; height: 22px; color: var(--text-3); }
+:where(.sm-iprice) .ip-story .sep { width: 1px; align-self: stretch; background: var(--border); }
+:where(.sm-iprice) .ip-story .foot { flex-basis: 100%; font-size: 13px; color: var(--text-2); border-top: 1px solid var(--border); padding-top: 12px; }
+
+:where(.sm-iprice) .ip-facts-row { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; }
+
+/* Свёрнутые настройки */
+:where(.sm-iprice) .ip-advanced { border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); }
+:where(.sm-iprice) .ip-advanced > summary { cursor: pointer; padding: 14px 20px; font-weight: 500; display: flex; gap: 8px; align-items: center; color: var(--text-2); list-style: none; }
+:where(.sm-iprice) .ip-advanced > summary::-webkit-details-marker { display: none; }
+:where(.sm-iprice) .ip-advanced[open] > summary { border-bottom: 1px solid var(--border); }
+:where(.sm-iprice) .ip-advanced > .ip-panel { border: 0; }
+
+:where(.sm-iprice) .ip-select-version.is-active { border-color: var(--orange-300); }
+
+:where(.sm-iprice) .ip-grid > * { min-width: 0; }
+:where(.sm-iprice) .ip-ladder { overflow-x: auto; }
+/* Коридор цены */
+:where(.sm-iprice) .ip-corr { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+:where(.sm-iprice) .ip-corr-cap { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--text-2); }
+:where(.sm-iprice) .ip-corr-cap .ip-term { font-weight: 600; color: var(--text); }
+:where(.sm-iprice) .ip-corr-track { position: relative; height: 28px; border-radius: var(--r-s); background: var(--surface-2); }
+:where(.sm-iprice) .ip-corr-track > span { position: absolute; top: 0; bottom: 0; }
+:where(.sm-iprice) .ip-corr-track .loss { background: repeating-linear-gradient(135deg, var(--red-100) 0 6px, #f6d0d0 6px 12px); border-radius: var(--r-s) 0 0 var(--r-s); }
+:where(.sm-iprice) .ip-corr-track .thin { background: var(--amber-100); }
+:where(.sm-iprice) .ip-corr-track .market { top: 8px; bottom: 8px; background: var(--blue-200); border-radius: 6px; }
+:where(.sm-iprice) .ip-corr-track .med { width: 2px; margin-left: -1px; top: 4px; bottom: 4px; background: var(--blue-700); }
+:where(.sm-iprice) .ip-corr-track .floor { width: 0; border-left: 2px dashed var(--red-600); top: -4px; bottom: -4px; }
+:where(.sm-iprice) .ip-corr-track .pin { width: 14px; height: 14px; top: 7px; margin-left: -7px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.15); }
+:where(.sm-iprice) .ip-corr-track .pin.now { background: var(--gray-400); }
+:where(.sm-iprice) .ip-corr-track .pin.next { background: var(--gray-800); width: 16px; height: 16px; top: 6px; margin-left: -8px; }
+:where(.sm-iprice) .ip-corr-track .pin.mine { background: var(--accent); width: 16px; height: 16px; top: 6px; margin-left: -8px; }
+:where(.sm-iprice) .ip-corr-legend { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; line-height: 16px; }
+:where(.sm-iprice) .ip-corr-legend > div { display: flex; gap: 6px; align-items: baseline; }
+:where(.sm-iprice) .ip-corr-legend dt { color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; }
+:where(.sm-iprice) .ip-corr-legend dd { margin: 0; }
+:where(.sm-iprice) .ip-corr-legend .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+:where(.sm-iprice) .ip-corr-legend .sw.loss { background: var(--red-100); box-shadow: inset 0 0 0 1px #efa3a3; }
+:where(.sm-iprice) .ip-corr-legend .sw.floor { width: 0; height: 12px; border-left: 2px dashed var(--red-600); border-radius: 0; }
+:where(.sm-iprice) .ip-corr-legend .sw.market { background: var(--blue-200); }
+:where(.sm-iprice) .ip-corr-legend .sw.pin-now { background: var(--gray-400); border-radius: 50%; }
+:where(.sm-iprice) .ip-corr-legend .sw.pin-next { background: var(--gray-800); border-radius: 50%; }
+:where(.sm-iprice) .ip-corr-legend .sw.pin-mine { background: var(--accent); border-radius: 50%; }
+:where(.sm-iprice) .ip-jump { color: var(--accent-text); font-weight: 600; }
+:where(.sm-iprice) .ip-newprice .chg.jump { color: var(--red-800); font-weight: 600; background: var(--red-100); padding: 0 4px; border-radius: var(--r-xs); }
+:where(.sm-iprice) .ip-corr-note { margin: 0; font-size: 13px; line-height: 18px; color: var(--warning-text); background: var(--warning-bg); border-radius: var(--r-m); padding: 8px 12px; }
+
+/* Только ПК: ниже этой ширины модуль прокручивается по горизонтали. */
+.sm-iprice { min-width: 1040px; }
+:where(.sm-iprice) .ip-welcome.compact { grid-template-columns: 1fr; padding: 20px 24px; }
+:where(.sm-iprice) .ip-welcome.compact h2 { font-size: 18px; line-height: 26px; }
+:where(.sm-iprice) button.ip-kpi:disabled { cursor: default; opacity: .75; }
+:where(.sm-iprice) button.ip-kpi:disabled:hover { border-color: var(--border); background: var(--surface); }
+:where(.sm-iprice) .ip-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+:where(.sm-iprice) .ip-newprice .ip-src { margin-top: 2px; }
+:where(.sm-iprice) .ip-checklist { list-style: none; margin: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; background: var(--surface-2); border-radius: var(--r-m); color: var(--text); }
+:where(.sm-iprice) .ip-checklist li { display: flex; gap: 8px; align-items: center; }
+:where(.sm-iprice) .ip-checklist li.bad .ip-i { color: var(--danger); }
+:where(.sm-iprice) .ip-checklist li.ok .ip-i { color: var(--success); }
+
+/* Организация в шапке */
+:where(.sm-iprice) .ip-org { position: relative; }
+:where(.sm-iprice) .ip-org-btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; max-width: 220px; padding: 0 10px 0 4px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface); color: var(--text); cursor: pointer; font: inherit; }
+:where(.sm-iprice) .ip-org-btn:hover:not(:disabled) { border-color: var(--blue-400); background: var(--blue-50); }
+:where(.sm-iprice) .ip-org-btn:disabled { cursor: default; opacity: 1; }
+:where(.sm-iprice) .ip-org-av { width: 28px; height: 28px; flex: none; border-radius: var(--r-s); background: var(--blue-800); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+:where(.sm-iprice) .ip-org-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; font-size: 13px; }
+:where(.sm-iprice) .ip-org-pop { top: 42px; right: 0; left: auto; width: 280px; padding: 6px; }
+:where(.sm-iprice) .ip-org-opt { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: var(--r-s); background: none; cursor: pointer; font: inherit; color: var(--text); text-align: left; }
+:where(.sm-iprice) .ip-org-opt:hover, :where(.sm-iprice) .ip-org-opt[aria-selected="true"] { background: var(--blue-50); }
+:where(.sm-iprice) .ip-org-opt .ip-org-name { flex: 1; }
+:where(.sm-iprice) .ip-org-opt .ip-i { color: var(--primary); }
+.sm-iprice .ip-select.ip-select-version { width: 280px; font-size: 13px; padding-left: 10px; }
+
+/* Вход и выбор организации */
+:where(.sm-iprice) .ip-auth { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 40px 16px;
+  background: radial-gradient(1200px 600px at 50% -10%, var(--blue-100), transparent 60%), var(--bg); }
+:where(.sm-iprice) .ip-auth-card { width: 400px; max-width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: var(--shadow-2); padding: 32px; display: flex; flex-direction: column; gap: 14px; }
+:where(.sm-iprice) .ip-auth-card h1 { font-size: 22px; line-height: 30px; font-weight: 600; }
+:where(.sm-iprice) .ip-auth-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; margin-bottom: 6px; }
+:where(.sm-iprice) .ip-auth-submit { width: 100%; justify-content: center; margin-top: 4px; }
+:where(.sm-iprice) .ip-affix .suf.ip-auth-eye { border: 0; background: none; cursor: pointer; color: var(--text-3); display: grid; place-items: center; pointer-events: auto; }
+:where(.sm-iprice) .ip-auth-eye:hover { color: var(--text); }
+:where(.sm-iprice) .ip-auth-hint { margin: 0; font-size: 12px; line-height: 16px; color: var(--accent-text); background: var(--accent-soft); border: 1px solid var(--orange-200); border-radius: var(--r-m); padding: 8px 10px; }
+:where(.sm-iprice) .ip-auth-foot { margin: 0; font-size: 12px; color: var(--text-3); }
+:where(.sm-iprice) .ip-auth-org { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface); cursor: pointer; font: inherit; color: var(--text); text-align: left; }
+:where(.sm-iprice) .ip-auth-org:hover { border-color: var(--blue-400); background: var(--blue-50); }
+:where(.sm-iprice) .ip-auth-org .ip-org-name { flex: 1; font-size: 14px; }
+:where(.sm-iprice) .ip-auth-org > .ip-i { color: var(--text-3); }
+
+/* Пользователь в шапке */
+:where(.sm-iprice) .ip-user { position: relative; }
+:where(.sm-iprice) .ip-user-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; }
+:where(.sm-iprice) .ip-user-btn:hover { border-color: var(--blue-400); background: var(--blue-50); }
+:where(.sm-iprice) .ip-user-pop { top: 40px; right: 0; left: auto; min-width: 220px; padding: 6px; }
+:where(.sm-iprice) .ip-user-name { display: flex; align-items: center; gap: 8px; padding: 6px 8px 8px; border-bottom: 1px solid var(--border); font-weight: 500; color: var(--text-2); }

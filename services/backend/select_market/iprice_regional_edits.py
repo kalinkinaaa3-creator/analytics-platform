@@ -1,5 +1,6 @@
 """Atomic edits of regional inputs and snapshot rows, preserving price history."""
 from decimal import Decimal
+from hashlib import sha256
 from types import SimpleNamespace
 from django.db import transaction
 from django.utils import timezone
@@ -9,9 +10,9 @@ from .iprice_filters import PRODUCT_FILTERS, filter_products
 from .iprice_regional_calculation import INPUT_FIELDS, build_regions
 
 
-def resolve(snapshot, filters, search=''):
+def resolve(snapshot, filters, search='', list_scope=None):
     from datasets.services.iprice_parameter_changes import IPriceParameterChangeError
-    if not any(filters.values()) and not search.strip():
+    if list_scope is None and not any(filters.values()) and not search.strip():
         raise IPriceParameterChangeError('Выберите хотя бы один фильтр.')
     if set(filters) - set(PRODUCT_FILTERS) - {'code_1c', 'sale_region'}:
         raise IPriceParameterChangeError('Неизвестный фильтр.')
@@ -21,18 +22,28 @@ def resolve(snapshot, filters, search=''):
     for key, path in (('code_1c', 'snapshot_product__code_1c'), ('sale_region', 'sale_region')):
         if filters.get(key):
             rows = rows.filter(**{path + '__in': filters[key]})
-    return filter_products(rows, {key: value for key, value in filters.items() if key in PRODUCT_FILTERS}, search, prefix='snapshot_product__')
+    rows = filter_products(rows, {key: value for key, value in filters.items() if key in PRODUCT_FILTERS}, search, prefix='snapshot_product__')
+    if list_scope is not None:
+        from .iprice_row_controls import filter_rows
+        rows = filter_rows(rows, list_scope)
+    return rows
 
 
-def preview(snapshot, filters, search=''):
+def scope_signature(row_ids):
+    return sha256(','.join(str(pk) for pk in sorted(row_ids)).encode('ascii')).hexdigest()
+
+
+def preview(snapshot, filters, search='', list_scope=None):
     from datasets.services.iprice_parameter_changes import ensure_snapshot_parameters_editable
     ensure_snapshot_parameters_editable(snapshot)
-    rows = resolve(snapshot, filters, search)
-    return {'products': rows.values('snapshot_product_id').distinct().count(), 'regions': rows.count(), 'routes': rows.count()}
+    rows = resolve(snapshot, filters, search, list_scope)
+    selected = list(rows.values_list('pk', 'snapshot_product_id'))
+    return {'products': len({product for _, product in selected}), 'regions': len(selected), 'routes': len(selected),
+            'scope_signature': scope_signature(pk for pk, _ in selected)}
 
 
 @transaction.atomic
-def apply(*, snapshot, filters, search='', coefficients=None, discounts=None, delivery=None, user=None, expected_revision=None):
+def apply(*, snapshot, filters, search='', list_scope=None, expected_scope=None, coefficients=None, discounts=None, delivery=None, user=None, expected_revision=None):
     from datasets.services.iprice_snapshot_builder import _lock_snapshot_workspace
     from datasets.services.iprice_workspace import IPriceWorkspace
     from datasets.services.iprice_parameter_changes import ensure_snapshot_parameters_editable, IPriceParameterChangeError
@@ -58,7 +69,9 @@ def apply(*, snapshot, filters, search='', coefficients=None, discounts=None, de
             changes[field] = value
         except Exception as exc:
             raise IPriceParameterChangeError(f'Некорректный параметр {field}') from exc
-    rows = list(resolve(snapshot, filters, search))
+    rows = list(resolve(snapshot, filters, search, list_scope))
+    if list_scope is not None and expected_scope != scope_signature(row.pk for row in rows):
+        raise IPriceParameterChangeError('Состав списка изменился. Повторите предварительный просмотр и подтверждение.')
     if not rows:
         raise IPriceParameterChangeError('Нет строк для изменения.')
     overrides = {}
@@ -85,7 +98,8 @@ def apply(*, snapshot, filters, search='', coefficients=None, discounts=None, de
     snapshot.parameters = {**snapshot.parameters, 'edit_revision': snapshot.parameters.get('edit_revision', 0) + 1}
     snapshot.save(update_fields=['parameters'])
     affected = {'products': len({row.snapshot_product_id for row in rows}), 'regions': len(rows), 'routes': len(rows)}
-    IPriceParameterChangeLog.objects.create(snapshot_id=snapshot.pk, user=user, mode='regions', filters=filters, search=search,
+    IPriceParameterChangeLog.objects.create(snapshot_id=snapshot.pk, user=user, mode=(list_scope or {}).get('mode', 'regions'),
+        filters={**filters, **({'_list_scope': list_scope} if list_scope is not None else {})}, search=search,
         changes={field: value if isinstance(value, bool) else str(value) for field, value in changes.items()},
         affected=affected, status='success', finished_at=timezone.now())
     return affected

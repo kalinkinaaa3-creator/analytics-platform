@@ -1,6 +1,12 @@
+import { PriceZonesProvider } from "./PriceZones";
+import { SelectMarketHealth } from "./SelectMarketHealth";
 import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
-import { SelectMarketIcon } from "../../organizations/SelectMarketHome";
+import { Button, PageHead, Panel, Tabs } from "./ui/primitives";
+import Icon from "./ui/Icon";
+import { SelectMarketHelp } from "./SelectMarketHelp";
+import "./demo.css";
 import "./selectMarketIPrice.css";
 import { SelectMarketCalculations } from "./SelectMarketCalculations";
 import { errorText } from "./format";
@@ -17,14 +23,30 @@ const statuses = { queued: "В очереди", running: "Выполняется
 const steps = { starting: "Подготовка", base_parser: "Сайт", base_report: "Итоги загрузки сайта", tt_parser: "ТопТара", tt_report: "Итоги ТопТара", ps_parser: "PS", ps_report: "Итоги PS", tara_parser: "ТАРА", tara_failed_retry: "Повтор ошибок ТАРА", tara_report: "Итоги ТАРА", completed: "Все этапы завершены" };
 
 export function SelectMarketIPrice({ dashboard }) {
-  const helpRef = useRef(null);
-  const [view, setView] = useState("home");
+  const [help, setHelp] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const address = new URLSearchParams(location.hash.slice(1));
+  const requestedView = address.get("suc");
+  const view = ["home", "prices", "market", "versions", "data", "compare"].includes(requestedView) ? requestedView : "home";
+  const dataTab = ["uploads", "parser", "health"].includes(address.get("data")) ? address.get("data") : "uploads";
+  function sectionAddress(next, tab) {
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    params.set("suc", next);
+    if (tab) params.set("data", tab);
+    return { pathname: location.pathname, search: location.search, hash: `#${params}` };
+  }
+  function setView(next, tab) {
+    navigate(sectionAddress(next, tab), { state: location.state });
+  }
+  function setDataTab(tab) { setView("data", tab); }
   const [state, setState] = useState(null);
   const [error, setError] = useState("");
   const [statusError, setStatusError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
   const [priceDate, setPriceDate] = useState("");
+  const [uploads, setUploads] = useState({});
   const mounted = useRef(false);
   const actionPending = useRef(false);
   useEffect(() => {
@@ -66,74 +88,77 @@ export function SelectMarketIPrice({ dashboard }) {
   }
   const active = state?.run && !["success", "failed", "cancelled"].includes(state.run.status);
 
-  return <section className="sm-system-page sm-iprice" aria-busy={!state || !!busy}>
-    <header className="sm-system-heading"><SelectMarketIcon type="suc" /><h1>{dashboard.name}</h1></header>
-    <nav className="sm-iprice-nav" aria-label="Разделы iPrice">{[["home", "Главная"], ["prices", "Цены"], ["market", "Рынок и изменения"], ["versions", "Расчёты и история"], ["data", "Исходные данные"]].map(([key, title]) => <button key={key} aria-current={view === key ? "page" : undefined} onClick={() => setView(key)}>{title}</button>)}</nav>
-    <button type="button" className="sm-iprice-help-trigger" onClick={() => helpRef.current.showModal()}>Справка по работе с iPrice</button>
-    <dialog ref={helpRef} className="sm-iprice-help" aria-labelledby="sm-iprice-help-title" onClick={event => { if (event.target === event.currentTarget) { const rect = event.currentTarget.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) event.currentTarget.close(); } }}>
-      <header><h2 id="sm-iprice-help-title">Справка по работе с iPrice</h2><button type="button" aria-label="Закрыть справку" onClick={() => helpRef.current.close()}>×</button></header>
-      <div className="sm-iprice-help-body">
-      <ol><li>В разделе «Исходные данные» скачайте шаблоны. Прайс содержит все регионы за выбранную дату и исходные цены с НДС 22%. Коды 1С вводятся текстом.</li><li>Обновите сайт и конкурентов. Дождитесь завершения сбора, затем выберите дату и запустите расчёт.</li><li>Выберите рассчитанную версию. Проверьте ошибки строк. Карточка товара показывает источники, расчёт и оптовые цены.</li><li>Для своей РРЦ укажите причину. Параметры меняются по точным фильтрам после предварительного просмотра. Изменение аналогов требует повторного подтверждения ручных цен.</li><li>Утвердите проверенную версию внутри системы и скачайте Excel. В 1С цены автоматически не отправляются.</li></ol>
-      <p>РРЦ — розничная цена. Маржа и скидки задаются долями: 0,15 означает 15%. «Нет данных рынка» означает отсутствие пригодной конкурентной цены. Предупреждение требует проверки; ошибка строки блокирует утверждение.</p>
-      <p>Цены утверждённой версии зафиксированы. Чтобы изменить их, создайте новый расчёт. Снятие утверждения сохраняет историю и не разблокирует редактирование прежней версии.</p>
-    </div></dialog>
-    {error && <p role="alert" className="sm-iprice-error">{error}</p>}
-    {statusError && <p role="alert" className="sm-iprice-error">{statusError}</p>}
-    {message && <p role="status">{message}</p>}
-    {!state && <p role="status" className="sm-iprice-loading">Загружаем источники…</p>}
-    {state && <>
-      <SelectMarketCalculations canEdit={state.can_edit} view={view} />
-      <div hidden={view !== "data"}>
-      <h2>Источники и загрузки</h2>
-      {!state.can_edit && <p>Доступен просмотр. Загрузка файлов и запуск парсеров доступны редакторам.</p>}
-      <div className="sm-iprice-sources sm-iprice-source-grid">{sources.map(([key, title, hint, route]) => {
-        const path = route || `sources/${key}/`;
-        return <article key={key} className="sm-iprice-card sm-iprice-source-card"><div><h3>{title}</h3><p>{hint}</p></div>
-          <div className="sm-iprice-source-date">
-          {key === "price" && state.can_edit && <label>Дата полного прайса<input type="date" required value={priceDate} disabled={!!busy} onChange={event => setPriceDate(event.target.value)} /></label>}
-          </div><section className="sm-iprice-source-download"><h4>Скачивание</h4>
-          <button type="button" disabled={!!busy} onClick={() => perform(`template-${key}`, async () => {
-            const response = await api.get(`${root}${path}`, { responseType: "blob" });
-            if (!mounted.current) return;
-            const url = URL.createObjectURL(response.data);
-            const link = document.createElement("a"); link.href = url; link.download = `select_market_${key}.xlsx`;
-            document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-          })}>Скачать шаблон</button>
-          </section><section className="sm-iprice-source-upload"><h4>Загрузка</h4>
-          {state.can_edit && <label>Загрузить XLSX
-            <input type="file" accept=".xlsx" disabled={!!busy || (key === "price" && !priceDate)} onChange={event => {
-              const file = event.target.files?.[0]; event.target.value = "";
-              if (!file) return;
-              if (!file.name.toLowerCase().endsWith(".xlsx") || file.size > 10 * 1024 * 1024) { setError("Выберите XLSX размером не более 10 МБ."); return; }
-              perform(key, async () => {
-                const body = new FormData(); body.append("file", file);
-                if (key === "price") body.append("price_date", priceDate);
-                await api.post(`${root}${path}`, body);
-                if (mounted.current) setMessage(`${title}: файл загружен.`);
-              });
-            }} />
-          </label>}
-          {busy === key && <p role="status" className="sm-iprice-loading">Проверяем и загружаем файл…</p>}
-          </section>
-        </article>;
-      })}</div>
-      <article className="sm-iprice-card"><h2>Обновление сайта и конкурентов</h2>
-        <p>Сайт загружается полностью. Товары конкурентов выбираются из активной классификации. Во время ожидания ТАРА остальные сборы ожидают освобождения общего слота.</p>
-        {state.can_edit && <button className="sm-iprice-primary" type="button" disabled={!!busy || active || !state.parsers_enabled} onClick={() => perform("parsers", async () => {
-          await api.post(`${root}parsers/start/`, {});
-          if (mounted.current) setMessage("Запуск зарегистрирован. Состояние обновляется автоматически.");
-        })}>{active ? "Обновление выполняется" : "Обновить источники"}</button>}
-        {!state.parsers_enabled && <p>Запуск парсеров пока не включён администратором.</p>}
-        {state.run && <p>Запуск №{state.run.id}: <strong>{statuses[state.run.status] || state.run.status}</strong>. Этап: {steps[state.run.step] || state.run.step || "—"}.</p>}
-        {state.run?.status === "failed" && <p>Обновление завершилось с ошибкой. Подробности доступны администратору в журнале запуска.</p>}
-        {state.queue.map(item => <p key={item.id}>{statuses[item.status] || item.status}{item.position ? ` · Место в очереди: ${item.position}` : ""}{item.message ? ` · ${item.message}` : ""}</p>)}
-      </article>
-      <article className="sm-iprice-card"><h2>Последние загрузки файлов</h2>
-        {!state.imports.length && !state.price_imports.length && <p className="sm-iprice-empty">Файлы пока не загружались.</p>}
-        <ul>{state.price_imports.map(item => <li key={`price-${item.id}`}>Прайс за {item.date}: {item.filename} · {item.rows} строк · версия {item.revision}</li>)}
-          {state.imports.map(item => <li key={item.id}>{sources.find(source => source[0] === item.kind)?.[1] || item.kind}: {item.filename} · {new Date(item.created_at).toLocaleString("ru-RU")}</li>)}</ul>
-      </article>
-      </div>
-    </>}
-  </section>;
+  function template(key, route) {
+    perform(`template-${key}`, async () => {
+      const response = await api.get(`${root}${route || `sources/${key}/`}`, { responseType: "blob" });
+      if (!mounted.current) return;
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a"); link.href = url; link.download = `select_market_${key}.xlsx`;
+      document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+  }
+  function upload(file, key, title, route) {
+    if (!file || busy || !state?.can_edit) return;
+    if (key === "price" && !priceDate) { setError("Выберите дату полного прайса."); return; }
+    if (!file.name.toLowerCase().endsWith(".xlsx") || file.size > 10 * 1024 * 1024) { setError("Выберите XLSX размером не более 10 МБ."); return; }
+    perform(key, async () => {
+      const body = new FormData(); body.append("file", file);
+      if (key === "price") body.append("price_date", priceDate);
+      setUploads(previous => ({ ...previous, [key]: { state: "uploading", file: file.name, progress: 0 } }));
+      try {
+        const { data: result } = await api.post(`${root}${route || `sources/${key}/`}`, body, { onUploadProgress: event => {
+          if (mounted.current) setUploads(previous => ({ ...previous, [key]: { state: "uploading", file: file.name, progress: event.total ? Math.round(event.loaded / event.total * 100) : 0 } }));
+        } });
+        if (mounted.current) setUploads(previous => ({ ...previous, [key]: { state: "done", file: file.name, message: `Файл загружен и проверен. ${Object.entries({rows: "Строк", loaded: "Загружено", created: "Создано", updated: "Обновлено", skipped: "Пропущено", deleted: "Удалено"}).filter(([key]) => typeof result?.[key] === "number").map(([key, label]) => `${label}: ${result[key].toLocaleString("ru-RU")}`).join("; ")}. Новые данные войдут в следующий расчёт.`.replace("проверен. .", "проверен.") } }));
+      } catch (err) {
+        if (mounted.current) setUploads(previous => ({ ...previous, [key]: { state: "error", file: file.name, message: errorText(err) } }));
+      }
+    });
+  }
+  return <PriceZonesProvider><section className="sm-system-page sm-iprice" aria-label={dashboard.name} aria-busy={!state || !!busy}>
+    <header className="ip-head"><div className="ip-head-row">
+      <nav className="ip-nav" aria-label="Разделы iPrice">{[["home", "Главная", "home"], ["prices", "Цены", "table"], ["market", "Рынок", "chart"], ["versions", "Расчёты", "layers"], ["data", "Данные", "data"]].map(([key, title, icon]) => <a href={`${location.pathname}${location.search}${sectionAddress(key).hash}`} key={key} className={(view === key || (key === "versions" && view === "compare")) ? "active" : ""} aria-current={(view === key || (key === "versions" && view === "compare")) ? "page" : undefined} onClick={e => { if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return; e.preventDefault(); setView(key); }}><Icon name={icon} size={16} />{title}</a>)}</nav>
+      <div className="ip-head-spacer" /><div id="sm-iprice-version-slot" />
+      <Button variant="ghost" icon="help" aria-label="Справка" title="Справка: шаги работы, цвета, словарь" onClick={() => setHelp(true)} />
+    </div></header>
+    <SelectMarketHelp open={help} onClose={() => setHelp(false)} />
+    <main className="ip-main">
+      {error && <p role="alert" className="sm-iprice-error">{error}</p>}
+      {statusError && <p role="alert" className="sm-iprice-error">{statusError}</p>}
+      {message && <p role="status">{message}</p>}
+      {!state && <p role="status" className="sm-iprice-loading">Загружаем источники…</p>}
+      {state && <>
+        <SelectMarketCalculations canEdit={state.can_edit} view={view} onNavigate={setView} onHelp={() => setHelp(view === "market" ? "colors" : "steps")} sourceState={state} />
+        {view === "data" && <>
+          <PageHead title="Исходные данные" text="iPrice считает цены по закупочной стоимости, доставке, правилам компании и ценам конкурентов. Перед расчётом обновите файлы." onHelp={() => setHelp(true)} />
+          <Tabs value={dataTab} onChange={setDataTab} items={[["uploads", "Файлы"], ["parser", "Цены конкурентов"], ["health", "Проверка данных"]]} />
+          {dataTab === "uploads" && <>
+            <div className="ip-alert info"><Icon name="info" /><div className="body"><b>Загрузка в три действия</b><span>Скачайте шаблон, заполните его в Excel и перетащите файл в карточку. Закупочные цены обновляйте каждый месяц, остальные файлы — при изменениях.</span></div></div>
+            <div className="ip-grid k2 sm-iprice-source-grid">{sources.map(([key, title, hint, route]) => <Panel key={key} title={title} sub={hint} actions={<Button size="s" variant="ghost" icon="download" disabled={!!busy} onClick={() => template(key, route)}>Шаблон</Button>}>
+              <div className="ip-stack sm-upload-body">
+                <div className="sm-source-date">{key === "price" && state.can_edit && <label>Дата полного прайса<input className="ip-input" type="date" required value={priceDate} disabled={!!busy} onChange={e => setPriceDate(e.target.value)} /></label>}</div>
+                {state.can_edit ? <label className={`ip-drop ${busy ? "disabled" : ""}`} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); upload(e.dataTransfer.files?.[0], key, title, route); }}>
+                  <Icon name="upload" size={22} /><div><b>Перетащите файл</b> или <span>выберите на компьютере</span></div><div className="small quiet">Excel (.xlsx) по шаблону, до 10 МБ</div>
+                  <input type="file" accept=".xlsx" aria-label={`Загрузить ${title}`} disabled={!!busy || (key === "price" && !priceDate)} onChange={e => { upload(e.target.files?.[0], key, title, route); e.target.value = ""; }} />
+                </label> : <span className="small muted">Файлы загружают сотрудники с правом редактирования.</span>}
+                {uploads[key]?.state === "uploading" && <><p role="status">Загружаем и проверяем {uploads[key].file}…</p><div className={`ip-progress ${uploads[key].progress >= 100 ? "indet" : ""}`}><span style={{ width: `${uploads[key].progress}%` }} /></div></>}
+                {uploads[key] && uploads[key].state !== "uploading" && <div role="status" className={`ip-alert ${uploads[key].state === "done" ? "success" : "error"}`}><div className="body"><b>{uploads[key].file}</b><span>{uploads[key].message}</span></div></div>}
+              </div>
+            </Panel>)}</div>
+          </>}
+          {dataTab === "parser" && <div className="ip-grid side"><Panel title="Сбор цен конкурентов" sub="Сайт загружается полностью. Товары конкурентов выбираются из активной классификации. Общая очередь защищает источники от одновременных сборов."
+            actions={state.can_edit && <Button variant="primary" icon="play" disabled={!!busy || active || !state.parsers_enabled} onClick={() => perform("parsers", async () => { await api.post(`${root}parsers/start/`, {}); if (mounted.current) setMessage("Запуск зарегистрирован. Состояние обновляется автоматически."); })}>{active ? "Обновление выполняется" : "Собрать цены"}</Button>}>
+            <div className="ip-stack sm-panel-body">{!state.parsers_enabled && <p>Запуск парсеров пока не включён администратором.</p>}
+              {state.run ? <><span className={`ip-tag ${state.run.status === "failed" ? "red" : state.run.status === "success" ? "green" : "blue"}`}>{statuses[state.run.status] || state.run.status}</span><p>Сейчас: <b>{steps[state.run.step] || state.run.step || "—"}</b></p>{active && <div className="ip-progress indet"><span /></div>}<dl className="ip-kv"><dt>Начали</dt><dd>{state.run.started_at ? new Date(state.run.started_at).toLocaleString("ru-RU") : "—"}</dd><dt>Закончили</dt><dd>{state.run.finished_at ? new Date(state.run.finished_at).toLocaleString("ru-RU") : active ? "ещё идёт" : "—"}</dd></dl></> : <span className="ip-tag gray">Ещё не собирали</span>}
+              {state.run?.status === "failed" && <p role="alert">Обновление завершилось с ошибкой. Подробности доступны администратору в журнале запуска.</p>}
+              {state.queue.map(item => <p key={`queue-${item.id}`}>{statuses[item.status] || item.status}{item.position ? ` · Место в очереди: ${item.position}` : ""}{item.message ? ` · ${item.message}` : ""}</p>)}
+            </div></Panel><Panel title="Файлы для сверки" sub="Excel для ручной проверки данных"><div className="ip-stack sm-panel-body"><Button icon="download" disabled={!!busy} onClick={() => template("parser_products", "review/parser_products/")}>Товары конкурентов</Button><Button icon="download" disabled={!!busy} onClick={() => template("preparation_check", "review/preparation_check/")}>Готовность к расчёту</Button><p>Проверка исходных данных и замечаний последнего расчёта. Полная проверка коэффициентов выполняется при расчёте.</p></div></Panel></div>}
+          {dataTab === "health" && <><SelectMarketHealth /><Panel title="Последние загрузки файлов" sub="Ошибки загрузки показываются при проверке файла. Ошибки расчёта доступны в разделе «Цены»."><div className="sm-panel-body">
+            {!state.imports.length && !state.price_imports.length && <div className="ip-empty"><b>Файлы пока не загружались</b><span>Перейдите во вкладку «Файлы» и заполните шаблоны.</span></div>}
+            <ul>{state.price_imports.map(item => <li key={`price-${item.id}`}>Прайс за {item.date}: {item.filename} · {item.rows} строк · версия {item.revision}</li>)}{state.imports.map(item => <li key={`source-${item.id}`}>{sources.find(source => source[0] === item.kind)?.[1] || item.kind}: {item.filename} · {new Date(item.created_at).toLocaleString("ru-RU")}</li>)}</ul>
+          </div></Panel></>}
+        </>}
+      </>}
+    </main>
+  </section></PriceZonesProvider>;
 }

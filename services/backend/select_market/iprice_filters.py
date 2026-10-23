@@ -4,6 +4,7 @@ from django.db.models import Q
 PRODUCT_FILTERS = {key: key for key in (
     'group_1', 'group_2', 'group_3', 'group_4', 'category', 'subcategory',
     'subcategory_type', 'color', 'material', 'modification', 'item_type', 'is_classified',
+    'pricing_method', 'calculation_status', 'sale_region',
 )}
 EMPTY = '__empty__'
 
@@ -31,6 +32,14 @@ def filter_products(queryset, filters, search='', *, skip=None, prefix=''):
             raise ValueError('Значения фильтра должны быть списком строк')
         if key == skip or not values:
             continue
+        if key == 'sale_region':
+            if prefix:
+                queryset = queryset.filter(sale_region__in=values)
+            else:
+                from .iprice_domain_models import IPriceSnapshotRegion
+                matching = IPriceSnapshotRegion.objects.filter(sale_region__in=values)
+                queryset = queryset.filter(pk__in=matching.values('snapshot_product_id'))
+            continue
         field = prefix + key
         if key == 'is_classified':
             if set(values) - {'true', 'false'}:
@@ -51,7 +60,11 @@ def filter_options(queryset, filters, search=''):
     result = {}
     for field in PRODUCT_FILTERS:
         scoped = filter_products(queryset, filters, search, skip=field)
-        values = scoped.order_by().values_list(field, flat=True).distinct()
+        if field == 'sale_region':
+            from .iprice_domain_models import IPriceSnapshotRegion
+            values = IPriceSnapshotRegion.objects.filter(snapshot_product_id__in=scoped.values('pk')).order_by().values_list(field, flat=True).distinct()
+        else:
+            values = scoped.order_by().values_list(field, flat=True).distinct()
         result[field] = sorted({('true' if value else 'false') if field == 'is_classified'
                                 else value or EMPTY for value in values})
     return result

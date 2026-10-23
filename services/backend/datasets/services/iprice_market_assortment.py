@@ -119,7 +119,7 @@ def split_regions(
 # ============================================================
 
 
-def build_prefix_region_map() -> dict:
+def build_prefix_region_map(*, workspace=None) -> dict:
     """
     Возвращает:
 
@@ -135,7 +135,7 @@ def build_prefix_region_map() -> dict:
     seen_by_key = defaultdict(set)
 
     rows = (
-        ParserPrefix.objects
+        (workspace.model('ParserPrefix') if workspace else ParserPrefix).objects
         .all()
         .values(
             "source",
@@ -270,6 +270,7 @@ def validate_snapshot_product_classification(
 def get_market_classifications(
     *,
     snapshot_product: IPriceSnapshotProduct,
+    workspace=None,
 ) -> list[ParserProductClassification]:
     """
     Отбирает все активные классификации
@@ -289,7 +290,7 @@ def get_market_classifications(
     )
 
     queryset = (
-        ParserProductClassification.objects
+        (workspace.model('ParserProductClassification') if workspace else ParserProductClassification).objects
         .filter(
             status=(
                 ParserProductClassification
@@ -333,6 +334,7 @@ def get_market_classifications(
 def build_market_group_key_map(
     *,
     competitor_product_keys: set[int],
+    workspace=None,
 ) -> dict[int, tuple]:
     """
     Возвращает ключ карточки для каждого competitor product_key.
@@ -353,13 +355,14 @@ def build_market_group_key_map(
         return {}
 
     prefixes_by_source = (
-        get_prefixes_by_source()
+        get_prefixes_by_source(workspace=workspace)
     )
 
     (
         _,
         url_group_key_by_product,
     ) = build_competitor_url_groups(
+        workspace=workspace,
         prefixes_by_source=(
             prefixes_by_source
         )
@@ -368,7 +371,7 @@ def build_market_group_key_map(
     url_rows = {
         row["id"]: row
         for row in (
-            ParserProductUrl.objects
+            (workspace.model('ParserProductUrl') if workspace else ParserProductUrl).objects
             .filter(
                 id__in=(
                     competitor_product_keys
@@ -440,6 +443,7 @@ def get_match_data(
     *,
     competitor_product_keys: set[int],
     current_base_product_key: int,
+    workspace=None,
 ) -> dict:
     """
     Для каждого competitor product_key возвращает:
@@ -465,7 +469,7 @@ def get_match_data(
         return result
 
     rows = (
-        ParserProductMatch.objects
+        (workspace.model('ParserProductMatch') if workspace else ParserProductMatch).objects
         .filter(
             product_key_competitor__in=(
                 competitor_product_keys
@@ -543,6 +547,16 @@ def get_snapshot_competitor_keys(
             flat=True,
         )
     )
+
+
+def get_used_competitor_keys(*, snapshot_product):
+    """Saved valid prices that apply to at least one saved sales region."""
+    from datasets.services.iprice_snapshot_builder import competitor_applies_to_region
+    region_model = snapshot_product._meta.apps.get_model(snapshot_product._meta.app_label, 'IPriceSnapshotRegion')
+    regions = list(region_model.objects.filter(snapshot_product=snapshot_product).values_list('sale_region', flat=True).distinct())
+    return {competitor.competitor_product_key for competitor in snapshot_product.competitors.filter(
+        calculation_status='success', competitor_final_price_max__gt=0)
+        if any(competitor_applies_to_region(competitor=competitor, sale_region=region) for region in regions)}
 
 
 # ============================================================
@@ -827,6 +841,7 @@ def market_card_sort_key(
 def build_iprice_market_assortment(
     *,
     snapshot_product: IPriceSnapshotProduct,
+    workspace=None,
 ) -> dict:
     """
     Формирует справочный рыночный ассортимент
@@ -853,6 +868,7 @@ def build_iprice_market_assortment(
 
     classifications = (
         get_market_classifications(
+            workspace=workspace,
             snapshot_product=(
                 snapshot_product
             )
@@ -909,7 +925,7 @@ def build_iprice_market_assortment(
     url_rows = {
         row["id"]: row
         for row in (
-            ParserProductUrl.objects
+            (workspace.model('ParserProductUrl') if workspace else ParserProductUrl).objects
             .filter(
                 id__in=classification_keys,
                 status=(
@@ -987,6 +1003,7 @@ def build_iprice_market_assortment(
 
     group_key_by_product = (
         build_market_group_key_map(
+            workspace=workspace,
             competitor_product_keys=(
                 competitor_product_keys
             )
@@ -994,6 +1011,7 @@ def build_iprice_market_assortment(
     )
 
     match_data = get_match_data(
+        workspace=workspace,
         competitor_product_keys=(
             competitor_product_keys
         ),
@@ -1010,9 +1028,11 @@ def build_iprice_market_assortment(
             )
         )
     )
+    if workspace and workspace.code == 'select-market':
+        snapshot_competitor_keys = get_used_competitor_keys(snapshot_product=snapshot_product)
 
     prefix_region_map = (
-        build_prefix_region_map()
+        build_prefix_region_map(workspace=workspace)
     )
 
     calculation_date = (
@@ -1022,6 +1042,7 @@ def build_iprice_market_assortment(
     )
     price_data_by_product = {
         product_key: get_competitor_price_data(
+            workspace=workspace,
             product_key=product_key,
             calculation_date=calculation_date,
         )
@@ -1293,12 +1314,13 @@ def build_iprice_market_assortment(
     }
 
 
-def group_snapshot_competitor_cards(items: list[dict]) -> list[dict]:
+def group_snapshot_competitor_cards(items: list[dict], *, workspace=None) -> list[dict]:
     """Объединяет региональные копии конкурента как рыночный ассортимент."""
     if not items:
         return []
 
     group_keys = build_market_group_key_map(
+        workspace=workspace,
         competitor_product_keys={
             int(item["competitor_product_key"])
             for item in items

@@ -8,6 +8,7 @@ from rest_framework.response import Response
 
 from .iprice_api import PriceFileView
 from .iprice_domain_models import IPriceSnapshot, IPriceSnapshotRegion, IPriceSnapshotApproval, IPriceParameterChangeLog
+from .iprice_row_controls import RowControls
 
 
 class ApprovalInput(serializers.Serializer):
@@ -17,8 +18,22 @@ class ApprovalInput(serializers.Serializer):
 
 
 class RowApprovalView(PriceFileView):
-    http_method_names = ['post', 'options']
+    http_method_names = ['get', 'post', 'options']
     parser_classes = [JSONParser]
+
+    def get(self, request, snapshot_id, row_id):
+        from .iprice_prices import whole_rubles, price_with_vat
+        from .iprice_regional_calculation import prices_meet_margin
+        row = get_object_or_404(IPriceSnapshotRegion, pk=row_id, snapshot_product__snapshot_id=snapshot_id)
+        price = serializers.DecimalField(max_digits=18, decimal_places=0, min_value=Decimal('1')).run_validation(request.query_params.get('price'))
+        prices = {'rrp': price}
+        for tier in ('small', 'medium', 'large'):
+            discount = getattr(row, 'discount_' + tier)
+            prices[tier] = whole_rubles(price * (1 - discount)) if discount is not None else None
+        valid = all(value is not None and value > 0 for value in prices.values()) and prices_meet_margin(row, list(prices.values()))
+        return Response({'price': str(price), 'prices': prices, 'gross': {key: price_with_vat(value) if value is not None else None for key, value in prices.items()},
+            'margin': (price - row.cost_with_logistics) / price if row.cost_with_logistics is not None else None,
+            'valid': valid, 'message': '' if valid else 'Цена или оптовые скидки нарушают минимальную маржу либо не заполнены.'})
 
     def post(self, request, snapshot_id, row_id):
         from datasets.services.iprice_snapshot_approval import create_iprice_snapshot_approval, IPriceSnapshotApprovalError
@@ -39,7 +54,10 @@ class DeliveryInput(serializers.Serializer):
 
 
 class ParameterInput(serializers.Serializer):
-    filters = serializers.DictField(child=serializers.ListField(child=serializers.CharField(max_length=1000), max_length=100), allow_empty=False)
+    filters = serializers.DictField(child=serializers.ListField(child=serializers.CharField(max_length=1000), max_length=100), allow_empty=True)
+    list_scope = RowControls(required=False)
+    expected_scope = serializers.RegexField(r'^[a-f0-9]{64}$', required=False)
+    search = serializers.CharField(max_length=200, allow_blank=True, default='')
     coefficients = serializers.DictField(child=serializers.DecimalField(max_digits=12, decimal_places=6), required=False, default=dict)
     discounts = serializers.DictField(child=serializers.DecimalField(max_digits=7, decimal_places=6), required=False, default=dict)
     preview = serializers.BooleanField(default=True)
@@ -49,12 +67,14 @@ class ParameterInput(serializers.Serializer):
     def validate(self, attrs):
         from .iprice_filters import PRODUCT_FILTERS
         from datasets.services.iprice_parameter_changes import COEFFICIENT_FIELDS, DISCOUNT_FIELDS
-        if set(attrs['filters']) - set(PRODUCT_FILTERS) - {'code_1c', 'sale_region'} or not any(attrs['filters'].values()):
+        if set(attrs['filters']) - set(PRODUCT_FILTERS) - {'code_1c', 'sale_region'} or (not any(attrs['filters'].values()) and 'list_scope' not in attrs):
             raise serializers.ValidationError('Выберите поддерживаемые непустые фильтры.')
         if set(attrs['coefficients']) - set(COEFFICIENT_FIELDS) or set(attrs['discounts']) - {'small', 'medium', 'large'}:
             raise serializers.ValidationError('Неизвестный параметр расчёта.')
         if not attrs['preview'] and 'expected_revision' not in attrs:
             raise serializers.ValidationError('Сначала выполните предварительный просмотр.')
+        if not attrs['preview'] and 'list_scope' in attrs and 'expected_scope' not in attrs:
+            raise serializers.ValidationError('Повторите предварительный просмотр списка.')
         return attrs
 
 
@@ -70,17 +90,18 @@ class ParameterChangeView(PriceFileView):
         data = ParameterInput(data=request.data)
         data.is_valid(raise_exception=True)
         values = data.validated_data
-        args = dict(snapshot=snapshot, mode='regions', filters=values['filters'], search='')
+        args = dict(snapshot=snapshot, filters=values['filters'], search=values['search'], list_scope=values.get('list_scope'))
         try:
             if values['coefficients'] or values['discounts'] or not values.get('delivery'):
                 validate_changes(parse_changes(values['coefficients'], COEFFICIENT_FIELDS), parse_changes(values['discounts'], DISCOUNT_FIELDS))
             if values['preview']:
-                return Response({'affected': preview_iprice_parameter_changes(**args),
+                from .iprice_regional_edits import preview
+                return Response({'affected': preview(**args),
                                  'edit_revision': snapshot.parameters.get('edit_revision', 0)})
             from .iprice_regional_edits import apply
-            affected = apply(snapshot=snapshot, filters=values['filters'], coefficients=values['coefficients'],
+            affected = apply(**args, coefficients=values['coefficients'],
                 discounts=values['discounts'], delivery=values.get('delivery'), user=request.user,
-                expected_revision=values['expected_revision'])
+                expected_revision=values['expected_revision'], expected_scope=values.get('expected_scope'))
         except IPriceParameterChangeError as exc:
             raise ValidationError(str(exc)) from exc
         return Response({'affected': affected})
@@ -101,6 +122,10 @@ class SnapshotHistoryView(PriceFileView):
         approvals = IPriceSnapshotApproval.objects.filter(snapshot_region__snapshot_product__snapshot=snapshot).order_by('-approved_at', '-id').values(
             'id', 'revision', 'approved_rrp', 'approved_by__username', 'approved_at', 'comment', 'is_current',
             'snapshot_region__snapshot_product__code_1c', 'snapshot_region__sale_region')
+        if 'row_id' in request.query_params:
+            row_id = serializers.IntegerField(min_value=1).run_validation(request.query_params['row_id'])
+            get_object_or_404(IPriceSnapshotRegion, pk=row_id, snapshot_product__snapshot=snapshot)
+            approvals = approvals.filter(snapshot_region_id=row_id)
         paginator = Paginator(approvals, 50)
         if page > paginator.num_pages:
             raise ValidationError('Страница не найдена.')
@@ -111,10 +136,17 @@ class SnapshotHistoryView(PriceFileView):
 
 
 class AnalysisQuery(serializers.Serializer):
+    from datasets.services.iprice_price_analytics import ZONE_ORDER
+    zone = serializers.CharField(default='', allow_blank=True, max_length=200)
+    validate_zone = RowControls.validate_zone
     page = serializers.IntegerField(min_value=1, default=1)
     search = serializers.CharField(max_length=200, allow_blank=True, default='')
+    ordering = serializers.ChoiceField(choices=['', 'median_deviation_percent', '-median_deviation_percent', 'product_count', '-product_count'], default='')
     comparison_id = serializers.IntegerField(min_value=1, required=False)
-    view = serializers.ChoiceField(choices=['regions', 'groups'], default='regions')
+    mode = serializers.ChoiceField(choices=['products', 'regions'], default='regions')
+    from datasets.services.iprice_snapshot_compare import ALLOWED_CHANGE_TYPES
+    change_type = serializers.ChoiceField(choices=sorted(ALLOWED_CHANGE_TYPES), default='all')
+    view = serializers.ChoiceField(choices=['regions', 'groups', 'region_groups'], default='regions')
     hierarchy = serializers.ChoiceField(choices=['1c', 'classification'], default='1c')
     drill_level = serializers.ChoiceField(choices=['root', 'group_1', 'group_2', 'group_3', 'group_4', 'category', 'subcategory', 'subcategory_type'], default='root')
     group_1 = serializers.CharField(max_length=1000, required=False)
@@ -137,6 +169,9 @@ class SnapshotAnalysisView(PriceFileView):
         query = AnalysisQuery(data=request.query_params)
         query.is_valid(raise_exception=True)
         values = query.validated_data
+        selected_zones = values['zone'].split(',') if values['zone'] else []
+        if selected_zones and values.get('comparison_id'):
+            raise ValidationError('Фильтр зон доступен при сравнении с рынком, а не между версиями.')
         from .iprice_filters import query_filters, filter_products
         try:
             filters = query_filters(request.query_params)
@@ -148,19 +183,20 @@ class SnapshotAnalysisView(PriceFileView):
             try:
                 return Response(build_iprice_price_analytics(snapshot=snapshot, filters=filters, search=values['search'],
                     hierarchy=values['hierarchy'], drill_level=values['drill_level'], drill_path={key: values[key] for key in ('group_1', 'group_2', 'group_3', 'group_4', 'category', 'subcategory', 'subcategory_type') if key in values},
-                    page=values['page'], page_size=50, ordering=''))
+                    page=values['page'], page_size=50, ordering=values['ordering'], selected_zones=selected_zones))
             except IPricePriceAnalyticsError as exc:
                 raise ValidationError(str(exc)) from exc
         if values.get('comparison_id'):
             get_object_or_404(IPriceSnapshot, pk=values['comparison_id'], status='success')
             try:
                 return Response(compare_iprice_snapshots(base_snapshot_id=values['comparison_id'],
-                    comparison_snapshot_id=snapshot.pk, mode='regions', page=values['page'], page_size=50,
+                    comparison_snapshot_id=snapshot.pk, mode=values['mode'], change_type=values['change_type'], page=values['page'], page_size=50,
                     search=values['search'], filters=filters, workspace=IPriceWorkspace('select-market')))
             except IPriceSnapshotCompareError as exc:
                 raise ValidationError(str(exc)) from exc
         return Response(build_iprice_regional_price_analytics(snapshot=snapshot, filters=filters, search=values['search'],
-            drill_path={}, page=values['page'], page_size=50))
+            drill_path={}, page=values['page'], page_size=50, selected_zones=selected_zones,
+            ordering=values['ordering'], group_by_region=values['view'] == 'region_groups'))
 
 
 class ProductDetailsView(PriceFileView):
@@ -169,9 +205,57 @@ class ProductDetailsView(PriceFileView):
     def get(self, request, snapshot_id, product_id):
         from .iprice_domain_models import IPriceSnapshotProduct
         product = get_object_or_404(IPriceSnapshotProduct, pk=product_id, snapshot_id=snapshot_id)
-        return Response({'code': product.code_1c, 'nom': product.nom, 'method': product.pricing_method,
+        from datasets.services.iprice_price_analytics import classify_price_zone, _deviation, get_active_price_zone_config
+        from datasets.services.iprice_workspace import IPriceWorkspace
+        summary = {field: getattr(product, field) for field in (
+            'image', 'url', 'category', 'subcategory', 'subcategory_type', 'material', 'color', 'modification',
+            'assortment_matrix_status', 'calculation_status', 'warning_codes', 'error_codes', 'competitor_count',
+            'competitor_rrp_min', 'competitor_rrp_max', 'competitor_rrp_median', 'current_retail_median', 'effective_approved_rrp_median')}
+        summary['zone'] = classify_price_zone(_deviation(product.effective_approved_rrp_median, product.competitor_rrp_median),
+                                             get_active_price_zone_config(workspace=IPriceWorkspace('select-market')))
+        from datasets.services.iprice_market_assortment import group_snapshot_competitor_cards, get_used_competitor_keys
+        from .iprice_domain_models import IPriceCompetitorSelectionOverride
+        competitors = list(product.competitors.order_by('source', 'pk').values())
+        cards = group_snapshot_competitor_cards(competitors, workspace=IPriceWorkspace('select-market'))
+        used = get_used_competitor_keys(snapshot_product=product)
+        modes = dict(IPriceCompetitorSelectionOverride.objects.filter(product_key_base=product.base_product_key).values_list('product_key_competitor', 'selection_mode'))
+        for card in cards:
+            variants = card.get('price_variants') or []
+            keys = card['competitor_product_keys']
+            chosen = {modes.get(key, 'auto') for key in keys}
+            card.update(price=card.get('competitor_final_price_median'), regions=card.get('applicable_regions', []),
+                product_key=card.get('competitor_product_key'), name=next((v.get('name') for v in variants if v.get('name')), None),
+                image=next((v.get('image') for v in variants if v.get('image')), None), is_used_in_snapshot=bool(used.intersection(keys)),
+                selection_mode=next(iter(chosen)) if len(chosen) == 1 else 'mixed')
+        return Response({**summary, 'competitor_cards': cards, 'edit_revision': product.snapshot.parameters.get('edit_revision', 0),
+            'code': product.code_1c, 'nom': product.nom, 'method': product.pricing_method,
             'details': product.calculation_details, 'competitors': list(product.competitors.order_by('source', 'id').values(
                 'id', 'source', 'url', 'competitor_price_date', 'competitor_final_price_max', 'applicable_regions', 'error_codes'))})
+
+
+class OwnAssortmentView(PriceFileView):
+    http_method_names = ['get', 'head', 'options']
+
+    def get(self, request, snapshot_id, product_id, kind='own'):
+        from datasets.services.iprice_own_assortment import build_iprice_own_assortment, IPriceOwnAssortmentError
+        from datasets.services.iprice_market_assortment import build_iprice_market_assortment, IPriceMarketAssortmentError
+        from datasets.services.iprice_workspace import IPriceWorkspace
+        from .iprice_domain_models import IPriceSnapshotProduct
+        product = get_object_or_404(IPriceSnapshotProduct, pk=product_id, snapshot_id=snapshot_id)
+        try:
+            build = build_iprice_market_assortment if kind == 'market' else build_iprice_own_assortment
+            result = build(snapshot_product=product, workspace=IPriceWorkspace('select-market'))
+            if kind == 'market':
+                from datasets.services.iprice_competitor_selection import is_selection_editable
+                from .iprice_domain_models import IPriceCompetitorSelectionOverride
+                modes = dict(IPriceCompetitorSelectionOverride.objects.filter(product_key_base=product.base_product_key).values_list('product_key_competitor', 'selection_mode'))
+                for card in result['results']:
+                    selections = {modes.get(key, 'auto') for key in card['competitor_product_keys']}
+                    card['selection_mode'] = next(iter(selections)) if len(selections) == 1 else 'mixed'
+                result.update(editable=is_selection_editable(product.snapshot), edit_revision=product.snapshot.parameters.get('edit_revision', 0))
+            return Response(result)
+        except (IPriceOwnAssortmentError, IPriceMarketAssortmentError) as exc:
+            return Response({'results': [], 'counts': {'cards': 0}, 'unavailable_reason': str(exc)})
 
 
 class ZoneInput(serializers.Serializer):
@@ -232,7 +316,9 @@ class CompetitorSelectionView(PriceFileView):
         if page > paginator.num_pages:
             raise ValidationError('Страница не найдена.')
         modes = dict(IPriceCompetitorSelectionOverride.objects.filter(product_key_base=product.base_product_key).values_list('product_key_competitor', 'selection_mode'))
-        return Response({'items': [{'id': row.pk, 'source': row.source, 'url': row.url, 'mode': modes.get(row.pk, 'auto')} for row in paginator.page(page)],
+        from datasets.services.iprice_market_assortment import get_used_competitor_keys
+        used = get_used_competitor_keys(snapshot_product=product)
+        return Response({'items': [{'id': row.pk, 'source': row.source, 'url': row.url, 'mode': modes.get(row.pk, 'auto'), 'used_in_snapshot': row.pk in used} for row in paginator.page(page)],
             'page': page, 'pages': paginator.num_pages, 'edit_revision': product.snapshot.parameters.get('edit_revision', 0),
             'editable': is_selection_editable(product.snapshot),
             'changes': list(product.snapshot.competitor_selection_changes.filter(override__product_key_base=product.base_product_key).order_by('-id').values(

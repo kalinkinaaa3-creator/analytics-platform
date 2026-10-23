@@ -373,6 +373,7 @@ def _apply_drill_path(queryset, path, prefix=""):
 
 
 def _product_rows(queryset, regional_metrics=None, extra_fields=()):
+    use_final = queryset.model._meta.app_label == "select_market"
     values = queryset.values(
         *extra_fields,
         "id",
@@ -408,7 +409,7 @@ def _product_rows(queryset, regional_metrics=None, extra_fields=()):
             "final_rrp": final_rrp,
             "market_price": market_price,
             "retail_price": retail_price,
-            "deviation": _deviation(retail_price, market_price),
+            "deviation": _deviation(final_rrp if use_final else retail_price, market_price),
             "final_market_delta": (
                 final_rrp - market_price
                 if final_rrp is not None and market_price is not None
@@ -701,7 +702,7 @@ def build_iprice_price_analytics(
                     row["final_market_delta_percent"]
                 ),
                 "retail_market_delta": row["retail_market_delta"],
-                "retail_market_delta_percent": _percent(row["deviation"]),
+                "retail_market_delta_percent": _percent(_deviation(row["retail_price"], row["market_price"])),
                 "zone": classify_price_zone(row["deviation"], config),
             })
         items = _sort_product_items(items, ordering)
@@ -795,6 +796,7 @@ def build_iprice_regional_price_analytics(
     page_size: int,
     ordering: str = "",
     selected_zones: list[str] | None = None,
+    group_by_region: bool = False,
 ) -> dict:
     from datasets.services.iprice_snapshot_builder import _snapshot_workspace
     workspace = _snapshot_workspace(snapshot)
@@ -831,7 +833,7 @@ def build_iprice_regional_price_analytics(
         final_rrp = _as_decimal(row.effective_approved_rrp)
         market_price = _as_decimal(row.regional_competitor_rrp_median)
         retail_price = _as_decimal(row.current_retail)
-        deviation = _deviation(retail_price, market_price)
+        deviation = _deviation(final_rrp if workspace and workspace.code == "select-market" else retail_price, market_price)
         items.append({
             "id": row.id,
             "product_id": row.snapshot_product_id,
@@ -867,7 +869,7 @@ def build_iprice_regional_price_analytics(
                 if retail_price is not None and market_price is not None
                 else None
             ),
-            "retail_market_delta_percent": _percent(deviation),
+            "retail_market_delta_percent": _percent(_deviation(retail_price, market_price)),
             "zone": classify_price_zone(deviation, config),
             "calculation_status": row.calculation_status,
         })
@@ -877,6 +879,20 @@ def build_iprice_regional_price_analytics(
     ]
     if normalized_zones:
         items = [item for item in items if item["zone"] in normalized_zones]
+    if group_by_region:
+        by_region = defaultdict(list)
+        for item in items:
+            by_region[item['sale_region']].append(item)
+        groups = []
+        for region, rows in by_region.items():
+            counts = {zone: sum(row['zone'] == zone for row in rows) for zone in ZONE_ORDER}
+            groups.append({'key': region, 'label': region, 'product_count': len(rows),
+                'median_deviation_percent': _median([row['deviation_percent'] for row in rows]),
+                'market_coverage_percent': Decimal(100) * (len(rows) - counts['no_market_data']) / len(rows),
+                'zones': [{'key': zone, 'count': count, 'percent': Decimal(100) * count / len(rows)} for zone, count in counts.items()]})
+        paginated, pagination = _paginate(_sort_items(groups, ordering), page, page_size)
+        return {'snapshot_id': snapshot.id, 'view': 'region_groups', 'results': paginated,
+                'pagination': pagination, 'price_zones': serialize_price_zone_config(config)}
     allowed_ordering = {
         "code_1c", "nom", "sale_region", "departure", "retail_price",
         "final_rrp", "market_price", "deviation_percent",
