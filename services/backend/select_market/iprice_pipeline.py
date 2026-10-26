@@ -36,6 +36,7 @@ def run_step(run, *, step_name, command_name, options):
     results = dict(run.result.get('source_results', {}))
     if command_name == 'load_base_products':
         result = base_parser.load_base_products(workspace=workspace)
+        sync_iprice_product_images(source="base", workspace=workspace)
     elif command_name in ('load_tt_products', 'load_ps_products'):
         source = 'tt' if command_name == 'load_tt_products' else 'ps'
         parser = tt_product_parser.parse_tt_products if source == 'tt' else ps_product_parser.parse_ps_products

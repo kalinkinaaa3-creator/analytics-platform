@@ -13,17 +13,20 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     let canEdit = true, manualPrice = null, parameterCalls = 0, approved = false, editRevision = 0, competitorChanges = 0;
     let failRowsOnce = false, twoRows = true;
     let marketSize = 1;
+    let drillProducts = false;
+    let manyImports = false;
     let zoneSaves = 0;
     let priceZones = { below_market_threshold: "-0.03", above_market_threshold: "0.03", critical_threshold: "0.1" };
     const version = { id: 1, version_number: 1, calculation_date: '2026-10-14', status: 'success', is_current: true, is_active: false, was_active: false };
-    const row = { id: 1, product_id: 1, snapshot_product__code_1c: '00-А', snapshot_product__nom: 'Тестовый ящик',
+    const row = { id: 1, product_id: 1, snapshot_product__code_1c: '00-А', snapshot_product__nom: 'Тестовый ящик', snapshot_product__image: 'https://images.example.test/product.svg',
       sale_region: 'СПБ', departure: 'Завод', current_retail: '100', cost_with_logistics: '60', minimum_price: '70',
       calculated_rrp: '110', regional_competitor_rrp_median: '105', regional_competitor_rrp_min: '90', regional_competitor_rrp_max: '120',
       calculation_status: 'warning', error_codes: [], warning_codes: ['MISSING_WEBSITE_PRODUCT', 'MISSING_CLASSIFICATION', 'REAPPROVAL_REQUIRED'] };
-    await page.route('**/v1/select-market/iprice/**', async route => {
+    await page.route('https://images.example.test/**', route => route.fulfill({contentType:'image/svg+xml', body:'<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="blue"/></svg>'}));
+    await page.route('**/v1/select-market/iprice/**' , async route => {
       const request = route.request(), path = new URL(request.url()).pathname;
       let body;
-      if (path.endsWith('/status/')) body = { can_edit: canEdit, imports: [], price_imports: [], parsers_enabled: false, run: null, queue: [] };
+      if (path.endsWith('/status/')) body = { can_edit: canEdit, imports: manyImports ? Array.from({length:20}, (_,i)=>({id:i+1,kind:"product_cost",filename:"cost-"+i+".xlsx",created_at:new Date(2026,9,23,12,i).toISOString()})) : [], price_imports: [], parsers_enabled: false, run: null, queue: [] };
       else if (path.endsWith('/health/')) body = { price_date: null, source_checks: [], snapshot: null, issues: [] };
       else if (path.endsWith('/own/')) body = { counts: { cards: 1 }, results: [{ snapshot_product_id: 3, code_1c: 'OWN', name: 'Другой товар линейки', price: 123, regional_prices: [{ region: 'СПБ', price: 123 }] }] };
       else if (path.endsWith('/market/')) body = { editable: true, edit_revision: editRevision, counts: { cards: 1, used_in_snapshot: 1 }, results: [{ group_key: ['tt', 2], competitor_product_keys: Array.from({ length: marketSize }, (_, i) => i + 2), selection_mode: 'auto', source: 'tt', name: 'Карточка рынка', price: 105, regions: ['СПБ'], is_used_in_snapshot: true }] };
@@ -44,20 +47,31 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
         if (new URL(request.url()).searchParams.get('mode') === 'products') body = { rows: [{ product_id: 1, regions: [first], summary: { current_retail_median: '100', effective_approved_rrp_median: manualPrice || '110', competitor_rrp_median: '105', competitor_count: 1, pricing_method: 'analog', calculation_status: 'warning', error_codes: [], warning_codes: row.warning_codes, zone: 'below_market' } }], page: 1, pages: 1, count: 1 };
       }
       else if (path.endsWith('/price-file/') && request.method() === 'POST') { await route.fulfill({ status: 400, json: { file: ['В файле не заполнен код товара.'] } }); return; }
-      else if (path.endsWith('/history/')) body = { activations: [], approvals: [], parameter_changes: [], page: 1, pages: 1 };
+      else if (path.endsWith('/history/')) body = {
+        activations: [{ at: '2026-10-24T10:00:00Z', username: 'reviewer@example.test', action: 'deactivate', previous_snapshot_ids: [2] }],
+        approvals: [{ id: 1, snapshot_region__snapshot_product__code_1c: '00-А', snapshot_region__sale_region: 'СПБ', approved_rrp: '150', approved_by__username: 'reviewer@example.test', approved_at: '2026-10-24T09:00:00Z', comment: 'Длинная причина согласования цены для проверки переноса строк. '.repeat(8), is_current: false }],
+        parameter_changes: [
+          { id: 1, created_at: '2026-10-24T09:00:00Z', user__username: null, status: 'success', changes: { minimum_margin: '0.20', include_transport: false, logistics_unit: '12.34' } },
+          { id: 2, created_at: '2026-10-24T08:00:00Z', user__username: 'reviewer@example.test', status: 'pending', changes: { coefficients: { base_analog: '1.050000' }, discounts: { small: '0.04' } } },
+        ], page: 1, pages: 1, count: 1,
+      };
       else if (path.endsWith('/approval/') && request.method() === 'GET') { const price = new URL(request.url()).searchParams.get('price'); body = { price, prices: { rrp: price, small: price, medium: price, large: price }, gross: { rrp: price, small: price, medium: price, large: price }, margin: 0.4, valid: true }; }
       else if (path.endsWith('/approval/')) { const data = request.postDataJSON(); assert.equal(data.expected_revision, 0); assert.equal(data.comment, 'Причина проверки'); manualPrice = data.approved_rrp; editRevision++; body = { revision: 1 }; }
       else if (path.endsWith('/parameters/')) { const data = request.postDataJSON(); parameterCalls++; assert.equal(data.coefficients.minimum_margin, "0.200000"); assert.deepEqual(data.delivery, { include_transport: true, logistics_unit: '12.34' }); assert.deepEqual(data.filters, {}); assert.deepEqual(data.list_scope, { mode: 'regions', zone: '', problems_only: false }); if (!data.preview) { assert.equal(data.expected_revision, editRevision); assert.equal(data.expected_scope, "a".repeat(64)); editRevision++; } body = { affected: { products: 1, regions: 1, routes: 1, scope_signature: "a".repeat(64) }, edit_revision: editRevision }; }
       else if (path.endsWith('/activate/')) { assert.equal(request.postDataJSON().expected_revision, editRevision); approved = true; body = { id: 1, is_active: true }; }
-      else if (path.endsWith('/products/1/')) body = { code: '00-А', nom: 'Тестовый ящик', method: 'exclusive', competitors: [] };
+      else if (path.endsWith('/products/1/')) body = { code: '00-А', nom: 'Тестовый ящик', method: 'exclusive', assortment_matrix_status: '3. Под заказ / заказная позиция', competitors: [] };
       else if (path.endsWith('/competitors/')) {
         if (request.method() === 'POST') { assert.equal(request.postDataJSON().expected_revision, editRevision); competitorChanges++; editRevision++; body = {}; }
         else body = { page: 1, pages: 1, edit_revision: editRevision, editable: true, changes: [], items: [{ id: 2, source: 'tt', url: 'https://example.test/competitor', mode: 'auto' }] };
       }
-      else if (path.endsWith('/analysis/') && new URL(request.url()).searchParams.get('view') === 'groups') body = { results: [{ key: 'Ящики', label: 'Ящики', product_count: 1, median_final_rrp: '150', median_retail_price: '100', median_market_price: '105' }], next_level: 'category', pagination: { page: 1, pages: 1 }, price_zones: { below_market_percent: -3, above_market_percent: 3, critical_percent: 10 } };
-      else if (path.endsWith('/analysis/') && new URL(request.url()).searchParams.get('view') === 'region_groups') body = { results: [{ key: 'СПБ', label: 'СПБ', product_count: 2, zones: [{key:'below_market',count:2,percent:100}], median_deviation_percent: -5, market_coverage_percent: 100 }], pagination: {page:1,pages:1} };
-      else if (path.endsWith('/analysis/') && new URL(request.url()).searchParams.get('comparison_id')) body = { results: [{ base: { id: 1, snapshot_product_id: 1, code_1c: 'OLD', nom: 'Удалённый товар', sale_region: 'СПБ', effective_approved_rrp: '100' }, comparison: null, change_type: 'removed', key: 'removed-OLD' }], page: 1, total_pages: 1 };
-      else if (path.endsWith('/analysis/')) body = { results: [{ code_1c: '00-А', nom: row.snapshot_product__nom, sale_region: 'СПБ', departure: 'Завод', final_rrp: manualPrice, retail_price: '100', market_price: '105', zone: 'below_market' }], pagination: { page: 1, pages: 1 }, price_zones: { below_market_percent: -3, above_market_percent: 3, critical_percent: 10 } };
+      else if (drillProducts && path.endsWith('/analysis/') && new URL(request.url()).searchParams.get('view') === 'groups') {
+        const leaf = new URL(request.url()).searchParams.get('drill_level') === 'group_1';
+        body = { next_level: leaf ? null : 'group_1', results: leaf ? [{id:1, code_1c:'00-А', nom:'Тестовый ящик', image:row.snapshot_product__image, median_final_rrp:150}] : [{key:'__empty__',label:'Не указано',product_count:1}], pagination:{page:1,pages:1,count:1,page_size:50} };
+      }
+      else if (path.endsWith('/analysis/') && new URL(request.url()).searchParams.get('view') === 'groups') body = { results: [{ key: 'Ящики', label: 'Ящики', product_count: 1, median_final_rrp: '150', median_retail_price: '100', median_market_price: '105' }], next_level: 'category', pagination: { page: 1, pages: 1, count: 1, page_size: 50 }, price_zones: { below_market_percent: -3, above_market_percent: 3, critical_percent: 10 } };
+      else if (path.endsWith('/analysis/') && new URL(request.url()).searchParams.get('view') === 'region_groups') body = { results: [{ key: 'СПБ', label: 'СПБ', product_count: 2, zones: [{key:'below_market',count:2,percent:100}], median_deviation_percent: -5, market_coverage_percent: 100 }], pagination: {page:1,pages:1,count:1,page_size:50} };
+      else if (path.endsWith('/analysis/') && new URL(request.url()).searchParams.get('comparison_id')) body = { results: [{ base: { id: 1, snapshot_product_id: 1, code_1c: 'OLD', nom: 'Удалённый товар', sale_region: 'СПБ', effective_approved_rrp: '100' }, comparison: null, change_type: 'removed', key: 'removed-OLD' }], page: 1, total_pages: 1, filtered_count: 1 };
+      else if (path.endsWith('/analysis/')) body = { results: [{ code_1c: '00-А', nom: row.snapshot_product__nom, sale_region: 'СПБ', departure: 'Завод', final_rrp: manualPrice, retail_price: '100', market_price: '105', zone: 'below_market' }], pagination: { page: 1, pages: 1, count: 1, page_size: 50 }, price_zones: { below_market_percent: -3, above_market_percent: 3, critical_percent: 10 } };
       else throw new Error(`Unexpected request: ${path}`);
       if (path.endsWith('/analysis/') && !new URL(request.url()).searchParams.get('comparison_id')) {
         body.summary = { total_products: 2, median_deviation_percent: -4.76, median_final_rrp: 110, median_retail_price: 100, median_market_price: 105, calculation_errors: 0, zones: [{key:'below_market', count:2, percent:100}] };
@@ -110,6 +124,13 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     const drawer = page.getByRole('dialog', { name: 'Справка', exact: true }).locator('.ip-drawer');
     assert.equal(await drawer.evaluate(el => Math.round(el.getBoundingClientRect().width)), 560);
     assert.equal(await drawer.locator('.ip-drawer-head').evaluate(el => getComputedStyle(el).padding), '20px 24px 12px');
+    await page.waitForFunction(() => {
+      const heading = document.querySelector('#sm-help-about');
+      const body = heading.closest('.ip-drawer-body');
+      return heading.getBoundingClientRect().top >= body.getBoundingClientRect().top && body.scrollTop === 0;
+    });
+    assert.equal(await drawer.locator('.ip-help-zones .ip-tag[class*="z-"] .ip-i').count(), 5);
+    assert.match(await drawer.innerText(), /В форме маржа и скидки вводятся в процентах/);
     await capture('current-help');
     await page.keyboard.press('Escape');
     assert.equal(await helpButton.evaluate(el => el === document.activeElement), true);
@@ -119,6 +140,12 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     await page.locator('.sm-iprice-source-grid .ip-panel').first().waitFor();
     assert.equal(await page.locator('.sm-iprice-source-grid').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 2);
     await capture('current-data');
+    const uploadRows = await page.locator('.sm-iprice-source-grid .ip-drop').evaluateAll(elements => elements.map(el => el.getBoundingClientRect().top));
+    assert.ok(Math.abs(uploadRows[0] - uploadRows[1]) < 2 && Math.abs(uploadRows[2] - uploadRows[3]) < 2, 'Upload controls must align within each row');
+    await page.getByRole('tab', { name: 'Цены конкурентов', exact: true }).click();
+    await page.getByRole('heading', { name: 'Сбор цен конкурентов', exact: true }).waitFor();
+    assert.ok(await page.getByText('Ещё не собирали', { exact: true }).evaluate(el => el.getBoundingClientRect().width < el.parentElement.getBoundingClientRect().width / 2), 'Parser status must be a compact badge');
+    await capture('current-parser');
     await page.getByRole('tab', { name: 'Проверка данных', exact: true }).click();
     await page.getByText('Полный прайс пока не загружен.', { exact: false }).waitFor();
     await capture('current-health');
@@ -147,6 +174,17 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     await page.getByRole('button', { name: 'Ещё фильтры', exact: true }).click();
     await page.getByRole('dialog', { name: 'Фильтры', exact: true }).waitFor();
     await capture('current-filters');
+    const formats = await page.evaluate(async () => {
+      const { priceText } = await import('/src/iprice/selectMarket/format.js');
+      const { fmtPct } = await import('/src/iprice/selectMarket/archiveFormat.js');
+      return [priceText('1234.5'), priceText(null), priceText(''), fmtPct(0.125), fmtPct(-0.125, { sign: true }), fmtPct(0.4545, { digits: 0 })];
+    });
+    assert.deepEqual(formats, ['1\u00a0234,50', '—', '—', '12,5\u00a0%', '−12,5\u00a0%', '45\u00a0%']);
+    const pager = page.locator('.sm-price-panel .ip-pager');
+    await pager.getByText('Показаны 1–2 из 2', { exact: true }).waitFor();
+    assert.equal(await pager.getByRole('button', {name:'Назад',exact:true}).isDisabled(), true);
+    assert.equal(await pager.getByRole('button', {name:'Вперёд',exact:true}).isDisabled(), true);
+    assert.equal(await pager.getByRole('button', {name:'1',exact:true}).getAttribute('aria-current'), 'true');
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Тестовый ящик', exact: true }).click();
     await page.getByRole('button', { name: 'Закрыть карточку', exact: true }).waitFor();
@@ -161,11 +199,28 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     assert.equal(await page.getByRole('button', { name: 'По регионам', exact: true }).getAttribute('aria-pressed'), 'true');
     await page.goForward();
     await page.getByRole('button', { name: 'Закрыть карточку', exact: true }).waitFor();
+    await page.getByText('САМ: 3. Под заказ / заказная позиция', { exact: true }).waitFor();
     await capture('current-product');
     await page.getByRole('tab', { name: 'Наша линейка', exact: true }).click();
     await page.getByRole('button', { name: 'Другой товар линейки', exact: true }).waitFor();
     await page.getByRole('tab', { name: 'Рынок категории', exact: true }).click();
     await page.getByRole('heading', { name: 'Карточка рынка', exact: true }).waitFor();
+    const aligned = await page.evaluate(() => {
+      const card = document.querySelector('.sm-competitor-card');
+      const clones = [1, 2].map(n => {
+        const copy = card.cloneNode(true);
+        copy.querySelector('.ip-card-title').textContent = 'Long product name '.repeat(n * 5);
+        card.parentElement.append(copy);
+        return copy;
+      });
+      const cards = [card, ...clones];
+      const positions = ['.ip-props', '.price', '.sm-competitor-card-actions'].map(selector => cards.map(el => el.querySelector(selector).getBoundingClientRect().top));
+      const overflow = cards.some(el => el.scrollWidth > el.clientWidth + 1);
+      clones.forEach(el => el.remove());
+      return { positions, overflow };
+    });
+    for (const positions of aligned.positions) assert.ok(Math.max(...positions) - Math.min(...positions) < 2, 'Card sections must align despite different title lengths');
+    assert.equal(aligned.overflow, false, 'Card controls must fit the card');
     await page.getByRole('button', { name: 'Не учитывать', exact: true }).click();
     const selection = page.getByRole('dialog', { name: 'Не учитывать цену этого товара?', exact: true });
     await selection.waitFor();
@@ -224,10 +279,12 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     assert.equal(competitorChanges, 1);
     await page.getByRole('button', { name: 'Своя цена', exact: true }).click();
     await page.getByRole('heading', { name: 'История цены', exact: true }).waitFor();
-    await page.getByLabel('Своя РРЦ').fill('150');
+    assert.equal(await page.getByLabel('Причина', { exact: true }).evaluate(el => getComputedStyle(el).minHeight), '64px');
+    await capture('current-price-editor');
+    await page.getByLabel('Ваша цена').fill('150');
     await page.getByLabel('Причина', { exact: true }).fill('Причина проверки');
     await page.getByRole('button', { name: 'Сохранить цену' }).click();
-    await page.getByRole('dialog', { name: 'Своя цена', exact: true }).waitFor({ state: 'hidden' });
+    await page.getByRole('dialog', { name: 'Цена: СПБ', exact: true }).waitFor({ state: 'hidden' });
     await page.getByRole('button', { name: 'По регионам', exact: true }).click();
     await page.getByText('Ручная цена', { exact: true }).waitFor();
     await page.getByText('Правила для списка', { exact: true }).click();
@@ -237,6 +294,8 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     await page.getByLabel('Учитывать транспортные расходы', { exact: true }).selectOption('on');
     await page.getByLabel('Доставка на единицу, руб. без НДС', { exact: true }).fill('12.34');
     await page.getByRole('button', { name: 'Проверить выбор' }).click();
+    await page.getByRole('button', { name: 'Применить и пересчитать' }).waitFor();
+    await capture('current-parameters');
     await page.getByRole('button', { name: 'Применить и пересчитать' }).click();
     await page.getByRole('dialog', { name: 'Подтверждение действия' }).getByRole('button', { name: 'Подтвердить', exact: true }).click();
     await page.waitForFunction(() => !document.body.textContent.includes('Товаров: 1, региональных строк: 1.'));
@@ -279,6 +338,15 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     await marketPanel.getByRole('checkbox', { name: 'Торговый ассортимент', exact: true }).check();
     await marketPanel.getByRole('button', { name: 'Готово', exact: true }).click();
     await filteredComparison;
+    const clearGroup = marketPanel.getByRole('button', { name: 'Сбросить «Группа 1»', exact: true });
+    assert.equal(await clearGroup.evaluate(el => {
+      const reset = el.getBoundingClientRect();
+      const chip = el.parentElement.querySelector('.ip-chip').getBoundingClientRect();
+      return reset.left >= chip.left && reset.right <= chip.right && reset.top >= chip.top && reset.bottom <= chip.bottom;
+    }), true, 'Reset control must sit inside the selected filter pill');
+    await clearGroup.focus();
+    await page.keyboard.press('Enter');
+    await marketPanel.getByRole('button', { name: 'Группа 1: все', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Ящики', exact: true }).waitFor();
     await page.getByRole('button', { name: 'По регионам', exact: true }).click();
     await page.locator('.sm-market-page').getByRole('button', { name: 'СПБ', exact: true }).waitFor();
@@ -311,12 +379,24 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     assert.equal(await page.getByRole('button', { name: 'Выбывшие товары', exact: true }).getAttribute('aria-pressed'), 'true');
     await page.getByRole('button', { name: 'Удалённый товар', exact: true }).waitFor();
     await capture('current-comparison');
+    assert.equal(await page.locator('.ip-page-head').filter({ has: page.getByRole('group', { name: 'Уровень сравнения', exact: true }) }).count(), 1);
+    await page.getByText(/Было: версия 2. Стало: версия 1/).waitFor();
     // Another editor changes this version while the current user views old data.
     editRevision++;
     await page.getByRole('button', { name: 'Обновить расчёт', exact: true }).waitFor();
     await page.getByRole('link', { name: 'Расчёты', exact: true }).click();
     assert.equal(await page.getByRole('button', { name: 'Утвердить внутри системы' }).isDisabled(), true);
     await capture('current-versions');
+    await page.locator('.sm-version-history > summary').click();
+    await page.getByRole('heading', { name: 'Последние 50 изменений параметров', exact: true }).waitFor();
+    const versionHistory = page.locator('.sm-version-history');
+    assert.match(await versionHistory.innerText(), /Минимальная маржа: 20 %/);
+    assert.match(await versionHistory.innerText(), /Учитывать транспортные расходы: Нет/);
+    assert.match(await versionHistory.innerText(), /Коэффициент аналога: 1,050000/);
+    assert.match(await versionHistory.innerText(), /Скидка малого опта: 4 %/);
+    assert.equal(await versionHistory.getByText('Применено', { exact: true }).count(), 1);
+    assert.equal(await versionHistory.getByText('Ожидает применения', { exact: true }).count(), 1);
+    await capture('current-history');
     await page.getByRole('button', { name: 'Обновить расчёт', exact: true }).click();
     await page.getByRole('button', { name: 'Утвердить внутри системы' }).click();
     await page.getByRole('dialog', { name: 'Подтверждение действия' }).getByRole('button', { name: 'Подтвердить', exact: true }).click();
@@ -353,6 +433,57 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     assert.equal(await page.getByRole('button', { name: 'Своя цена', exact: true }).count(), 0);
     assert.equal(await page.getByText('Правила для списка', { exact: true }).count(), 0);
     assert.equal(await page.getByRole('button', { name: 'Скачать Excel', exact: true }).count(), 0);
+
+    version.status = 'success'; canEdit = true; approved = false;
+    await page.reload();
+    await page.getByRole('link', {name:'Цены',exact:true}).click();
+    await page.getByRole('button', {name:'Тестовый ящик',exact:true}).waitFor();
+    for (let i=1;i<=4;i++) await page.getByRole('button',{name:new RegExp('^Группа '+i+':')}).waitFor();
+    await page.locator('.sm-price-panel .iprice-product-image-trigger').first().hover();
+    await page.locator('.iprice-product-image-preview--positioned').waitFor();
+    await page.getByRole('button',{name:'Тестовый ящик',exact:true}).click();
+    await page.getByRole('button',{name:'Закрыть карточку',exact:true}).waitFor();
+    await page.getByRole('link',{name:'Главная',exact:true}).click();
+    await page.getByRole('link',{name:'Цены',exact:true}).click();
+    await page.getByRole('button',{name:'Тестовый ящик',exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Закрыть карточку',exact:true}).count(),0);
+    assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).has('product'),false);
+    drillProducts = true;
+    await page.getByRole('link',{name:'Рынок',exact:true}).click();
+    await page.getByRole('button',{name:'Тестовый ящик',exact:true}).waitFor();
+    assert.equal(await page.locator('.sm-market-page th').allTextContents().then(values=>values.includes('Регион')),false);
+    assert.equal(await page.locator('.ip-crumbs').innerText().then(text=>text.includes('__empty__')),false);
+    await page.getByRole('checkbox',{name:'Выбрать 00-А',exact:true}).check();
+    await page.getByRole('button',{name:'Изменить цены выбранных (1)',exact:true}).click();
+    await page.getByRole('dialog',{name:'Изменить цены выбранных (1)',exact:true}).waitFor();
+    await page.getByRole('dialog').getByRole('button',{name:'Закрыть',exact:true}).click();
+    let delayedRoute, signalIntercept;
+    const intercepted = new Promise(resolve => { signalIntercept = resolve; });
+    const delayFirstProduct = async route => {
+      if (!delayedRoute) { delayedRoute = route; signalIntercept(); return; }
+      await route.fallback();
+    };
+    await page.route('**/snapshots/1/rows/**', delayFirstProduct);
+    await page.getByRole('button',{name:'Тестовый ящик',exact:true}).click();
+    await intercepted;
+    await page.getByRole('status').filter({hasText:'Загружаем карточку'}).waitFor();
+    const cancelled = page.waitForEvent('requestfailed', {predicate: request => request.url().includes('/snapshots/1/rows/')});
+    await page.getByRole('button',{name:'Тестовый ящик',exact:true}).click();
+    await cancelled;
+    await page.getByRole('tab',{name:'Цены по регионам',exact:true}).waitFor();
+    await delayedRoute.abort().catch(() => {});
+    await page.unroute('**/snapshots/1/rows/**', delayFirstProduct);
+    await page.getByRole('button',{name:'К рынку',exact:true}).click();
+    await page.getByRole('button',{name:'Тестовый ящик',exact:true}).waitFor();
+    await capture('current-market-products');
+    manyImports = true;
+    await page.reload();
+    await page.getByRole('link',{name:'Данные',exact:true}).click();
+    await page.getByRole('tab',{name:'Проверка данных',exact:true}).click();
+    const importsPanel = page.locator('.ip-panel').filter({has:page.getByRole('heading',{name:'Последние загрузки файлов',exact:true})});
+    await importsPanel.locator('li').first().waitFor();
+    assert.equal(await importsPanel.locator('li').count(),10);
+
     assert.deepEqual(errors, []);
     console.log('Select Market iPrice React: price edit, parameter preview/apply, market, activation and viewer rights passed.');
   } finally { await browser.close(); }

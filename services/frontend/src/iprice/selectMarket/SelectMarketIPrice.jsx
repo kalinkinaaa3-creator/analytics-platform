@@ -16,7 +16,7 @@ const sources = [
   ["price", "Прайс", "Полный прайс всех регионов за выбранную дату. Четыре уровня групп, цены с НДС 22%; код 1С — текст. Цена без НДС рассчитывается с округлением до целого рубля.", "price-file/"],
   ["product_cost", "Закупочные цены", "Полный файл за один месяц: дата, текстовый код, наименование, регион и закупочная цена без НДС. Замена файла сохраняет параметры доставки."],
   ["parser_prefixes", "Регионы конкурентов", "Файл полностью заменяет список региональных префиксов."],
-  ["product_classification", "Классификация и аналоги", "Полная классификация. Ручные связи и исключения сохраняются."],
+  ["product_classification", "Классификация и аналоги", "Полная классификация. Шаблон содержит собственные товары, включая позиции без сайта, и уже классифицированных конкурентов. Заполните новые строки; ручные связи и исключения сохраняются."],
   ["calculation_config", "Параметры расчёта", "Месяц, код и регион; коэффициенты и три оптовые скидки. include_transport: 1 — учитывать доставку, 0 — не учитывать. logistics_unit — расходы без НДС на единицу, до копеек. Классификация и карточка сайта не обязательны."],
 ];
 const statuses = { queued: "В очереди", running: "Выполняется", waiting_tara: "Ожидание ТАРА", waiting_session: "Ожидание Windows-исполнителя", waiting_remote: "Ожидание ТАРА", recovery_required: "Требуется проверка администратором", success: "Завершён", failed: "Ошибка", cancelled: "Отменён" };
@@ -24,14 +24,16 @@ const steps = { starting: "Подготовка", base_parser: "Сайт", base_
 
 export function SelectMarketIPrice({ dashboard }) {
   const [help, setHelp] = useState(false);
+  const [navigationRevision, setNavigationRevision] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
   const address = new URLSearchParams(location.hash.slice(1));
   const requestedView = address.get("suc");
   const view = ["home", "prices", "market", "versions", "data", "compare"].includes(requestedView) ? requestedView : "home";
   const dataTab = ["uploads", "parser", "health"].includes(address.get("data")) ? address.get("data") : "uploads";
-  function sectionAddress(next, tab) {
+  function sectionAddress(next, tab, reset = false) {
     const params = new URLSearchParams(window.location.hash.slice(1));
+    if (reset) ["product", "row", "price_scope", "market_scope", "compare_scope", "compare_product", "compare_snapshot", "compare_region"].forEach(key => params.delete(key));
     params.set("suc", next);
     if (tab) params.set("data", tab);
     return { pathname: location.pathname, search: location.search, hash: `#${params}` };
@@ -117,7 +119,7 @@ export function SelectMarketIPrice({ dashboard }) {
   }
   return <PriceZonesProvider><section className="sm-system-page sm-iprice" aria-label={dashboard.name} aria-busy={!state || !!busy}>
     <header className="ip-head"><div className="ip-head-row">
-      <nav className="ip-nav" aria-label="Разделы iPrice">{[["home", "Главная", "home"], ["prices", "Цены", "table"], ["market", "Рынок", "chart"], ["versions", "Расчёты", "layers"], ["data", "Данные", "data"]].map(([key, title, icon]) => <a href={`${location.pathname}${location.search}${sectionAddress(key).hash}`} key={key} className={(view === key || (key === "versions" && view === "compare")) ? "active" : ""} aria-current={(view === key || (key === "versions" && view === "compare")) ? "page" : undefined} onClick={e => { if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return; e.preventDefault(); setView(key); }}><Icon name={icon} size={16} />{title}</a>)}</nav>
+      <nav className="ip-nav" aria-label="Разделы iPrice">{[["home", "Главная", "home"], ["prices", "Цены", "table"], ["market", "Рынок", "chart"], ["versions", "Расчёты", "layers"], ["data", "Данные", "data"]].map(([key, title, icon]) => <a href={`${location.pathname}${location.search}${sectionAddress(key, undefined, true).hash}`} key={key} className={(view === key || (key === "versions" && view === "compare")) ? "active" : ""} aria-current={(view === key || (key === "versions" && view === "compare")) ? "page" : undefined} onClick={e => { if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return; e.preventDefault(); navigate(sectionAddress(key, undefined, true), { state: location.state }); setNavigationRevision(value => value + 1); }}><Icon name={icon} size={16} />{title}</a>)}</nav>
       <div className="ip-head-spacer" /><div id="sm-iprice-version-slot" />
       <Button variant="ghost" icon="help" aria-label="Справка" title="Справка: шаги работы, цвета, словарь" onClick={() => setHelp(true)} />
     </div></header>
@@ -128,7 +130,7 @@ export function SelectMarketIPrice({ dashboard }) {
       {message && <p role="status">{message}</p>}
       {!state && <p role="status" className="sm-iprice-loading">Загружаем источники…</p>}
       {state && <>
-        <SelectMarketCalculations canEdit={state.can_edit} view={view} onNavigate={setView} onHelp={() => setHelp(view === "market" ? "colors" : "steps")} sourceState={state} />
+        <SelectMarketCalculations navigationRevision={navigationRevision} canEdit={state.can_edit} view={view} onNavigate={setView} onHelp={() => setHelp(view === "market" ? "colors" : "steps")} sourceState={state} />
         {view === "data" && <>
           <PageHead title="Исходные данные" text="iPrice считает цены по закупочной стоимости, доставке, правилам компании и ценам конкурентов. Перед расчётом обновите файлы." onHelp={() => setHelp(true)} />
           <Tabs value={dataTab} onChange={setDataTab} items={[["uploads", "Файлы"], ["parser", "Цены конкурентов"], ["health", "Проверка данных"]]} />
@@ -155,7 +157,10 @@ export function SelectMarketIPrice({ dashboard }) {
             </div></Panel><Panel title="Файлы для сверки" sub="Excel для ручной проверки данных"><div className="ip-stack sm-panel-body"><Button icon="download" disabled={!!busy} onClick={() => template("parser_products", "review/parser_products/")}>Товары конкурентов</Button><Button icon="download" disabled={!!busy} onClick={() => template("preparation_check", "review/preparation_check/")}>Готовность к расчёту</Button><p>Проверка исходных данных и замечаний последнего расчёта. Полная проверка коэффициентов выполняется при расчёте.</p></div></Panel></div>}
           {dataTab === "health" && <><SelectMarketHealth /><Panel title="Последние загрузки файлов" sub="Ошибки загрузки показываются при проверке файла. Ошибки расчёта доступны в разделе «Цены»."><div className="sm-panel-body">
             {!state.imports.length && !state.price_imports.length && <div className="ip-empty"><b>Файлы пока не загружались</b><span>Перейдите во вкладку «Файлы» и заполните шаблоны.</span></div>}
-            <ul>{state.price_imports.map(item => <li key={`price-${item.id}`}>Прайс за {item.date}: {item.filename} · {item.rows} строк · версия {item.revision}</li>)}{state.imports.map(item => <li key={`source-${item.id}`}>{sources.find(source => source[0] === item.kind)?.[1] || item.kind}: {item.filename} · {new Date(item.created_at).toLocaleString("ru-RU")}</li>)}</ul>
+            <ul>{[
+              ...state.price_imports.map(item => ({ ...item, kind: "price", created_at: item.date_add || item.date })),
+              ...state.imports,
+            ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 10).map(item => <li key={item.kind + "-" + item.id}>{sources.find(source => source[0] === item.kind)?.[1] || item.kind}: {item.filename} · {new Date(item.created_at).toLocaleString("ru-RU")}{item.kind === "price" && ` · прайс за ${item.date} · ${item.rows} строк · версия ${item.revision}`}</li>)}</ul>
           </div></Panel></>}
         </>}
       </>}

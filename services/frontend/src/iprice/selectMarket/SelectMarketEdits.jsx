@@ -1,3 +1,6 @@
+import { ZoneTag } from "./ZoneTag";
+import { fmtPct, fmtMoney } from "./archiveFormat";
+import { Pager } from "./ui/Pager";
 import { PriceLadder } from "./PriceLadder";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
@@ -39,19 +42,33 @@ export function PriceEditor({ snapshotId, row, onSaved }) {
     } catch (err) { setError(errorText(err)); }
     finally { pending.current = false; setBusy(false); }
   }
-  return <form onSubmit={save} className="sm-iprice-editor">
-    <Corridor region={{ ...row, effective_approved_rrp: row.effective.rrp }} preview={price} />
-    <p>Нижняя граница: {priceText(row.minimum_price)} · Рынок: {priceText(row.regional_competitor_rrp_median)} руб. без НДС</p>
-    <label>Своя РРЦ без НДС, целые рубли<input type="number" min="1" step="1" required value={price} onChange={e => setPrice(e.target.value)} disabled={busy} /></label>
-    {price !== "" && row.minimum_price != null && Number(price) < Number(row.minimum_price) && <p role="status">Цена ниже расчётной нижней границы. Проверьте маржинальность.</p>}
-    <label>Причина<input required maxLength={2000} value={comment} onChange={e => setComment(e.target.value)} disabled={busy} /></label>
-    {checked && <><p>Маржа: {checked.margin == null ? "—" : `${priceText(Number(checked.margin) * 100)}%`}</p>{!checked.valid && <p role="alert">{checked.message}</p>}<PriceLadder region={row} preview={checked} /></>}
-    {row.calculated_rrp != null && <Button variant="ghost" disabled={busy} onClick={() => setPrice(String(row.calculated_rrp))}>Вернуть расчёт iPrice</Button>}
-    <p>Оптовые цены пересчитаются по скидкам этой строки. Утверждение всей версии выполняется отдельно.</p>
-    <button className="sm-iprice-primary" disabled={busy || !checked?.valid}>{busy ? "Сохраняем…" : "Сохранить цену"}</button>
-    {error && <p role="alert">{error}</p>}
+  return <div className="ip-stack">
+    <div className="ip-row between"><div className="ip-row"><span className="muted">Новая цена</span><b style={{ fontSize: 20 }}>{fmtMoney(row.effective.rrp)}</b><span className="ip-tag blue">{row.effective.approval_source === "manual" ? "Цена сотрудника" : "Расчёт iPrice"}</span></div><ZoneTag zone={row.zone} percent={Number(row.regional_competitor_rrp_median) > 0 && row.effective.rrp != null ? (Number(row.effective.rrp) / Number(row.regional_competitor_rrp_median) - 1) * 100 : null} /></div>
+    <Corridor region={{ ...row, effective_approved_rrp: row.effective.rrp }} preview={checked?.valid ? price : undefined} />
+    <form onSubmit={save} className="ip-panel pad ip-stack sm-iprice-editor">
+      <div className="ip-section-title">Своя цена</div>
+      <p className="small muted">Введите цену без НДС целыми рублями. iPrice покажет маржу и цены для оптовиков. Утверждение версии выполняется отдельно, отправки в 1С нет.</p>
+      <label className="ip-field">Ваша цена *
+        <div className="ip-affix"><input className="ip-input num" type="number" min="1" step="1" required value={price} onChange={e => setPrice(e.target.value)} disabled={busy} /><span className="suf">₽</span></div>
+        <span className="small muted">Расчёт iPrice: {fmtMoney(row.calculated_rrp)}. Нижняя граница: {fmtMoney(row.minimum_price)}.</span>
+      </label>
+      {checked && <><p>Маржа: {checked.margin == null ? "—" : fmtPct(checked.margin)}</p>{!checked.valid && <p role="alert">{checked.message}</p>}<PriceLadder region={row} preview={checked} /></>}
+      <label className="ip-field">Причина<textarea aria-label="Причина" className="ip-textarea" required maxLength={2000} value={comment} onChange={e => setComment(e.target.value)} disabled={busy} placeholder="Например: договорились с сетью до конца квартала" /><span className="small muted">Кто согласовал и зачем. Коллеги увидят причину в истории цены.</span></label>
+      <div className="ip-row" style={{ justifyContent: "flex-end" }}>
+        {row.calculated_rrp != null && Number(row.calculated_rrp) !== Number(row.effective.rrp) && <Button variant="ghost" disabled={busy} onClick={() => setPrice(String(row.calculated_rrp))}>Вернуть расчёт iPrice</Button>}
+        <Button type="submit" variant="accent" icon="check" disabled={busy || !checked?.valid || !comment.trim()}>{busy ? "Сохраняем…" : "Сохранить цену"}</Button>
+      </div>{error && <p role="alert">{error}</p>}
+    </form>
     <PriceHistory snapshotId={snapshotId} rowId={row.id} />
-  </form>;
+    <details className="ip-advanced"><summary>Расчёт iPrice по шагам</summary><div className="ip-explain sm-panel-body">{[
+      ["Закупочная цена", row.product_cost],
+      [row.include_transport ? "Доставка на единицу" : "Доставка не учитывается", row.logistics_unit],
+      ["Закупка с доставкой", row.cost_with_logistics],
+      ["Цена по правилам компании", row.preliminary_rrp],
+      ["Нижняя граница", row.minimum_price],
+      ["Цена по расчёту", row.calculated_rrp],
+    ].map(([title, value], i) => <div className="st" key={title}><span className="n">{i + 1}</span><span>{title}</span><strong className="v">{fmtMoney(value)}</strong></div>)}</div></details>
+  </div>;
 }
 
 const fields = [
@@ -60,7 +77,7 @@ const fields = [
   ["coefficients", "minimum_margin", "Минимальная маржа"],
   ["discounts", "small", "Скидка малого опта"], ["discounts", "medium", "Скидка среднего опта"], ["discounts", "large", "Скидка крупного опта"],
 ];
-export function ParameterEditor({ snapshotId, onSaved, row = null, listScope = null }) {
+export function ParameterEditor({ snapshotId, onSaved, row = null, listScope = null, selectionCount = null }) {
   const [confirm, confirmation] = useConfirm();
   const [open, setOpen] = useState(false);
   const [filters, setFilters] = useState({ code_1c: row?.snapshot_product__code_1c || "", sale_region: row?.sale_region || "" });
@@ -109,10 +126,10 @@ export function ParameterEditor({ snapshotId, onSaved, row = null, listScope = n
     } catch (err) { setPreview(null); setError(errorText(err)); }
     finally { pending.current = false; setBusy(false); }
   }
-  const title = row ? "Параметры позиции и доставка" : "Правила для списка";
+  const title = row ? "Параметры позиции и доставка" : selectionCount ? `Изменить цены выбранных (${selectionCount})` : "Правила для списка";
   return <>{confirmation}<Button variant="ghost" icon="settings" onClick={() => { setPreview(null); setOpen(true); }}>{title}</Button><Drawer open={open} onClose={() => { if (!busy) setOpen(false); }} title={title}><div className="ip-stack sm-iprice-editor">
     <section className="ip-panel pad ip-stack"><div className="ip-section-title">1. Область изменения</div>
-    <p>{listScope ? "Изменяются все строки текущего списка, включая другие страницы. Учитываются поиск, фильтры, зоны и замечания." : "Фильтры применяются совместно по точному значению. Заполните хотя бы один."} Пустые параметры сохраняют прежние значения. Маржа и скидки задаются в процентах: 15 означает 15%.</p>
+    <p>{selectionCount ? `Изменяются выбранные товары (${selectionCount}) во всех регионах. Состав будет проверен перед применением.` : listScope ? "Изменяются все строки текущего списка, включая другие страницы. Учитываются поиск, фильтры, зоны и замечания." : "Фильтры применяются совместно по точному значению. Заполните хотя бы один."} Пустые параметры сохраняют прежние значения. Маржа и скидки задаются в процентах: 15 означает 15%.</p>
     {!listScope && <div className="sm-iprice-sources">{[["code_1c", "Код 1С"], ["sale_region", "Регион"]].map(([key, title]) => <label key={key}>{title}<input disabled={busy || !!row} value={filters[key]} onChange={e => { setFilters({ ...filters, [key]: e.target.value }); setPreview(null); }} /></label>)}</div>}
     {!row && !listScope && <fieldset disabled={busy} className="sm-iprice-fieldset"><SelectMarketFilters snapshotId={snapshotId} search="" filters={groupFilters} onChange={value => { setGroupFilters(value); setPreview(null); }} /></fieldset>}
     <Button disabled={busy || !!Object.keys(fieldErrors).length} onClick={() => submit(false)}>Проверить выбор</Button>
@@ -129,6 +146,18 @@ export function ParameterEditor({ snapshotId, onSaved, row = null, listScope = n
   </div></Drawer></>;
 }
 
+function parameterChangesText(changes = {}) {
+  return Object.entries(changes).map(([key, value]) => {
+    if (["coefficients", "discounts", "delivery"].includes(key) && value && typeof value === "object") return parameterChangesText(value);
+    const label = fields.find(([, field]) => field === key)?.[2] || ({ include_transport: "Учитывать транспортные расходы", logistics_unit: "Доставка на единицу" })[key] || key;
+    const text = key === "include_transport" ? value === true ? "Да" : value === false ? "Нет" : "—"
+      : key === "logistics_unit" ? `${fmtMoney(value)} без НДС`
+      : ["base_exclusive", "minimum_margin", "small", "medium", "large"].includes(key) ? value == null || value === "" || !Number.isFinite(Number(value)) ? "—" : `${Number(Number(value) * 100).toLocaleString("ru-RU", { maximumFractionDigits: 4 })} %`
+      : value == null ? "—" : String(value).replace(".", ",");
+    return `${label}: ${text}`;
+  }).filter(Boolean).join("; ");
+}
+
 export function SnapshotHistory({ snapshotId }) {
   const [page, setPage] = useState(1);
   const [data, setData] = useState(null);
@@ -139,18 +168,18 @@ export function SnapshotHistory({ snapshotId }) {
       .catch(err => { if (err.code !== "ERR_CANCELED") setError("Не удалось загрузить историю."); });
     return () => controller.abort();
   }, [snapshotId, page]);
-  return <details><summary>История версии</summary>
+  return <details className="sm-version-history"><summary>История версии</summary>
     {error && <p role="alert">{error}</p>}
-    {data && <>
+    {data && <div className="ip-stack sm-panel-body">
       <h3>Утверждения версии</h3>
       {!data.activations.length && <p>Версия ещё не утверждалась.</p>}
       {data.activations.map((item, i) => <p key={i}>{new Date(item.at).toLocaleString("ru-RU")} · {item.username || "Система"} · {item.action === "deactivate" ? "Утверждение снято" : "Версия утверждена"} · предыдущие версии: {item.previous_snapshot_ids.join(", ") || "—"}</p>)}
-      <h3>Корректировки цен</h3>
+      <h3>Корректировки цен</h3>{!data.approvals.length && <p className="muted">Ручных корректировок нет.</p>}
       {data.approvals.map(item => <p key={item.id}>{item.snapshot_region__snapshot_product__code_1c} · {item.snapshot_region__sale_region} · {priceText(item.approved_rrp)} руб. · {item.approved_by__username || "Система"} · {new Date(item.approved_at).toLocaleString("ru-RU")} · {item.comment}{item.is_current ? " (текущая)" : ""}</p>)}
-      <button disabled={page === 1} onClick={() => setPage(page - 1)}>Назад</button> {page} / {data.pages} <button disabled={page >= data.pages} onClick={() => setPage(page + 1)}>Далее</button>
-      <h3>Последние 50 изменений параметров</h3>
-      {data.parameter_changes.map(item => <p key={item.id}>{new Date(item.created_at).toLocaleString("ru-RU")} · {item.user__username} · {item.status} · {JSON.stringify(item.changes)}</p>)}
-    </>}
+      <Pager page={page} totalPages={data.pages} count={data.count} pageSize={50} onPage={setPage} />
+      <h3>Последние 50 изменений параметров</h3>{!data.parameter_changes.length && <p className="muted">Параметры не изменялись.</p>}
+      {data.parameter_changes.map(item => <div className="ip-panel pad ip-stack" key={item.id}><div className="ip-row"><span className={`ip-tag ${item.status === "success" ? "green" : item.status === "error" ? "red" : "gray"}`}>{({ success: "Применено", error: "Ошибка", pending: "Ожидает применения" })[item.status] || "Неизвестный статус"}</span><span className="small muted">{new Date(item.created_at).toLocaleString("ru-RU")} · {item.user__username || "Система"}</span></div><span>{parameterChangesText(item.changes) || "Нет изменённых параметров"}</span></div>)}
+    </div>}
   </details>;
 }
 
@@ -166,5 +195,5 @@ function PriceHistory({ snapshotId, rowId }) {
     return () => controller.abort();
   }, [snapshotId, rowId, page]);
   const ready = result?.requestedPage === page;
-  return <section className="ip-panel pad ip-stack"><h3>История цены</h3>{error && <p role="alert">{error}</p>}{!ready && !error && <p role="status">Загружаем историю…</p>}{ready && <>{!result.approvals.length && <p className="muted">Ручных изменений пока нет.</p>}{result.approvals.map(item => <div key={item.id}><b>{priceText(item.approved_rrp)} ₽</b><span className="sub">{item.approved_by__username || "Система"} · {new Date(item.approved_at).toLocaleString("ru-RU")}</span><p>{item.comment}</p></div>)}{result.pages > 1 && <div className="ip-row"><Button disabled={page <= 1} onClick={() => setPage(page - 1)}>Назад</Button><span>{page} / {result.pages}</span><Button disabled={page >= result.pages} onClick={() => setPage(page + 1)}>Далее</Button></div>}</>}</section>;
+  return <section className="ip-panel pad ip-stack"><h3>История цены</h3>{error && <p role="alert">{error}</p>}{!ready && !error && <p role="status">Загружаем историю…</p>}{ready && <>{!result.approvals.length && <p className="muted">Ручных изменений пока нет.</p>}{result.approvals.map(item => <div key={item.id}><b>{priceText(item.approved_rrp)} ₽</b><span className="sub">{item.approved_by__username || "Система"} · {new Date(item.approved_at).toLocaleString("ru-RU")}</span><p>{item.comment}</p></div>)}{result.pages > 1 && <Pager page={page} totalPages={result.pages} count={result.count} pageSize={50} onPage={setPage} />}</>}</section>;
 }

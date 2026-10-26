@@ -59,7 +59,7 @@ class ExcelRoundtripTests(TestCase):
         return result
 
     def price(self, code='001-A', region='Region'):
-        return [code, region, 'Product', 'Deep', 'Boxes', 'Assortment', None, 1220, 1464, 1615, 1342]
+        return [code, region, 'Product', 'Deep', 'Boxes', 'Assortment', None, 'Active', 1220, 1464, 1615, 1342]
 
     def parameters(self, code='001-A', region='Region'):
         return [self.day.isoformat(), code, region, 1, '.3', '.1', '.1', '.15', '.2', 1, '12,34']
@@ -69,6 +69,7 @@ class ExcelRoundtripTests(TestCase):
         self.assertEqual(NomenclaturePrice.objects.count(), 2)
         row = NomenclaturePrice.objects.get(shipp_region='Region')
         self.assertEqual(row.code, '001-A')
+        self.assertEqual(row.assortment_matrix_status, 'Active')
         self.assertEqual((row.group_1, row.group_2, row.group_3, row.group_4), ('Assortment', 'Boxes', 'Deep', ''))
         self.assertEqual(row.retail_gross, Decimal('1615'))
         self.assertEqual(row.retail, Decimal('1324'))

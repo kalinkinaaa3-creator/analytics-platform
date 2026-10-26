@@ -1,0 +1,75 @@
+.iprice-product-image-trigger {
+  display: inline-flex;
+  align-self: start;
+
+  max-width: 100%;
+
+  cursor: default;
+  outline: none;
+}
+
+
+.iprice-product-image-trigger:focus-visible {
+  border-radius: 6px;
+  box-shadow: 0 0 0 3px rgb(81 112 71 / 22%);
+}
+
+
+.iprice-product-image-preview {
+  position: fixed;
+  z-index: 4100;
+  top: 16px;
+  left: 16px;
+
+  display: flex;
+  overflow: hidden;
+  flex-direction: column;
+
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  box-sizing: border-box;
+
+  pointer-events: none;
+
+  background: #ffffff;
+  border: 1px solid #d9ddd5;
+  border-radius: 8px;
+  box-shadow:
+    0 18px 45px rgb(31 39 28 / 20%),
+    0 4px 12px rgb(31 39 28 / 10%);
+
+  opacity: 0;
+}
+
+
+.iprice-product-image-preview--positioned {
+  opacity: 1;
+}
+
+
+.iprice-product-image-preview > img {
+  display: block;
+
+  width: 100%;
+  height: min(420px, calc(100vh - 86px));
+
+  object-fit: contain;
+
+  background: #ffffff;
+}
+
+
+.iprice-product-image-preview__caption {
+  overflow: hidden;
+
+  padding: 10px 12px;
+
+  border-top: 1px solid #e5e7e2;
+
+  color: #343a32;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

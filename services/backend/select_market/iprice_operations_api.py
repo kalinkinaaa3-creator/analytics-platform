@@ -130,7 +130,7 @@ class SnapshotHistoryView(PriceFileView):
         if page > paginator.num_pages:
             raise ValidationError('Страница не найдена.')
         return Response({'activations': snapshot.parameters.get('activation_history', []),
-            'approvals': list(paginator.page(page)), 'page': page, 'pages': paginator.num_pages,
+            'approvals': list(paginator.page(page)), 'page': page, 'pages': paginator.num_pages, 'count': paginator.count,
             'parameter_changes': list(IPriceParameterChangeLog.objects.filter(snapshot_id=snapshot.pk).order_by('-id').values(
                 'id', 'user__username', 'changes', 'filters', 'affected', 'status', 'created_at')[:50])})
 
@@ -319,7 +319,7 @@ class CompetitorSelectionView(PriceFileView):
         from datasets.services.iprice_market_assortment import get_used_competitor_keys
         used = get_used_competitor_keys(snapshot_product=product)
         return Response({'items': [{'id': row.pk, 'source': row.source, 'url': row.url, 'mode': modes.get(row.pk, 'auto'), 'used_in_snapshot': row.pk in used} for row in paginator.page(page)],
-            'page': page, 'pages': paginator.num_pages, 'edit_revision': product.snapshot.parameters.get('edit_revision', 0),
+            'page': page, 'pages': paginator.num_pages, 'count': paginator.count, 'edit_revision': product.snapshot.parameters.get('edit_revision', 0),
             'editable': is_selection_editable(product.snapshot),
             'changes': list(product.snapshot.competitor_selection_changes.filter(override__product_key_base=product.base_product_key).order_by('-id').values(
                 'id', 'selection_mode', 'reason', 'date_add', 'changed_by__username', 'override__product_key_competitor')[:50])})

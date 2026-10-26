@@ -4,10 +4,11 @@
 .sm-iprice :where(button:hover) { box-shadow: none; transform: none; }
 .sm-iprice :where(.sm-iprice-editor, .sm-iprice-toolbar, .sm-market-controls) > label { font-weight: 500; font-size: 13px; line-height: 18px; color: var(--text); }
 .sm-iprice [hidden] { display: none !important; }
-.sm-iprice .ip-main { width: 100%; }
+.sm-iprice .ip-main { width: 100%; max-width: none; }
 .sm-iprice .ip-head { position: relative; }
 .sm-iprice .sm-calculation-pages { gap: 20px; min-width: 0; }
 .sm-iprice .sm-panel-body { padding: 20px; }
+.sm-iprice .sm-panel-body > .ip-tag { align-self: flex-start; }
 .sm-iprice .sm-upload-body { padding: 0 20px 20px; }
 .sm-iprice .sm-iprice-source-grid > .ip-panel { display: grid; grid-template-rows: subgrid; grid-row: span 2; gap: 0; }
 .sm-iprice .sm-iprice-source-grid .ip-panel-head { align-items: flex-start; }
@@ -25,6 +26,11 @@
 .sm-iprice .sm-demo-confirm[open] { align-items: center; justify-content: center; padding: 24px; }
 .sm-iprice .sm-demo-dialog::backdrop { background: rgba(22,27,33,.36); }
 .sm-iprice .sm-filter-chip { position: relative; }
+.sm-iprice .sm-filter-chip .ip-chip.on { padding-right: 30px; }
+.sm-iprice .sm-filter-clear { position: absolute; right: 6px; top: 6px; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; padding: 2px; border: 0; border-radius: 50%; background: transparent; color: var(--primary); cursor: pointer; }
+.sm-iprice .sm-filter-clear:hover { background: var(--blue-200); }
+.sm-iprice .sm-filter-clear:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sm-iprice .sm-filter-section .ip-badge { background: var(--primary-soft); color: var(--primary-soft-text); }
 .sm-iprice .sm-filter-section { padding: 10px 12px; }
 .sm-iprice .sm-filter-section summary { cursor: pointer; font-weight: 500; display: flex; justify-content: space-between; }
 .sm-iprice .sm-filter-options { position: static; box-shadow: none; border: 0; padding: 8px 0 0; max-width: none; }
@@ -45,9 +51,9 @@
 .sm-iprice .sm-iprice-detail { padding: 24px; border-top: 1px solid var(--border); background: var(--surface); }
 .sm-iprice .sm-iprice-detail > button { margin-bottom: 20px; }
 .sm-iprice :where(.sm-iprice-editor, .sm-iprice-toolbar, .sm-iprice-thresholds, .sm-iprice-detail) label { display: grid; gap: 6px; }
-.sm-iprice :where(input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea):not(.ip-input):not(.ip-select) { width: 100%; min-height: 32px; padding: 5px 10px; border: 1px solid var(--border-strong); border-radius: var(--r-m); background: var(--surface); font: inherit; color: inherit; }
-.sm-iprice :where(button:not([class]):not(.ip-tabs button):not(.ip-seg button)) { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 5px 14px; border: 1px solid var(--border-strong); border-radius: var(--r-m); background: var(--surface); font: 500 14px/20px var(--font); color: var(--text); cursor: pointer; }
-.sm-iprice :where(button:not([class]):not(.ip-tabs button):not(.ip-seg button)):hover { background: var(--surface-2); }
+.sm-iprice :where(input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea):not(.ip-input):not(.ip-select):not(.ip-textarea) { width: 100%; min-height: 32px; padding: 5px 10px; border: 1px solid var(--border-strong); border-radius: var(--r-m); background: var(--surface); font: inherit; color: inherit; }
+.sm-iprice :where(button:not([class]):not(.ip-tabs button):not(.ip-seg button):not(.ip-pager button)) { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 5px 14px; border: 1px solid var(--border-strong); border-radius: var(--r-m); background: var(--surface); font: 500 14px/20px var(--font); color: var(--text); cursor: pointer; }
+.sm-iprice :where(button:not([class]):not(.ip-tabs button):not(.ip-seg button):not(.ip-pager button)):hover { background: var(--surface-2); }
 .sm-iprice :where(button):disabled { opacity: .5; cursor: not-allowed; }
 .sm-iprice :where(button.sm-iprice-primary) { min-height: 32px; padding: 5px 14px; border: 1px solid var(--primary); border-radius: var(--r-m); background: var(--primary); color: white; cursor: pointer; }
 .sm-iprice .sm-iprice-primary:hover { background: var(--primary-hover); }
@@ -86,3 +92,38 @@
 .sm-iprice .sm-iprice-detail table { width: 100%; border-collapse: collapse; }
 .sm-iprice .sm-iprice-detail th, .sm-iprice .sm-iprice-detail td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
 @media (prefers-reduced-motion: reduce) { .sm-iprice .sm-iprice-loading::before { animation: none; } }
+
+/* Numeric cells retain the demo alignment for composed price changes. */
+.sm-iprice .ip-table td.num > .ip-row { justify-content: flex-end; }
+.sm-iprice .ip-cards > .sm-competitor-card {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 5;
+  row-gap: 10px;
+}
+.sm-iprice .ip-cards > .sm-competitor-card-readonly { grid-row: span 4; }
+.sm-iprice .sm-competitor-card > * { min-width: 0; }
+.sm-iprice .sm-competitor-card-actions { align-content: start; }
+.sm-iprice .sm-competitor-card-actions .ip-seg { width: 100%; min-width: 0; }
+.sm-iprice .sm-competitor-card-actions .ip-seg button { flex: 1; min-width: 0; white-space: normal; }
+.sm-iprice .sm-competitor-editor-body { display: grid; gap: 16px; padding-top: 12px; }
+.sm-iprice .sm-competitor-editor-item { display: grid; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border); min-width: 0; }
+.sm-iprice .sm-competitor-editor-item p { overflow-wrap: anywhere; }
+.sm-iprice .sm-competitor-editor-item .ip-select { width: min(320px, 100%); }
+
+
+/* Layout overrides for the embedded application shell. */
+.sm-iprice .ip-head-row { padding-left: 64px; height: 48px; }
+.sm-iprice .ip-pager { width: 100%; box-sizing: border-box; }
+.sm-iprice .ip-pager > :last-child { margin-left: auto; }
+.sm-iprice .sm-product-name { text-align: left; justify-content: flex-start; }
+.sm-iprice .ip-crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.sm-iprice .ip-advanced > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.sm-iprice .sm-version-history > summary { padding: 12px 0; }
+.sm-iprice .sm-version-history p { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-m); overflow-wrap: anywhere; }
+.sm-iprice .sm-product-image { width: 56px; height: 56px; object-fit: contain; border-radius: 6px; background: white; }
+.sm-iprice .sm-product-image-empty { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 11px; }
+
+.sm-iprice .sm-market-page .ip-panel-head > .ip-crumbs { order: -1; flex: 1 1 auto; justify-content: flex-start; }
+
+.sm-iprice .ip-field > .small.muted { font-weight: 400; }

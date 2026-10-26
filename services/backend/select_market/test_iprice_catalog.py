@@ -61,3 +61,13 @@ class CatalogTests(TestCase):
         self.assertEqual(missing.calculation_status, 'error')
         self.assertIn('INVALID_PURCHASE_COST', missing.error_codes)
         self.assertIsNone(missing.calculated_rrp)
+
+    def test_sam_is_saved_without_website_and_old_snapshot_is_immutable(self):
+        NomenclaturePrice.objects.filter(code="001-A").update(assortment_matrix_status="Active")
+        build_products(self.snapshot)
+        product = self.snapshot.products.get(code_1c="001-A")
+        self.assertEqual(product.assortment_matrix_status, "Active")
+        NomenclaturePrice.objects.filter(code="001-A").update(assortment_matrix_status=None)
+        product.refresh_from_db()
+        self.assertEqual(product.assortment_matrix_status, "Active")
+        self.assertIsNone(self.snapshot.products.get(code_1c="002").assortment_matrix_status)

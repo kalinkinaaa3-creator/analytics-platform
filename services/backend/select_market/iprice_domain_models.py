@@ -30,7 +30,10 @@ class ParserProductUrl(models.Model):
     STATUS_CHOICES = ((STATUS_ACTIVE, 'Active'), (STATUS_INACTIVE, 'Inactive'))
     source = models.CharField(max_length=50, db_index=True, verbose_name='Источник')
     prefix = models.CharField(max_length=255, blank=True, null=True, verbose_name='Префикс')
-    url = models.URLField(max_length=1000, verbose_name='URL с префиксом')
+    url = models.URLField(max_length=1000, blank=True, null=True, verbose_name='URL с префиксом')
+    own_code = models.CharField(max_length=160, blank=True, null=True, db_index=True)
+    in_price = models.BooleanField(default=False)
+    on_website = models.BooleanField(default=False)
     additional_property = models.CharField(max_length=255, blank=True, null=True, verbose_name='Дополнительное свойство')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE, db_index=True, verbose_name='Статус')
     lastmod = models.DateTimeField(blank=True, null=True, verbose_name='Lastmod из sitemap')
@@ -44,7 +47,7 @@ class ParserProductUrl(models.Model):
         verbose_name = 'Parser: Product URL'
         verbose_name_plural = 'Parser: Product URLs'
         indexes = [models.Index(fields=['source', 'status'], name='sm_ip_a73e53d8f486'), models.Index(fields=['source', 'is_loaded'], name='sm_ip_945373698cf6'), models.Index(fields=['source', 'date_update'], name='sm_ip_76d9c5b1c16b'), models.Index(fields=['url'], name='sm_ip_91d2c9c648e8')]
-        constraints = [models.UniqueConstraint(fields=['source', 'url', 'additional_property'], nulls_distinct=False, name='sm_parser_product_url_e394bf')]
+        constraints = [models.UniqueConstraint(fields=['source', 'url', 'additional_property'], condition=models.Q(url__isnull=False), nulls_distinct=False, name='sm_parser_product_url_e394bf'), models.UniqueConstraint(fields=['own_code'], condition=models.Q(source='base', own_code__isnull=False), name='sm_own_product_code_unique')]
 
     def __str__(self):
         return f'{self.source}: {self.url}'

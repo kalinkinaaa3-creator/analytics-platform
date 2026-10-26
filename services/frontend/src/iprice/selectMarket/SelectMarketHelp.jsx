@@ -2,6 +2,7 @@ import { usePriceZones, zoneHint } from "./priceZonesContext";
 import { Drawer } from "./ui/primitives";
 import Icon from "./ui/Icon";
 import { useEffect } from "react";
+import { ZoneTag } from "./ZoneTag";
 
 const steps = [
   ["Загрузите данные", "Прайс всех регионов за выбранную дату, закупочные цены без НДС и правила расчёта в Excel по шаблонам.", "Данные → Файлы"],
@@ -15,16 +16,21 @@ const glossary = [
   ["Закупочная цена", "Цена закупки без НДС для пары «товар + регион». Загружается вручную за месяц расчёта."],
   ["Доставка", "Расходы на единицу без НДС. Прибавляются к закупке только при включённом параметре «Учитывать транспортные расходы»."],
   ["Цена конкурентов", "Ориентир по пригодным аналогам в регионе. Отсутствие данных рынка не означает нулевую цену."],
-  ["Минимальная маржа", "Ограничение нижней цены. Маржа и скидки задаются долями: 0,15 означает 15%."],
-  ["Расчёт", "Сохранённая версия цен и исходных данных. Статус «Рассчитано» не исключает ошибок отдельных строк."],
+  ["Минимальная маржа", "Ограничение нижней цены. В форме маржа и скидки вводятся в процентах: 15 означает 15%. В Excel-шаблоне используются доли: 0,15 означает 15%."],
+  ["Расчёт", "Сохранённая версия цен и исходных данных. Статус «Ждёт проверки» не исключает ошибок отдельных строк."],
   ["Утверждённая версия", "Проверенная версия с зафиксированными ценами. Для изменения создайте новый расчёт. Снятие утверждения не разблокирует прежние цены."],
 ];
-const zones = [["blue", "Ниже рынка", "Цена ниже нижнего порога."], ["green", "В рынке", "Цена внутри допустимого диапазона."], ["orange", "Выше рынка", "Цена выше верхнего порога."], ["red", "Критически выше рынка", "Отклонение превышает критический порог."], ["gray", "Нет данных рынка", "Нет пригодной цены конкурентов для сравнения."]];
+const zones = ["below_market", "in_market", "above_market", "critical_above", "no_market_data"];
 export function SelectMarketHelp({ open, onClose }) {
   const { config } = usePriceZones();
   useEffect(() => {
     if (!open) return;
-    const timer = setTimeout(() => document.getElementById(`sm-help-${typeof open === "string" ? open : "about"}`)?.scrollIntoView({ block: "start" }), 50);
+    const timer = setTimeout(() => {
+      const section = typeof open === "string" ? open : "about";
+      const target = document.getElementById(`sm-help-${section}`);
+      const body = target?.closest(".ip-drawer-body");
+      if (body) body.scrollTop = section === "about" ? 0 : body.scrollTop + target.getBoundingClientRect().top - body.getBoundingClientRect().top - 20;
+    }, 50);
     return () => clearTimeout(timer);
   }, [open]);
   return <Drawer open={open} onClose={onClose} title="Справка" sub="Шаги работы, цвета, частые вопросы, словарь">
@@ -33,7 +39,7 @@ export function SelectMarketHelp({ open, onClose }) {
         <div className="ip-help-three"><div><Icon name="wallet" /><b>Закупочная цена</b><span>закупка и учитываемая доставка; задаёт нижнюю границу цены</span></div><div><Icon name="compare" /><b>Цены конкурентов</b><span>похожий товар в регионе; служат ориентиром</span></div><div><Icon name="settings" /><b>Правила компании</b><span>положение к рынку и маржа</span></div></div>
         <p>Ваша задача: проверить цены, поправить спорные и утвердить расчёт внутри системы.</p></section>
       <section className="ip-stack" style={{ gap: 8 }}><h3 id="sm-help-steps">Пять шагов к новым ценам</h3><ol className="ip-help-steps">{steps.map(([title, text, where], i) => <li key={title}><span className="n">{i + 1}</span><div><b>{title}</b><p>{text}</p><span className="where">Раздел: {where}</span></div></li>)}</ol></section>
-      <section className="ip-stack" style={{ gap: 8 }}><h3 id="sm-help-colors">Цвета</h3><p>Цвет метки показывает положение новой итоговой цены относительно рынка. Пороги задаются в разделе «Рынок».</p><ul className="ip-help-zones">{zones.map(([tone, label, text], index) => <li key={tone}><span className={`ip-tag ${tone}`}>{label}</span><span>{text} {zoneHint(["below_market", "in_market", "above_market", "critical_above", "no_market_data"][index], config)}</span></li>)}</ul></section>
+      <section className="ip-stack" style={{ gap: 8 }}><h3 id="sm-help-colors">Цвета</h3><p>Цвет метки показывает положение новой итоговой цены относительно рынка. Пороги задаются в разделе «Рынок».</p><ul className="ip-help-zones">{zones.map(zone => <li key={zone}><ZoneTag zone={zone} /><span>{zoneHint(zone, config)}</span></li>)}</ul></section>
       <section className="ip-stack" style={{ gap: 8 }}><h3 id="sm-help-faq">Частые вопросы</h3>{[
         ["Как поменять цену товара?", "Откройте «Цены», найдите товар по названию или коду 1С. Нажмите «Своя цена», введите целую цену без НДС и причину."],
         ["Почему у товара такая цена?", "Откройте карточку товара. Она показывает закупку, доставку, параметры, нижнюю границу, цены конкурентов и итоговые цены."],

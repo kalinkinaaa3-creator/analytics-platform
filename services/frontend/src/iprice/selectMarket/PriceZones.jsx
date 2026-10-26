@@ -1,3 +1,4 @@
+import { fmtPct } from "./archiveFormat";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { Button, Panel } from "./ui/primitives";
@@ -23,7 +24,7 @@ export function PriceZonesProvider({ children }) {
 
 export function ZoneSettings({ canEdit, onSaved }) {
   const { config, error } = usePriceZones();
-  return <details className="ip-advanced"><summary><Icon name="settings" size={16} />Пороги цветов</summary>
+  return <details className="ip-advanced"><summary><Icon name="settings" size={16} />Пороги цветов{config && <span className="small muted">Синий: ниже {fmtPct(config.below_market_threshold)} · зелёный: до {fmtPct(config.above_market_threshold, { sign: true })} · красный: выше {fmtPct(config.critical_threshold, { sign: true })}</span>}</summary>
     {error && <p role="alert">{error}</p>}
     {config ? <ZoneForm key={JSON.stringify(config)} config={config} canEdit={canEdit} onSaved={onSaved} /> : !error && <p role="status">Загружаем пороги…</p>}
   </details>;

@@ -1,4 +1,6 @@
-export const priceText = value => value == null ? "—" : Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 4 });
+import { fmtNumber } from "./archiveFormat";
+export const priceText = value => fmtNumber(value, 2);
+
 
 export function errorText(error, fallback = "Не удалось выполнить запрос.") {
   const data = error.response?.data;

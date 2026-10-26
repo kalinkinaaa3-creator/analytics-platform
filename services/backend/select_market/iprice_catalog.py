@@ -23,10 +23,12 @@ def build_products(snapshot):
     by_code = {}
     for row in prices:
         by_code.setdefault(row.code, []).append(row)
+    registry = {row.own_code: row for row in ParserProductUrl.objects.filter(source='base', own_code__isnull=False)}
     active_urls = set(ParserProductUrl.objects.filter(source='base', status='active').values_list('pk', flat=True))
     website = {}
     for row in BaseProductPrice.objects.filter(code_1c__in=by_code, date_add__date__lte=snapshot.calculation_date).order_by('-date_add', '-id'):
-        if row.product_key in active_urls:
+        identity = registry.get(row.code_1c)
+        if row.product_key in active_urls and (identity is None or (identity.on_website and identity.pk == row.product_key)):
             website.setdefault(row.code_1c, row)
     classifications = {row.product_key: row for row in ParserProductClassification.objects.filter(status='active')}
     matches = {}
@@ -38,7 +40,9 @@ def build_products(snapshot):
     for code, regional_prices in by_code.items():
         source = regional_prices[0]
         base = website.get(code)
-        classification = classifications.get(base.product_key) if base else None
+        identity = registry.get(code)
+        product_key = identity.pk if identity else base.product_key if base else None
+        classification = classifications.get(product_key)
         warnings = []
         if not base:
             warnings.append('MISSING_WEBSITE_PRODUCT')
@@ -48,9 +52,12 @@ def build_products(snapshot):
         groups = {f'group_{level}': getattr(source, f'group_{level}') for level in range(1, 5)}
         if any(any(getattr(row, field) != value for field, value in groups.items()) or row.nom != source.nom for row in regional_prices):
             raise IPriceSnapshotBuildError(f'Различаются наименование или группы товара {code} между регионами')
+        if any(row.assortment_matrix_status != source.assortment_matrix_status for row in regional_prices):
+            raise IPriceSnapshotBuildError(f'Различается САМ товара {code} между регионами')
         product = IPriceSnapshotProduct.objects.create(
             snapshot=snapshot, code_1c=code, nom=source.nom,
-            base_product_key=base.product_key if base else None,
+            assortment_matrix_status=source.assortment_matrix_status,
+            base_product_key=product_key,
             is_classified=classification is not None, **groups,
             nom_hier_code=code, nom_hier=source.nom,
             item_type=classification.item_type if classification else 'product',
@@ -63,7 +70,7 @@ def build_products(snapshot):
             calculation_details={'price_import_id': source.batch_id, 'price_rows': [row.pk for row in regional_prices],
                                  'base_product_price_id': base.pk if base else None},
         )
-        keys = matches.get(base.product_key, set()) if classification else set()
+        keys = matches.get(product_key, set()) if classification else set()
         market_prices = _replace_snapshot_competitors(product=product, competitor_keys=keys, workspace=workspace)
         competitors_created += product.competitors.count()
         product.competitor_count = len(market_prices)

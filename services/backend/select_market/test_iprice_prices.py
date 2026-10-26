@@ -15,7 +15,7 @@ def workbook(*rows):
     book = Workbook()
     book.active.append(COLUMNS)
     for day, code, price in rows:
-        book.active.append([code, "Region", "Product", "Leaf", "Parent", "Root", None, price, price, price, price])
+        book.active.append([code, "Region", "Product", "Leaf", "Parent", "Root", None, None, price, price, price, price])
     stream = BytesIO()
     book.save(stream)
     book.close()
@@ -123,3 +123,43 @@ class PriceImportTests(TestCase):
             dashboards.filter.return_value.first.return_value = object()
             response = PriceFileView.as_view()(request)
         self.assertEqual(response.status_code, 200)
+
+
+class AssortmentMatrixImportTests(TestCase):
+    setUp = PriceImportTests.setUp
+    def content(self, statuses, legacy=False):
+        from .iprice_prices import LEGACY_COLUMNS
+        book = Workbook()
+        book.active.append(LEGACY_COLUMNS if legacy else COLUMNS)
+        for index, status in enumerate(statuses):
+            row = ["001", f"Region {index}", "Product", "Leaf", "Root", None, None]
+            if not legacy:
+                row.append(status)
+            book.active.append(row + [122, 244, 366, 488])
+        stream = BytesIO(); book.save(stream); book.close()
+        return stream.getvalue()
+
+    def publish(self, statuses, legacy=False):
+        return import_price_file(self.content(statuses, legacy), filename="sam.xlsx", user=self.user,
+                                 organization=self.organization, price_date="2026-10-01")
+
+    def test_sam_and_price_columns_are_not_shifted(self):
+        self.publish([" 3. On order ", "3. On order"])
+        for price in NomenclaturePrice.objects.all():
+            self.assertEqual(price.assortment_matrix_status, "3. On order")
+            self.assertEqual([price.large, price.small, price.retail, price.medium], [100, 200, 300, 400])
+
+    def test_conflict_rejects_entire_file(self):
+        self.publish(["Old"])
+        for values in (["Active", "On order"], ["Active", None], ["=1+1"], [123]):
+            with self.subTest(values=values), self.assertRaises(PriceImportError):
+                self.publish(values)
+        self.assertEqual(NomenclaturePrice.objects.get().assortment_matrix_status, "Old")
+
+    def test_blank_and_legacy_clear_source_status(self):
+        self.publish(["Active"])
+        self.publish([None])
+        self.assertIsNone(NomenclaturePrice.objects.get().assortment_matrix_status)
+        self.publish(["Active"])
+        self.publish([None], legacy=True)
+        self.assertIsNone(NomenclaturePrice.objects.get().assortment_matrix_status)

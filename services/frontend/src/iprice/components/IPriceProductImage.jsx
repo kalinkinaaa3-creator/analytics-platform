@@ -1,3 +1,4 @@
+import "./IPriceProductImage.css";
 import {
   useCallback,
   useLayoutEffect,

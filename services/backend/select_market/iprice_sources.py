@@ -46,7 +46,8 @@ def validate_source(content, kind, workspace):
         rows = book.active.iter_rows(values_only=True)
         expected = PURCHASE_HEADERS if kind == 'product_cost' else PARAMETER_HEADERS if kind == 'calculation_config' else UPLOAD_TEMPLATE_HEADERS[kind]
         header = tuple(str(v).strip() if v is not None else "" for v in next(rows, ()))
-        if header != expected:
+        accepted = (tuple(expected), (*expected, 'code_1c', 'name', 'on_website')) if kind == 'product_classification' else (tuple(expected),)
+        if header not in accepted:
             raise ValueError("Ожидаются столбцы в порядке шаблона: " + ", ".join(expected))
         if kind == 'product_cost':
             parse_purchase(BytesIO(content))

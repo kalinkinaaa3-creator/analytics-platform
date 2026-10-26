@@ -84,7 +84,7 @@ class SourcesStatusView(PriceFileView):
             'can_edit': user_can_edit_dashboard(request.user, self.dashboard),
             'parsers_enabled': enabled(),
             'imports': list(IPriceSourceImport.objects.order_by('-id').values('id', 'kind', 'filename', 'created_at')[:20]),
-            'price_imports': list(IPricePriceImport.objects.order_by('-date').values('id', 'filename', 'date', 'rows', 'revision')[:10]),
+            'price_imports': list(IPricePriceImport.objects.order_by('-date_add').values('id', 'filename', 'date', 'rows', 'revision', 'date_add')[:10]),
             'queue': queue_status(organization=request.organization) if enabled() else [],
             'run': {'id': run.pk, 'status': run.status, 'step': run.current_step,
                     'started_at': run.started_at, 'finished_at': run.finished_at,
@@ -362,7 +362,7 @@ class SnapshotRowsView(PriceFileView):
             values.update(snapshot_product__code_1c=row.snapshot_product.code_1c,
                 include_transport=row.calculation_details.get('include_transport', False),
                 entered_logistics_unit=row.calculation_details.get('entered_logistics_unit'),
-                snapshot_product__nom=row.snapshot_product.nom, product_id=row.snapshot_product_id,
+                snapshot_product__nom=row.snapshot_product.nom, snapshot_product__image=row.snapshot_product.image, product_id=row.snapshot_product_id,
                 effective=get_effective_prices(row), last_approval_revision=row.last_approval_revision or 0)
             from .iprice_prices import price_with_vat
             values['effective_gross'] = {key: price_with_vat(values['effective'][key]) if values['effective'][key] is not None else None

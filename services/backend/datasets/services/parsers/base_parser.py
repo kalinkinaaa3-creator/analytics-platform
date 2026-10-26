@@ -221,6 +221,11 @@ def parse_offer(offer, *, workspace=None) -> dict | None:
 
 
 def sync_base_urls(parsed_offers: list[dict], *, workspace=None, deactivate_missing=True) -> dict:
+    if workspace is not None and workspace.code == "select-market":
+        from select_market.iprice_registry import lock_registry, sync_website
+        with transaction.atomic():
+            lock_registry()
+            return sync_website(parsed_offers, complete=deactivate_missing)
     ParserProductUrl = _model("ParserProductUrl", workspace)
     active_ids = set()
 

@@ -13,8 +13,9 @@ from .iprice_models import IPricePriceImport, NomenclaturePrice
 
 PRICE_FIELDS = ("large", "small", "retail", "medium")
 COLUMNS = ("Код", "Регион", "Номенклатура", "Группа", "Группа", "Группа", "Группа",
-           "Крупный опт", "Мелкий опт", "Розница", "Средний опт")
+           "Статус ассортиментной матрицы", "Крупный опт", "Мелкий опт", "Розница", "Средний опт")
 
+LEGACY_COLUMNS = COLUMNS[:7] + COLUMNS[8:]
 
 def whole_rubles(value):
     return Decimal(value).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
@@ -50,9 +51,11 @@ def parse_price_file(content, *, price_date):
             raise PriceImportError("В файле должен быть один лист с полным прайсом.")
         rows = iter(book.active.iter_rows(values_only=True))
         header = tuple(str(v).strip() if v is not None else "" for v in next(rows, ()))
-        if header != COLUMNS:
+        if header not in (COLUMNS, LEGACY_COLUMNS):
             raise PriceImportError("Ожидаются столбцы: " + ", ".join(COLUMNS))
         result, keys, dates = [], set(), set()
+        sam_by_code = {}
+        has_sam = header == COLUMNS
         for number, values in enumerate(rows, 2):
             if number > 100001:
                 raise PriceImportError("В прайсе допускается не более 100 000 строк.")
@@ -67,7 +70,12 @@ def parse_price_file(content, *, price_date):
                 if any(len(value) > 255 for value in groups):
                     raise ValueError("слишком длинное наименование группы")
                 row.update({f"group_{index + 1}": groups[index] if index < len(groups) else "" for index in range(4)})
-                row.update(zip(PRICE_FIELDS, values[7:11]))
+                sam = values[7] if has_sam else None
+                if sam is not None and not isinstance(sam, str):
+                    raise ValueError("САМ должен быть текстом")
+                row["assortment_matrix_status"] = (sam or "").strip() or None
+                offset = 8 if has_sam else 7
+                row.update(zip(PRICE_FIELDS, values[offset:offset + 4]))
                 for field in ("code", "shipp_region", "nom"):
                     value = row[field]
                     if field == "code" and not isinstance(value, str):
@@ -78,6 +86,10 @@ def parse_price_file(content, *, price_date):
                     if len(value) > (160 if field == "code" else 255):
                         raise ValueError(f"слишком длинное поле {field}")
                     row[field] = value
+                code = row["code"]
+                if code in sam_by_code and sam_by_code[code] != row["assortment_matrix_status"]:
+                    raise ValueError(f"САМ товара {code} различается между регионами")
+                sam_by_code[code] = row["assortment_matrix_status"]
                 for field in PRICE_FIELDS:
                     value = row[field]
                     if value is None or value == "":
@@ -112,8 +124,14 @@ def import_price_file(content, *, filename, user, organization, price_date):
     with transaction.atomic():
         # Serializes even the first import, when no dated batch exists yet.
         Organization.objects.select_for_update().get(pk=organization.pk)
+        from .iprice_registry import bind_existing, sync_price_membership
+        try:
+            bind_existing()
+        except ValueError as exc:
+            raise PriceImportError(str(exc)) from exc
         batch = IPricePriceImport.objects.filter(date=rows[0]["date"]).first()
         if batch and batch.checksum == digest:
+            sync_price_membership()
             return batch
         revision = batch.revision + 1 if batch else 1
         batch, _ = IPricePriceImport.objects.update_or_create(date=rows[0]["date"], defaults={
@@ -122,6 +140,7 @@ def import_price_file(content, *, filename, user, organization, price_date):
         })
         NomenclaturePrice.objects.filter(date=batch.date).delete()
         NomenclaturePrice.objects.bulk_create([NomenclaturePrice(batch=batch, **row) for row in rows], batch_size=500)
+        sync_price_membership()
     return batch
 
 

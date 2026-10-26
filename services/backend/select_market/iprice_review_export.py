@@ -34,8 +34,8 @@ def review_workbook(kind):
             ws.append(cells)
 
     if kind == 'parser_products':
-        sheet('URL', ['Источник', 'ID', 'URL', 'Статус', 'Ошибка'],
-              models.ParserProductUrl.objects.order_by('pk').values_list('source', 'pk', 'url', 'status', 'last_error').iterator())
+        sheet('URL', ['Источник', 'ID', 'URL', 'Статус', 'Ошибка', 'Код 1С', 'В прайсе', 'На сайте'],
+              models.ParserProductUrl.objects.order_by('pk').values_list('source', 'pk', 'url', 'status', 'last_error', 'own_code', 'in_price', 'on_website').iterator())
         for source, model in [('ТАРА', models.TaraProductPrice), ('Пластик Система', models.PsProductPrice), ('ТопТара', models.TtProductPrice)]:
             latest = model.objects.filter(product_key=OuterRef('product_key')).annotate(day=TruncDate('date_add')).order_by('-date_add').values('day')[:1]
             rows = model.objects.annotate(latest_date=Subquery(latest), day=TruncDate('date_add')).filter(day=F('latest_date')).order_by('product_key', 'pk')

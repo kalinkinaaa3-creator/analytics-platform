@@ -50,6 +50,14 @@ class MasterPipelineTests(TestCase):
         self.legacy.refresh_from_db()
         self.assertEqual(self.legacy.status, 'queued')
 
+    def test_base_step_refreshes_only_select_market_images_once(self):
+        from .iprice_pipeline import run_step
+        run = create_master()
+        with patch('select_market.iprice_pipeline.base_parser.load_base_products', return_value={'loaded': 1}), patch('select_market.iprice_pipeline.sync_iprice_product_images') as sync:
+            run_step(run, step_name='base_parser', command_name='load_base_products', options={})
+            run_step(run, step_name='base_parser', command_name='load_base_products', options={})
+        sync.assert_called_once_with(source='base', workspace=self.workspace)
+
     def test_busy_iplast_slot_prevents_any_source_work(self):
         global_queue.enqueue(organization=self.iplast, kind='master', run_id=self.legacy.pk)
         global_queue.claim_next(executor='iplast')

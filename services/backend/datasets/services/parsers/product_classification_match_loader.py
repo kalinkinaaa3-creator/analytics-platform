@@ -219,6 +219,10 @@ def load_product_classification_matches(file_obj, *, filename="", workspace=None
         ).values_list("product_key_competitor", flat=True)
     )
     product_keys = set(classifications)
+    inactive_own_keys = set()
+    if workspace is not None and workspace.code == 'select-market':
+        # Missing catalog membership must not erase retained classification/links.
+        inactive_own_keys = set(ParserProductUrl.objects.filter(source='base', status='inactive').values_list('pk', flat=True))
     url_by_key = dict(
         ParserProductUrl.objects.filter(id__in=product_keys).values_list("id", "url")
     )
@@ -227,7 +231,7 @@ def load_product_classification_matches(file_obj, *, filename="", workspace=None
         ParserProductClassification.objects.filter(
             status=ParserProductClassification.STATUS_ACTIVE,
         ).exclude(
-            product_key__in=(product_keys | preserved_manual_keys),
+            product_key__in=(product_keys | preserved_manual_keys | inactive_own_keys),
         ).update(
             status=ParserProductClassification.STATUS_INACTIVE,
             date_update=now,
@@ -266,7 +270,7 @@ def load_product_classification_matches(file_obj, *, filename="", workspace=None
 
         ParserProductMatch.objects.filter(
             match_type=ParserProductMatch.MATCH_TYPE_AUTO,
-        ).update(status=ParserProductMatch.STATUS_INACTIVE)
+        ).exclude(product_key_base__in=inactive_own_keys).update(status=ParserProductMatch.STATUS_INACTIVE)
         rows = [
             ParserProductMatch(
                 product_key_base=base_key,

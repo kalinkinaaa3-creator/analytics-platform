@@ -1,19 +1,21 @@
+import { ProductImage } from "./ProductImage";
+import { fmtMoney } from "./archiveFormat";
 import { getIPriceCompetitorSourceLabel, getIPriceCompetitorPriceProperties } from "../product/ipriceProductLabels";
 import { useState } from "react";
 import { Button, Modal } from "./ui/primitives";
 import Icon from "./ui/Icon";
-import { priceText, errorText } from "./format";
+import { errorText } from "./format";
 import { saveCompetitorSelection } from "./competitorSelection";
 
 export function CompetitorCard({ card, editable, onChangeMode }) {
   const mode = card.selection_mode || "auto";
   const properties = getIPriceCompetitorPriceProperties(card.source, card.price_variants || card.variants);
-  return <article className={`ip-card ${mode === "exclude" ? "excluded" : mode === "include" ? "included" : ""}`}>
-    <div className="ip-card-top"><div className="ip-thumb">{/^https?:\/\//i.test(card.image || "") ? <img src={card.image} alt="" loading="lazy" /> : <Icon name="box" />}</div><div style={{ minWidth: 0, flex: 1 }}><div className="ip-row"><span className="ip-tag outline">{getIPriceCompetitorSourceLabel(card.source)}</span><span className={`ip-tag ${card.is_used_in_snapshot ? "blue" : "gray"}`}>{card.is_used_in_snapshot ? "Учтён в расчёте" : "Не учтён"}</span></div><h3 className="ip-card-title">{card.name || `Товар ${card.product_key}`}</h3></div></div>
-    <div className="ip-row between"><span className="price">{priceText(card.price)} ₽</span>{/^https?:\/\//i.test(card.url || "") && <a className="small ip-row" href={card.url} target="_blank" rel="noopener noreferrer">На сайте конкурента <Icon name="ext" /></a>}</div>
+  return <article className={`ip-card sm-competitor-card ${editable ? "" : "sm-competitor-card-readonly"} ${mode === "exclude" ? "excluded" : mode === "include" ? "included" : ""}`}>
+    <div className="ip-card-top"><div className="ip-thumb"><ProductImage src={card.image} name={card.name} /></div><div style={{ minWidth: 0, flex: 1 }}><div className="ip-row"><span className="ip-tag outline">{getIPriceCompetitorSourceLabel(card.source)}</span><span className={`ip-tag ${card.is_used_in_snapshot ? "blue" : "gray"}`}>{card.is_used_in_snapshot ? "Учтён в расчёте" : "Не учтён"}</span></div><h3 className="ip-card-title">{card.name || `Товар ${card.product_key}`}</h3></div></div>
+    <div className="ip-row between"><span className="price">{fmtMoney(card.price)}</span>{/^https?:\/\//i.test(card.url || "") && <a className="small ip-row" href={card.url} target="_blank" rel="noopener noreferrer">На сайте конкурента <Icon name="ext" /></a>}</div>
     <div className="ip-props">{[...new Set([card.material, card.color, card.modification, card.additional_property].filter(Boolean))].map(value => <span key={value} className="ip-tag gray">{value}</span>)}{properties.map(({ label, value }) => <span key={JSON.stringify([label, value])} className="ip-tag gray">{label}: {value}</span>)}</div>
     <div className="small muted">Без НДС. Регионы: {(card.regions || []).join(", ") || "не указаны"}.{card.competitor_price_date && ` Цена от ${new Date(card.competitor_price_date).toLocaleDateString("ru-RU")}.`}{card.article_number_analogs && ` Группа аналогов: ${card.article_number_analogs}.`}</div>
-    {editable && <div className="ip-row between" style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}><span className="small muted">Цена в расчёте{mode === "mixed" ? " · разные решения по регионам" : ""}</span><div className="ip-seg" role="group" aria-label="Учитывать цену">{[["auto", "Авто"], ["include", "Учитывать"], ["exclude", "Не учитывать"]].map(([key, label]) => <button key={key} aria-pressed={mode === key} onClick={() => { if (key !== mode) onChangeMode(card, key); }}>{label}</button>)}</div></div>}
+    {editable && <div className="ip-row between sm-competitor-card-actions" style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}><span className="small muted">Цена в расчёте{mode === "mixed" ? " · разные решения по регионам" : ""}</span><div className="ip-seg" role="group" aria-label="Учитывать цену">{[["auto", "Авто"], ["include", "Учитывать"], ["exclude", "Не учитывать"]].map(([key, label]) => <button key={key} aria-pressed={mode === key} onClick={() => { if (key !== mode) onChangeMode(card, key); }}>{label}</button>)}</div></div>}
   </article>;
 }
 

@@ -51,6 +51,7 @@ class NomenclaturePrice(models.Model):
     group_2 = models.CharField(max_length=255, blank=True, default="")
     group_3 = models.CharField(max_length=255, blank=True, default="")
     group_4 = models.CharField(max_length=255, blank=True, default="")
+    assortment_matrix_status = models.TextField(null=True, blank=True, verbose_name="САМ")
     retail_gross = models.DecimalField(max_digits=18, decimal_places=4, null=True)
     small_gross = models.DecimalField(max_digits=18, decimal_places=4, null=True)
     medium_gross = models.DecimalField(max_digits=18, decimal_places=4, null=True)

@@ -17,12 +17,20 @@ assert.equal(fs.readFileSync(path.resolve(__dirname, '../src/iprice/selectMarket
 const sample = `<div class="ip-main"><div class="ip-page-head"><div><h1 data-s="h1">Page</h1><p data-s="description">Description</p></div></div>
   <div class="ip-row"><button class="ip-btn primary" data-s="primary">Action</button><button class="ip-btn secondary" data-s="secondary">Action</button><button class="ip-btn ghost s" data-s="ghost">Action</button><button class="ip-chip" data-s="chip">Category: all</button></div>
   <input class="ip-input" data-s="input" value="Sample"><select class="ip-select" data-s="select"><option>Sample</option></select>
+  <textarea class="ip-textarea" data-s="textarea">Reason</textarea>
+  <div class="ip-modal" data-s="modal"><h2 data-s="modaltitle">Confirm</h2><div class="foot" data-s="modalfooter"><button class="ip-btn accent" data-s="accent">Save</button></div></div>
+  <div class="ip-kpi" data-s="kpi"><span class="l" data-s="kpilabel">Products</span><span class="v" data-s="kpivalue">123</span></div>
+  <span class="ip-tag z-below" data-s="below">Below</span><span class="ip-tag z-market" data-s="market">Market</span><span class="ip-tag z-above" data-s="above">Above</span><span class="ip-tag z-critical" data-s="critical">Risk</span>
+  <div class="ip-help-three"><div data-s="helpitem"><b data-s="helpitemtitle">Cost</b><span>Details</span></div></div>
+  <div class="ip-alert info" data-s="alert"><div class="body" data-s="alertbody">Details</div></div>
   <div class="ip-tabs"><button aria-selected="true" data-s="tab">Tab</button></div>
   <div class="ip-panel" data-s="panel"><div class="ip-panel-head" data-s="panelhead"><div class="ip-panel-title"><h2 data-s="h2">Panel</h2><p>Details</p></div></div>
   <table class="ip-table"><thead><tr><th data-s="th">Product</th></tr></thead><tbody><tr><td data-s="td">Sample</td></tr></tbody></table></div>
+  <div class="ip-pager" data-s="pager"><span>1-50 / 150</span><div class="ip-row"><div class="pages"><button data-s="page" aria-current="true">1</button><button data-s="nextpage">2</button><button data-s="disabledpage" disabled>3</button></div></div></div>
+  <table class="ip-table"><thead><tr><th class="num" data-s="numhead"><span class="th-in" data-s="sortwrap"><button class="sort" data-s="sort">Price<span class="arrow">&#8593;</span></button></span></th></tr></thead></table>
   <div class="ip-pop" style="position:static"><label class="opt" data-s="option"><input type="checkbox"><span class="lbl">Value</span></label></div>
   <div class="ip-drawer"><div class="ip-drawer-head" data-s="drawerhead"><h2>Help</h2></div><div class="ip-drawer-body" data-s="drawerbody">Content</div></div></div>`;
-const props = ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'color', 'backgroundColor', 'padding', 'borderColor', 'borderWidth', 'borderRadius', 'boxShadow'];
+const props = ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'color', 'backgroundColor', 'padding', 'borderColor', 'borderWidth', 'borderRadius', 'boxShadow', 'minHeight', 'textAlign', 'justifyContent'];
 (async () => {
   const browser = await chromium.launch({ headless: true, ...(process.env.IPRICE_BROWSER ? { executablePath: process.env.IPRICE_BROWSER } : {}) });
   try {

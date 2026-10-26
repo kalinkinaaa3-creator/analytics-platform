@@ -25,8 +25,8 @@ function Chip({ name, values, selected, onChange }) {
     return () => { document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", close); };
   }, [open]);
   return <div ref={ref} className="sm-filter-chip"><button type="button" className={`ip-chip ${selected.length ? "on" : ""}`} aria-expanded={open} onClick={() => setOpen(!open)}>
-    <span className="val">{labels[name]}: {selected.length ? `${display(name, selected[0])}${selected.length > 1 ? ` и ещё ${selected.length - 1}` : ""}` : "все"}</span><Icon name="chevDown" />
-  </button>{selected.length > 0 && <button className="ip-btn ghost icon s" aria-label={`Сбросить «${labels[name]}»`} onClick={() => onChange([])}><Icon name="x" size={12} /></button>}{open && <div className="ip-pop" style={{ top: 36, left: 0 }}><Options name={name} values={values} selected={selected} toggle={v => onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v])} />
+    <span className="val">{labels[name]}: {selected.length ? `${display(name, selected[0])}${selected.length > 1 ? ` и ещё ${selected.length - 1}` : ""}` : "все"}</span>{!selected.length && <Icon name="chevDown" />}
+  </button>{selected.length > 0 && <button type="button" className="sm-filter-clear" aria-label={`Сбросить «${labels[name]}»`} onClick={() => onChange([])}><Icon name="x" size={12} /></button>}{open && <div className="ip-pop" style={{ top: 36, left: 0 }}><Options name={name} values={values} selected={selected} toggle={v => onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v])} />
     <div className="foot"><Button size="s" variant="ghost" onClick={() => onChange([])}>Сбросить</Button><Button size="s" onClick={() => setOpen(false)}>Готово</Button></div></div>}</div>;
 }
 
@@ -43,7 +43,7 @@ export function SelectMarketFilters({ snapshotId, comparisonId, search, filters,
   }, [snapshotId, comparisonId, search, serialized, mode, zone, problemsOnly]);
   const set = (key, value) => { const next = { ...filters }; if (value.length) next[key] = value; else delete next[key]; onChange(next); };
   const values = key => [...new Set([...(options[key] || []), ...(filters[key] || [])])];
-  return <><div className="ip-filters">{Object.keys(labels).filter(key => ["group_1", "category", "is_classified"].includes(key) || filters[key]?.length).map(key => <Chip key={key} name={key} values={values(key)} selected={filters[key] || []} onChange={value => set(key, value)} />)}
+  return <><div className="ip-filters">{Object.keys(labels).filter(key => ["group_1", "group_2", "group_3", "group_4", "category", "is_classified"].includes(key) || filters[key]?.length).map(key => <Chip key={key} name={key} values={values(key)} selected={filters[key] || []} onChange={value => set(key, value)} />)}
     <Button size="s" icon="filter" onClick={() => setMore(true)}>Ещё фильтры</Button>{Object.values(filters).some(v => v.length) && <Button size="s" variant="ghost" onClick={() => onChange({})}>Сбросить все</Button>}
   </div>{error && <p role="alert">{error}</p>}<Drawer open={more} onClose={() => setMore(false)} title="Фильтры" sub="Списки подстраиваются под уже выбранные фильтры: остаются только подходящие значения.">
     {Object.entries(labels).map(([key, label]) => <details key={key} open={filters[key]?.length > 0} className="ip-panel sm-filter-section"><summary>{label}{filters[key]?.length > 0 && <span className="ip-badge">{filters[key].length}</span>}</summary>
