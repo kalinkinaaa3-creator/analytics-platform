@@ -1,3 +1,4 @@
+import { readScope as readAddressScope, writeScope } from "./scopeAddress";
 import { ProductImage } from "./ProductImage";
 import { fmtPct, fmtMoney, fmtDate, countText } from "./archiveFormat";
 import { Pager } from "./ui/Pager";
@@ -13,7 +14,7 @@ import { errorText } from "./format";
 const types = [["all", "Все товары"], ["changed", "С изменениями"], ["final_rrp_increased", "Цена выросла"], ["final_rrp_decreased", "Цена снизилась"], ["price_increased", "Цена в прайсе выросла"], ["price_decreased", "Цена в прайсе снизилась"], ["added", "Новые товары"], ["removed", "Выбывшие товары"], ["new_error", "Потеряли цену"], ["resolved_error", "Получили цену"], ["status_changed", "Сменили статус"]];
 function readScope(snapshotId, baseId) {
   try {
-    const value = JSON.parse(new URLSearchParams(window.location.hash.slice(1)).get("compare_scope") || "{}");
+    const value = readAddressScope(new URLSearchParams(window.location.hash.slice(1)), "compare_scope");
     if (!value || String(value.snapshotId) !== String(snapshotId) || String(value.baseId) !== String(baseId)) return {};
     return {
       mode: value.mode === "regions" ? "regions" : "products",
@@ -63,8 +64,9 @@ export function SelectMarketCompare({ snapshotId, baseId, onBack, exportAction }
   const key = JSON.stringify({ mode, type, search, filters, page, snapshotId, baseId });
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.slice(1));
-    if (params.get("compare_scope") === key) return;
-    params.set("compare_scope", key);
+    const before = params.toString();
+    writeScope(params, "compare_scope", JSON.parse(key));
+    if (params.toString() === before) return;
     navigate({ pathname: window.location.pathname, search: window.location.search, hash: `#${params}` }, { replace: true, state: window.history.state?.usr });
   }, [key, navigate]);
   useEffect(() => {

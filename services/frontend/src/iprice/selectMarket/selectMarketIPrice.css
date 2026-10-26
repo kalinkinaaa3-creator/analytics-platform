@@ -155,3 +155,21 @@
 .app-shell.sm-workspace .content:has(.sm-iprice) { padding-top: 0; }
 .sm-iprice .sm-iprice-loading { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: var(--info-bg); color: var(--info-text); border: 1px solid var(--blue-200); border-radius: var(--r-l); font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
 .sm-iprice .sm-iprice-loading::before { flex: 0 0 14px; margin-right: 0; }
+
+.sm-iprice .sm-competitor-card-actions .ip-seg button { font-size: 12px; padding-inline: 4px; white-space: nowrap; overflow-wrap: normal; flex: 1 0 auto; }
+.sm-iprice .ip-select.ip-select-version { width: 420px; max-width: min(420px, 55vw); }
+.sm-iprice .sm-own-card .sm-own-product-name { font-size: 16px; font-weight: 600; line-height: 20px; }
+.sm-iprice .sm-product-heading { align-items: flex-start; flex-wrap: nowrap; gap: 16px; }
+.sm-iprice .sm-product-heading > .ip-thumb { flex: 0 0 56px; }
+.sm-iprice .sm-product-heading-text { min-width: 0; flex: 1; }
+.sm-iprice .sm-product-heading h1 { overflow-wrap: anywhere; }
+.sm-iprice .sm-product-heading > .ip-btn { flex: 0 0 auto; }
+.sm-iprice .sm-color-swatch { display: inline-block; vertical-align: middle; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border-strong); }
+.sm-iprice .sm-own-assortment { padding: 20px; }
+.sm-iprice .sm-own-card { display: flex; flex-direction: column; gap: 12px; }
+.sm-iprice .sm-own-card > .ip-btn { margin-top: auto; }
+.sm-iprice .sm-iprice-source-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+.sm-iprice .sm-iprice-source-grid > .ip-panel:nth-child(n+3) .sm-upload-body { grid-template-rows: 58px 1fr; }
+.sm-iprice .sm-iprice-source-grid > .ip-panel:nth-child(n+3) .sm-source-date { display: block; }
+@media(max-width:1100px) { .sm-iprice .sm-iprice-source-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media(max-width:700px) { .sm-iprice .sm-iprice-source-grid { grid-template-columns: 1fr; } .sm-iprice .sm-product-heading { flex-wrap: wrap; } .sm-iprice .sm-product-heading-text { flex-basis: calc(100% - 80px); } }

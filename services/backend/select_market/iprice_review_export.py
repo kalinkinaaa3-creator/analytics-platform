@@ -45,6 +45,38 @@ def review_workbook(kind):
         sheet('Проверка данных', ['Раздел', 'Уровень', 'Код проверки', 'Код 1С', 'Наименование', 'Регион', 'Замечание', 'Исправление'],
               ([item[key] for key in ('section', 'severity', 'code', 'code_1c', 'nom', 'region', 'message', 'fix')] for item in report['results']))
         sheet('Срезы', ['Источник', 'Дата'], [('Прайс', report['price_date']), ('Расчёт', (report['snapshot'] or {}).get('date'))])
+        from .iprice_models import IPriceRegionalInput, IPriceSourceImport
+        from openpyxl import load_workbook
+        sheet('Действующая классификация',
+              ['Ключ товара', 'Категория', 'Подкатегория', 'Тип подкатегории', 'Материал', 'Цвет', 'Модификация', 'Группа аналогов', 'Тип товара', 'Ссылка'],
+              ([r.product_key, r.category, r.subcategory, r.subcategory_type, r.material, r.color, r.modification,
+                r.article_number_analogs, r.get_item_type_display(), r.url]
+               for r in models.ParserProductClassification.objects.filter(status='active').order_by('product_key').iterator()))
+        sheet('Действующие аналоги', ['Ключ нашего товара', 'Ключ конкурента', 'Способ добавления'],
+              ([r.product_key_base, r.product_key_competitor, r.get_match_type_display()]
+               for r in models.ParserProductMatch.objects.filter(status='active').order_by('product_key_base', 'product_key_competitor').iterator()))
+        sheet('Решения по учёту аналогов', ['Ключ нашего товара', 'Ключ конкурента', 'Участие в расчёте', 'Причина'],
+              ([r.product_key_base, r.product_key_competitor, r.get_selection_mode_display(), r.reason]
+               for r in models.IPriceCompetitorSelectionOverride.objects.order_by('product_key_base', 'product_key_competitor').iterator()))
+        sheet('Действующие префиксы', ['Конкурент', 'Префикс', 'Регион'],
+              models.ParserPrefix.objects.order_by('source', 'prefix').values_list('source', 'prefix', 'shipp_region').iterator())
+        latest_input = IPriceRegionalInput.objects.filter(code=OuterRef('code'), region=OuterRef('region')).order_by('-month', '-pk').values('pk')[:1]
+        current_inputs = IPriceRegionalInput.objects.filter(pk=Subquery(latest_input))
+        sheet('Настройки расчёта', ['Последний месяц настройки', 'Код 1С', 'Регион', 'Коэффициент по рынку', 'Маржа по себестоимости, доля',
+              'Минимальная маржа, доля', 'Скидка мелкого опта, доля', 'Скидка среднего опта, доля', 'Скидка крупного опта, доля',
+              'Учитывать доставку', 'Доставка на единицу без НДС, руб.'],
+              ([r.month, r.code, r.region, r.base_analog, r.base_exclusive, r.minimum_margin, r.small, r.medium, r.large,
+                'Да' if r.include_transport else 'Нет', r.logistics_unit]
+               for r in current_inputs.order_by('code', 'region').iterator()))
+        last_cost = IPriceSourceImport.objects.filter(kind='product_cost').order_by('-id').first()
+        cost_rows = []
+        if last_cost:
+            source = load_workbook(BytesIO(bytes(last_cost.content)), read_only=True, data_only=False)
+            try:
+                cost_rows = list(source.active.iter_rows(min_row=2, values_only=True))
+            finally:
+                source.close()
+        sheet('Последние закупочные цены', ['Дата', 'Код 1С', 'Наименование', 'Регион', 'Закупочная цена без НДС, руб.'], cost_rows)
     output = BytesIO()
     book.save(output)
     book.close()

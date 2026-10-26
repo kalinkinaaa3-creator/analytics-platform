@@ -255,7 +255,37 @@ class ListControlsTests(TestCase):
             with BytesIO(response.content) as stream:
                 book = load_workbook(stream, read_only=True)
                 self.assertGreater(len(book.sheetnames), 1)
+                if kind == 'preparation_check':
+                    self.assertTrue({'Действующая классификация', 'Действующие аналоги',
+                                     'Действующие префиксы', 'Настройки расчёта',
+                                     'Последние закупочные цены'}.issubset(book.sheetnames))
+                    self.assertEqual(next(book['Последние закупочные цены'].values),
+                                     ('Дата', 'Код 1С', 'Наименование', 'Регион', 'Закупочная цена без НДС, руб.'))
                 book.close()
+
+    def test_review_exports_latest_purchase_file_and_active_classification(self):
+        from io import BytesIO
+        from openpyxl import Workbook, load_workbook
+        from .iprice_models import IPriceSourceImport
+        from .iprice_domain_models import ParserProductClassification
+        from .iprice_review_export import review_workbook
+        for code in ['OLD', '=TEXT-CODE']:
+            source = Workbook()
+            source.active.append(['date', 'code', 'name', 'region', 'cost'])
+            source.active.append(['2026-10-01', code, 'Name', 'Region', 123])
+            stream = BytesIO()
+            source.save(stream)
+            source.close()
+            IPriceSourceImport.objects.create(kind='product_cost', filename='cost.xlsx', checksum=code, content=stream.getvalue())
+        ParserProductClassification.objects.create(product_key=900, status='active', category='Active')
+        ParserProductClassification.objects.create(product_key=901, status='inactive', category='Inactive')
+        book = load_workbook(BytesIO(review_workbook('preparation_check')))
+        self.assertEqual(book['Последние закупочные цены'].max_row, 2)
+        self.assertEqual(book['Последние закупочные цены']['B2'].value, '=TEXT-CODE')
+        self.assertEqual(book['Последние закупочные цены']['B2'].data_type, 's')
+        self.assertEqual(list(book['Действующая классификация'].values)[1][1], 'Active')
+        self.assertEqual(book['Действующая классификация'].max_row, 2)
+        book.close()
 
     def test_product_details_and_snapshot_counts(self):
         from .iprice_api import SnapshotListView

@@ -314,7 +314,7 @@ class IPriceSnapshot(models.Model):
 class IPriceSnapshotProduct(models.Model):
     PRICING_METHOD_ANALOG = 'analog'
     PRICING_METHOD_EXCLUSIVE = 'exclusive'
-    PRICING_METHOD_CHOICES = ((PRICING_METHOD_ANALOG, 'Аналог'), (PRICING_METHOD_EXCLUSIVE, 'Эксклюзив'))
+    PRICING_METHOD_CHOICES = ((PRICING_METHOD_ANALOG, 'По рынку'), (PRICING_METHOD_EXCLUSIVE, 'По себестоимости'))
     STATUS_SUCCESS = 'success'
     STATUS_WARNING = 'warning'
     STATUS_ERROR = 'error'
@@ -425,7 +425,7 @@ class IPriceSnapshotRegion(models.Model):
     regional_competitor_rrp_max = models.DecimalField(max_digits=18, decimal_places=4, null=True, blank=True, verbose_name='Максимальная РРЦ конкурентов региона')
     regional_competitor_rrp_median = models.DecimalField(max_digits=18, decimal_places=4, null=True, blank=True, verbose_name='Медианная РРЦ конкурентов региона')
     base_analog = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True, verbose_name='Коэффициент аналога')
-    base_exclusive = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True, verbose_name='Коэффициент эксклюзива')
+    base_exclusive = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True, verbose_name='Маржа по себестоимости')
     minimum_margin = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True, verbose_name='Минимальная маржинальность')
     discount_small = models.DecimalField(max_digits=7, decimal_places=6, null=True, blank=True, verbose_name='Скидка small')
     discount_medium = models.DecimalField(max_digits=7, decimal_places=6, null=True, blank=True, verbose_name='Скидка medium')

@@ -12,10 +12,20 @@ import { useConfirm } from "./ui/useConfirm";
 
 const root = "/v1/select-market/iprice/snapshots/";
 
-export function PriceEditor({ snapshotId, row, onSaved }) {
+export function PriceEditor({ snapshotId, row: initialRow, onSaved, refreshRevision = 0 }) {
+  const [error, setError] = useState("");
+  const [currentRow, setCurrentRow] = useState(null);
+  const row = currentRow || initialRow;
+  useEffect(() => {
+    const controller = new AbortController();
+    api.get(`${root}${snapshotId}/rows/`, { params: { product_id: initialRow.product_id }, signal: controller.signal }).then(({data}) => {
+      const next = data.rows.find(item => item.id === initialRow.id);
+      if (next) setCurrentRow(next);
+    }).catch(err => { if (!controller.signal.aborted) setError(errorText(err)); });
+    return () => controller.abort();
+  }, [snapshotId, initialRow.id, initialRow.product_id, refreshRevision]);
   const [price, setPrice] = useState(row.effective.rrp ?? "");
   const [comment, setComment] = useState("");
-  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [previewPrice, setPreviewPrice] = useState(null);
   const [previewFailure, setPreviewFailure] = useState(null);
@@ -65,11 +75,11 @@ export function PriceEditor({ snapshotId, row, onSaved }) {
       </div>
       <label className="ip-field">Причина<textarea aria-label="Причина" className="ip-textarea" required maxLength={2000} value={comment} onChange={e => setComment(e.target.value)} disabled={busy} placeholder="Например: договорились с сетью до конца квартала" /><span className="small muted">Кто согласовал и зачем. Коллеги увидят причину в истории цены.</span></label>
       <div className="ip-row" style={{ justifyContent: "flex-end" }}>
-        {row.calculated_rrp != null && Number(row.calculated_rrp) !== Number(row.effective.rrp) && <Button variant="ghost" disabled={busy} onClick={() => setPrice(String(row.calculated_rrp))}>Вернуть расчёт iPrice</Button>}
+        {row.calculated_rrp != null && Number(row.calculated_rrp) !== Number(row.effective.rrp) && <Button variant="ghost" disabled={busy} onClick={() => { setPrice(String(row.calculated_rrp)); setComment("Возвращена цена по расчёту iPrice."); }}>Вернуть расчёт iPrice</Button>}
         <Button type="submit" variant="accent" icon="check" disabled={busy || !checked?.valid || !comment.trim()}>{busy ? "Сохраняем…" : "Сохранить цену"}</Button>
       </div>{error && <p role="alert">{error}</p>}
     </form>
-    <PriceHistory snapshotId={snapshotId} rowId={row.id} />
+    <PriceHistory key={refreshRevision} snapshotId={snapshotId} rowId={row.id} />
     <details className="ip-advanced"><summary>Расчёт iPrice по шагам</summary><div className="ip-explain sm-panel-body">{[
       ["Закупочная цена", row.product_cost],
       [row.include_transport ? "Доставка на единицу" : "Доставка не учитывается", row.logistics_unit],

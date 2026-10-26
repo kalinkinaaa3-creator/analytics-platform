@@ -1,3 +1,4 @@
+import { readScope, writeScope } from "./scopeAddress";
 import { ProductImage } from "./ProductImage";
 import { Pager } from "./ui/Pager";
 import { fmtMoney, fmtPct, fmtDate, fmtDateTime, countText } from "./archiveFormat";
@@ -11,7 +12,7 @@ import { createPortal } from "react-dom";
 import { Button, Drawer, PageHead, Panel } from "./ui/primitives";
 import { SelectMarketOverview } from "./SelectMarketOverview";
 import { api } from "../../api/client";
-import { ParameterEditor, PriceEditor, SnapshotHistory } from "./SelectMarketEdits";
+import { ParameterEditor, PriceEditor } from "./SelectMarketEdits";
 import { MarketAnalysis, ProductDetails } from "./SelectMarketAnalysis";
 import { SelectMarketFilters } from "./SelectMarketFilters";
 import { errorText } from "./format";
@@ -39,7 +40,7 @@ function CalculationStatus({ row }) {
   return <span className={`ip-tag ${tone}`} title={reasons || label} tabIndex={reasons ? 0 : undefined} aria-label={reasons ? `${label}: ${reasons}` : label}>{icon ? <Icon name={icon} size={12} /> : <span className="dot" />}{label}</span>;
 }
 
-function CalculationRows({ id, canEdit, canEditParameters, onSaved, initialScope = {}, onScopeChange }) {
+function CalculationRows({ revision, id, canEdit, canEditParameters, onSaved, initialScope = {}, onScopeChange }) {
   const [mode, setMode] = useState(initialScope.mode || "products");
   const [ordering, setOrdering] = useState(initialScope.ordering || "nom");
   const [zone, setZone] = useState(initialScope.zone || "");
@@ -79,7 +80,7 @@ function CalculationRows({ id, canEdit, canEditParameters, onSaved, initialScope
       else setError("Товар или региональная строка отсутствуют в выбранном расчёте.");
     }).catch(err => { if (err.code !== "ERR_CANCELED") setError(errorText(err)); });
     return () => controller.abort();
-  }, [id, productAddress, rowAddress]);
+  }, [id, productAddress, rowAddress, revision]);
   const [retry, setRetry] = useState(0);
   function openProduct(productId) { setProduct({ product_id: productId }); }
   useEffect(() => {
@@ -95,7 +96,7 @@ function CalculationRows({ id, canEdit, canEditParameters, onSaved, initialScope
       setResult({ ...data, query, filters: serializedFilters, mode, zone, problemsOnly, ordering, pageSize }); setError("");
     }).catch(err => { if (err.code !== "ERR_CANCELED") setError(errorText(err, "Не удалось загрузить строки расчёта.")); });
     return () => controller.abort();
-  }, [id, page, query, serializedFilters, retry, mode, zone, problemsOnly, ordering, pageSize]);
+  }, [id, page, query, serializedFilters, retry, mode, zone, problemsOnly, ordering, pageSize, revision]);
   const loading = !result || result.pageSize !== pageSize || result.page !== page || result.query !== query || result.filters !== serializedFilters || result.mode !== mode || result.zone !== zone || result.problemsOnly !== problemsOnly || result.ordering !== ordering;
   const rowNavigation = row => ({
     className: "is-clickable", tabIndex: 0,
@@ -104,7 +105,7 @@ function CalculationRows({ id, canEdit, canEditParameters, onSaved, initialScope
   });
   const heading = (key, label) => <th className={["market", "current", "final", "deviation", "margin"].includes(key) ? "num" : undefined} aria-sort={ordering.replace("-", "") === key ? ordering.startsWith("-") ? "descending" : "ascending" : "none"}><span className="th-in"><button className="sort" onClick={() => { setOrdering(ordering === key ? "-" + key : key); setPage(1); }}>{label} {ordering === key ? "↑" : ordering === "-" + key ? "↓" : "↕"}</button>{({deviation: "Отклонение новой итоговой цены от медианы цен конкурентов.", margin: "Доля новой цены, остающаяся после закупки и включённой доставки.", market: "Медиана пригодных цен конкурентов.", current: "Текущая цена из загруженного прайса без НДС.", final: "Итоговая цена с учётом ручного согласования. Для товара — медиана по регионам."})[key] && <Term icon title={label} text={({deviation: "Отклонение новой итоговой цены от медианы цен конкурентов.", margin: "Доля новой цены, остающаяся после закупки и включённой доставки.", market: "Медиана пригодных цен конкурентов.", current: "Текущая цена из загруженного прайса без НДС.", final: "Итоговая цена с учётом ручного согласования. Для товара — медиана по регионам."})[key]} />}</span></th>;
   if (product) return <div className="ip-stack">
-    {error && <p role="alert">{error}</p>}<ProductDetails key={`details-${product.id}`} snapshotId={id} productId={product.product_id} onBack={() => setProduct(null)} region={product} canEdit={canEditParameters} canEditPrice={canEdit} onSaved={onSaved} onOpenProduct={openProduct} />
+    {error && <p role="alert">{error}</p>}<ProductDetails key={`details-${product.id}`} refreshRevision={revision} snapshotId={id} productId={product.product_id} onBack={() => setProduct(null)} region={product} canEdit={canEditParameters} canEditPrice={canEdit} onSaved={onSaved} onOpenProduct={openProduct} />
   </div>;
   return <div className="ip-panel sm-price-panel" aria-busy={loading}>
     {canEditParameters && document.getElementById("sm-list-parameters") && createPortal(<ParameterEditor snapshotId={id} onSaved={onSaved} listScope={{ filters, search: query, mode, zone, problems_only: problemsOnly }} />, document.getElementById("sm-list-parameters"))}
@@ -120,7 +121,7 @@ function CalculationRows({ id, canEdit, canEditParameters, onSaved, initialScope
         const sum = item.summary;
         const current = Number(sum.current_retail_median), next = Number(sum.effective_approved_rrp_median), market = Number(sum.competitor_rrp_median);
         const delta = market > 0 && sum.effective_approved_rrp_median != null ? (next / market - 1) * 100 : null;
-        return <tr key={item.product_id} {...rowNavigation(first)}><td><ProductImage src={first.snapshot_product__image} name={first.snapshot_product__nom} /></td><td><button className="ip-linkbtn sm-product-name" onClick={() => setProduct(first)}>{first.snapshot_product__nom}</button><span className="sub">{first.snapshot_product__code_1c} · {sum.pricing_method === "analog" ? "по рынку" : "эксклюзив"}</span></td><td className="num">{money(sum.competitor_rrp_median)}<span className="sub">{countText(sum.competitor_count, "конкурент", "конкурента", "конкурентов")}</span></td><td className="num">{money(sum.current_retail_median)}</td><td className="num"><span className="ip-newprice"><b>{money(sum.effective_approved_rrp_median)}</b><span className="chg">{current > 0 && sum.effective_approved_rrp_median != null ? `${next >= current ? "↑" : "↓"} ${fmtPct(Math.abs(next / current - 1))}` : "—"}</span></span></td><td><ZoneTag zone={sum.zone} percent={delta} /></td><td><CalculationStatus row={sum} /></td></tr>;
+        return <tr key={item.product_id} {...rowNavigation(first)}><td><ProductImage src={first.snapshot_product__image} name={first.snapshot_product__nom} /></td><td><button className="ip-linkbtn sm-product-name" onClick={() => setProduct(first)}>{first.snapshot_product__nom}</button><span className="sub">{first.snapshot_product__code_1c} · {sum.pricing_method === "analog" ? "по рынку" : "по себестоимости"}</span></td><td className="num">{money(sum.competitor_rrp_median)}<span className="sub">{countText(sum.competitor_count, "конкурент", "конкурента", "конкурентов")}</span></td><td className="num">{money(sum.current_retail_median)}</td><td className="num"><span className="ip-newprice"><b>{money(sum.effective_approved_rrp_median)}</b><span className="chg">{current > 0 && sum.effective_approved_rrp_median != null ? `${next >= current ? "↑" : "↓"} ${fmtPct(Math.abs(next / current - 1))}` : "—"}</span></span></td><td><ZoneTag zone={sum.zone} percent={delta} /></td><td><CalculationStatus row={sum} /></td></tr>;
       })}</tbody></table></div> : <>
       <div className="sm-iprice-table"><table className="ip-table"><thead><tr><th>Фото</th>{heading("nom", "Товар")}{heading("sale_region", "Регион продажи")}{heading("market", "У конкурентов")}{heading("final", "Новая цена")}{heading("margin", "Маржа")}{heading("deviation", "К рынку")}<th><span className="sr-only">Действия</span></th></tr></thead>
         <tbody>{result.rows.map(row => {
@@ -131,21 +132,21 @@ function CalculationRows({ id, canEdit, canEditParameters, onSaved, initialScope
           return <tr key={`row-${row.id}`} {...rowNavigation(row)}><td><ProductImage src={row.snapshot_product__image} name={row.snapshot_product__nom} /></td><td><button className="ip-linkbtn sm-product-name" onClick={() => setProduct(row)}>{row.snapshot_product__nom}</button><span className="sub">{row.snapshot_product__code_1c}</span></td>
           <td><b>{row.sale_region}</b><span className="sub"><CalculationStatus row={row} /></span></td>
           <td className="num">{money(row.regional_competitor_rrp_median)}</td>
-          <td className="num"><span className="ip-newprice"><b>{money(row.effective.rrp)}</b><span className="chg">{current > 0 && row.effective.rrp != null ? `${next >= current ? "↑" : "↓"} ${fmtPct(Math.abs(next / current - 1))}` : "—"}</span></span><span className="sub">Сейчас {money(row.current_retail)}</span><span className="sub">{money(row.effective_gross?.rrp)} с НДС</span>{row.effective.approval_source === "manual" && <span className="ip-tag orange">Ручная цена</span>}</td>
+          <td className="num"><span className="ip-newprice"><b>{money(row.effective.rrp)}</b><span className="chg">{current > 0 && row.effective.rrp != null ? `${next >= current ? "↑" : "↓"} ${fmtPct(Math.abs(next / current - 1))}` : "—"}</span></span><span className="sub">{money(row.effective_gross?.rrp)} с НДС</span><span className="sub">Сейчас {money(row.current_retail)}</span>{row.effective.approval_source === "manual" && <span className="ip-tag orange">Ручная цена</span>}</td>
           <td className="num">{next > 0 && row.cost_with_logistics != null ? fmtPct((next - Number(row.cost_with_logistics)) / next, { digits: 0 }) : "—"}</td>
           <td><ZoneTag zone={row.zone} percent={delta} /></td>
           <td>{canEdit && row.calculation_status !== "error" ? <Button size="s" icon="edit" aria-label="Своя цена" onClick={() => setEditing(row)} /> : <Button variant="ghost" size="s" icon="eye" aria-label="Расчёт цены" onClick={() => setProduct(row)} />}</td></tr>;
         })}</tbody></table></div></>}
       {!result.count && <p className="sm-iprice-empty">Региональные строки отсутствуют.</p>}
       <Pager page={page} totalPages={result.pages} count={result.count} pageSize={pageSize} onPage={value => { setEditing(null); setProduct(null); setPage(value); }} onPageSize={value => { setPageSize(value); setPage(1); try { sessionStorage.setItem("select-market-iprice-page-size", String(value)); } catch { /* Optional browser preference. */ } }} />
-      <Drawer open={!!editing && canEdit} onClose={() => setEditing(null)} title={editing ? `Цена: ${editing.sale_region}` : "Своя цена"} sub={editing?.snapshot_product__nom || ""}>{editing && <PriceEditor key={editing.id} snapshotId={id} row={editing} onSaved={onSaved} />}</Drawer>
+      <Drawer open={!!editing && canEdit} onClose={() => setEditing(null)} title={editing ? `Цена: ${editing.sale_region}` : "Своя цена"} sub={editing?.snapshot_product__nom || ""}>{editing && <PriceEditor key={editing.id} refreshRevision={revision} snapshotId={id} row={editing} onSaved={onSaved} />}</Drawer>
     </>}
   </div>;
 }
 
 function readPriceScope() {
     try {
-      const value = JSON.parse(new URLSearchParams(window.location.hash.slice(1)).get("price_scope") || "{}");
+      const value = readScope(new URLSearchParams(window.location.hash.slice(1)), "price_scope");
       if (!value || typeof value !== "object" || Array.isArray(value)) return {};
       return {
         snapshotId: typeof value.snapshotId === "string" ? value.snapshotId : "",
@@ -181,9 +182,9 @@ export function SelectMarketCalculations({ navigationRevision = 0, canEdit, view
   const rememberScope = useCallback(scope => {
     setPriceScope(scope);
     const params = new URLSearchParams(window.location.hash.slice(1));
-    const encoded = JSON.stringify(scope);
-    if (params.get("price_scope") === encoded) return;
-    params.set("price_scope", encoded);
+    const before = params.toString();
+    writeScope(params, "price_scope", scope);
+    if (params.toString() === before) return;
     navigate({ pathname: window.location.pathname, search: window.location.search, hash: `#${params}` }, { replace: true, state: window.history.state?.usr });
   }, [navigate]);
   const [confirm, confirmation] = useConfirm();
@@ -237,6 +238,10 @@ export function SelectMarketCalculations({ navigationRevision = 0, canEdit, view
         const { data } = await api.get(root, { signal: controller.signal });
         if (!controller.signal.aborted) {
           setVersions(data); setVersionsError("");
+          const latest = data.find(v => v.status === "success");
+          const old = data.find(v => v.is_active && v.id !== latest?.id) || data.find(v => v.was_active && v.id !== latest?.id) || data.find(v => v.status === "success" && v.id !== latest?.id);
+          setCompareTo(value => value || String(latest?.id || ""));
+          setCompareFrom(value => value || String(old?.id || ""));
           if (selectedRef.current && loadedSnapshot.current !== selectedRef.current) {
             const linkedVersion = data.find(version => String(version.id) === selectedRef.current);
             if (linkedVersion) {
@@ -368,15 +373,14 @@ export function SelectMarketCalculations({ navigationRevision = 0, canEdit, view
         <label className="ip-field">Старый<select className="ip-select" aria-label="Старый расчёт" value={compareFrom} onChange={e => setCompareFrom(e.target.value)}><option value="">Выберите расчёт</option>{versions?.filter(v => v.status === "success").map(v => <option key={v.id} value={v.id}>{fmtDate(v.calculation_date)} · №{v.version_number}</option>)}</select></label>
         <label className="ip-field">Новый<select className="ip-select" aria-label="Новый расчёт" value={compareTo} onChange={e => setCompareTo(e.target.value)}><option value="">Выберите расчёт</option>{versions?.filter(v => v.status === "success").map(v => <option key={v.id} value={v.id}>{fmtDate(v.calculation_date)} · №{v.version_number}</option>)}</select></label>
         </div><div className="ip-row" style={{ justifyContent: "flex-end" }}><Button icon="compare" disabled={!compareFrom || !compareTo || compareFrom === compareTo} onClick={() => { selectedRef.current = compareTo; setSelected(compareTo); setReviewedRevision(versions.find(v => String(v.id) === compareTo)?.edit_revision || 0); setInitialComparison(compareFrom); onNavigate("compare"); }}>Показать изменения</Button></div></div></Panel></div>
-      <Panel title="Все расчёты" sub="Утверждение действует внутри системы. Автоматической отправки цен в 1С нет."><div className="sm-iprice-table"><table className="ip-table"><thead><tr><th>Расчёт</th><th>Состояние</th><th>Запуск</th><th className="num">Товаров</th><th className="num">Цен по регионам</th><th className="num">Без цены</th><th /></tr></thead><tbody>{versions?.map(version => <tr key={`version-${version.id}`} className={String(version.id) === selected ? "selected" : ""}><td>{fmtDate(version.calculation_date)}<span className="sub">№{version.version_number}{!version.is_current && " · есть новее за эту дату"}</span></td><td><span className={`ip-tag ${version.is_active ? "orange" : version.status === "failed" ? "red" : "gray"}`}>{versionLabel(version, versions.find(item => item.status === "success")?.id)}</span>{version.error && <span className="sub">{version.error}</span>}</td><td>{version.created_by__username || "—"}<span className="sub">{version.created_at ? fmtDateTime(version.created_at) : "—"}</span></td><td className="num">{version.products_count ?? "—"}</td><td className="num">{version.regions_count ?? "—"}</td><td className="num">{version.errors_count ?? "—"}</td><td><div className="ip-row"><Button size="s" onClick={() => { selectedRef.current = String(version.id); setSelected(String(version.id)); setReviewedRevision(version.edit_revision || 0); }}>{String(version.id) === selected ? "Выбран" : "Открыть"}</Button>{version.status === "success" && <Button size="s" variant="ghost" icon="download" aria-label="Скачать цены версии" disabled={exporting} onClick={() => download(version)} />}{String(version.id) === selected && activationActions}{version.status === "success" && <Button variant="ghost" size="s" icon="table" onClick={() => { selectedRef.current = String(version.id); setSelected(String(version.id)); setReviewedRevision(version.edit_revision || 0); onNavigate("prices"); }}>Цены</Button>}</div></td></tr>)}</tbody></table></div></Panel>
+      <Panel title="Все расчёты" sub="Утверждение действует внутри системы. Автоматической отправки цен в 1С нет."><div className="sm-iprice-table"><table className="ip-table"><thead><tr><th>Расчёт</th><th>Состояние</th><th>Запуск</th><th className="num">Товаров</th><th className="num">Цен по регионам</th><th className="num">Без цены</th><th /></tr></thead><tbody>{versions?.map(version => <tr key={`version-${version.id}`} className={String(version.id) === selected ? "selected" : ""}><td>{fmtDate(version.calculation_date)}<span className="sub">№{version.version_number}{!version.is_current && " · есть новее за эту дату"}</span></td><td><span className={`ip-tag ${version.is_active ? "orange" : version.status === "failed" ? "red" : "gray"}`}>{versionLabel(version, versions.find(item => item.status === "success")?.id)}</span>{version.error && <span className="sub">{version.error}</span>}</td><td>{version.created_by__username || "—"}<span className="sub">{version.created_at ? fmtDateTime(version.created_at) : "—"}</span></td><td className="num">{version.products_count ?? "—"}</td><td className="num">{version.regions_count ?? "—"}</td><td className="num">{version.errors_count ?? "—"}</td><td><div className="ip-row"><Button size="s" onClick={() => { selectedRef.current = String(version.id); setSelected(String(version.id)); setReviewedRevision(version.edit_revision || 0); }}>{String(version.id) === selected ? "Выбран" : "Открыть"}</Button>{version.status === "success" && <Button size="s" variant="ghost" icon="download" aria-label="Скачать цены версии" disabled={exporting} onClick={() => download(version)} />}{String(version.id) === selected && activationActions}{version.status === "success" && !version.is_active && <Button variant="ghost" size="s" icon="compare" onClick={() => { const base = versions.find(v => v.is_active && v.id !== version.id) || versions.find(v => v.status === "success" && v.id !== version.id); if (base) { selectedRef.current = String(version.id); setSelected(String(version.id)); setInitialComparison(String(base.id)); onNavigate("compare"); } }}>Изменения</Button>}{version.status === "success" && <Button variant="ghost" size="s" icon="table" onClick={() => { selectedRef.current = String(version.id); setSelected(String(version.id)); setReviewedRevision(version.edit_revision || 0); onNavigate("prices"); }}>Цены</Button>}</div></td></tr>)}</tbody></table></div></Panel>
       {versions?.length === 0 && <div className="ip-empty"><b>Расчётов пока нет</b><span>Загрузите данные и посчитайте цены.</span></div>}
     </>}
     {stale && <p role="alert">Расчёт изменён другим пользователем. Обновите и проверьте данные перед утверждением. <button onClick={() => { setReviewedRevision(selectedVersion.edit_revision || 0); setRevision(value => value + 1); }}>Обновить расчёт</button></p>}
     {historicalRoutes && <p role="status">Историческая версия с маршрутами: доступны просмотр и выгрузка. Для изменения цен создайте новый расчёт.</p>}
 
-    {selected && view === "prices" && selectedVersion?.status === "success" && <CalculationRows key={`rows-${selected}-${selectedVersion.status}-${revision}-${restoration}`} id={selected} initialScope={priceScope.snapshotId === selected ? priceScope : {}} onScopeChange={rememberScope} canEdit={editable} canEditParameters={editableParameters} onSaved={changed} />}
+    {selected && view === "prices" && selectedVersion?.status === "success" && <CalculationRows key={`rows-${selected}-${selectedVersion.status}-${restoration}`} revision={revision} id={selected} initialScope={priceScope.snapshotId === selected ? priceScope : {}} onScopeChange={rememberScope} canEdit={editable} canEditParameters={editableParameters} onSaved={changed} />}
     {selected && view === "compare" && <SelectMarketCompare key={`compare-${selected}-${initialComparison}-${restoration}`} snapshotId={selected} baseId={initialComparison} exportAction={selectedVersion?.status === "success" ? <Button icon="download" disabled={exporting} onClick={() => download()}>{exporting ? "Готовим документ…" : "Скачать Excel"}</Button> : null} onBack={() => onNavigate("versions")} />}
-    {selected && view === "market" && selectedVersion?.status === "success" && <MarketAnalysis key={`market-${selected}-${revision}-${restoration}`} snapshotId={selected} canEdit={editableParameters} canEditPrice={editable} onSaved={changed} initialZone={initialZone} onOpenList={scope => { setPriceScope({ ...scope, snapshotId: selected }); onNavigate("prices"); }} />}
-    {selected && view === "versions" && <SnapshotHistory key={`history-${selected}-${revision}`} snapshotId={selected} />}
+    {selected && view === "market" && selectedVersion?.status === "success" && <MarketAnalysis key={`market-${selected}-${restoration}`} refreshRevision={revision} snapshotId={selected} canEdit={editableParameters} canEditPrice={editable} onSaved={changed} initialZone={initialZone} onOpenList={scope => { setPriceScope({ ...scope, snapshotId: selected }); onNavigate("prices"); }} />}
   </div>;
 }

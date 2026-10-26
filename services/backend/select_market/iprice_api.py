@@ -76,6 +76,7 @@ class SourcesStatusView(PriceFileView):
     http_method_names = ['get', 'head', 'options']
     def get(self, request):
         from .iprice_models import IPriceSourceImport, IPricePriceImport
+        from django.db.models import Max
         from .iprice_domain_models import ParserMasterPipelineRun
         from datasets.services.parsers.queue_execution import enabled
         from datasets.services.parsers.global_queue import queue_status
@@ -83,7 +84,7 @@ class SourcesStatusView(PriceFileView):
         return Response({
             'can_edit': user_can_edit_dashboard(request.user, self.dashboard),
             'parsers_enabled': enabled(),
-            'imports': list(IPriceSourceImport.objects.order_by('-id').values('id', 'kind', 'filename', 'created_at')[:20]),
+            'imports': list(IPriceSourceImport.objects.filter(id__in=IPriceSourceImport.objects.values('kind').annotate(last=Max('id')).values('last')).order_by('-id').values('id', 'kind', 'filename', 'created_at')),
             'price_imports': list(IPricePriceImport.objects.order_by('-date_add').values('id', 'filename', 'date', 'rows', 'revision', 'date_add')[:10]),
             'queue': queue_status(organization=request.organization) if enabled() else [],
             'run': {'id': run.pk, 'status': run.status, 'step': run.current_step,

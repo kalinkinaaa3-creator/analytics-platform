@@ -1,8 +1,7 @@
 import { fmtPct } from "./archiveFormat";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
-import { Button, Panel } from "./ui/primitives";
-import Icon from "./ui/Icon";
+import { Button, Panel, Drawer } from "./ui/primitives";
 import { errorText } from "./format";
 
 import { PriceZonesContext as Context, usePriceZones } from "./priceZonesContext";
@@ -24,10 +23,11 @@ export function PriceZonesProvider({ children }) {
 
 export function ZoneSettings({ canEdit, onSaved }) {
   const { config, error } = usePriceZones();
-  return <details className="ip-advanced"><summary><Icon name="settings" size={16} />Пороги цветов{config && <span className="small muted">Синий: ниже {fmtPct(config.below_market_threshold)} · зелёный: до {fmtPct(config.above_market_threshold, { sign: true })} · красный: выше {fmtPct(config.critical_threshold, { sign: true })}</span>}</summary>
+  const [open, setOpen] = useState(false);
+  return <><Button size="s" icon="settings" onClick={() => setOpen(true)}>Пороги цветов</Button><Drawer open={open} onClose={() => setOpen(false)} title="Пороги цветов">{config && <p className="small muted">Синий: ниже {fmtPct(config.below_market_threshold)} · зелёный: до {fmtPct(config.above_market_threshold, { sign: true })} · красный: выше {fmtPct(config.critical_threshold, { sign: true })}</p>}
     {error && <p role="alert">{error}</p>}
     {config ? <ZoneForm key={JSON.stringify(config)} config={config} canEdit={canEdit} onSaved={onSaved} /> : !error && <p role="status" className="sm-iprice-loading">Загружаем пороги…</p>}
-  </details>;
+  </Drawer></>;
 }
 
 function ZoneForm({ config, canEdit, onSaved }) {

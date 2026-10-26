@@ -1,3 +1,7 @@
+import { readScope, writeScope } from "./scopeAddress";
+import { CardCollection } from "./CardCollection";
+import { ColorSwatch } from "./ColorSwatch";
+import { getIPriceCompetitorSourceLabel } from "../product/ipriceProductLabels";
 import { Term } from "./ui/Term";
 import { ProductImage } from "./ProductImage";
 import { fmtNumber, fmtPct, fmtMoney } from "./archiveFormat";
@@ -7,10 +11,8 @@ import { ZoneSettings } from "./PriceZones";
 import { ZoneTag } from "./ZoneTag";
 import { issues } from "./issueLabels";
 import { CompetitorCard, SelectionModal } from "./CompetitorCard";
-import { saveCompetitorSelection } from "./competitorSelection";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
-import { useConfirm } from "./ui/useConfirm";
 import { api } from "../../api/client";
 import { errorText } from "./format";
 import { Corridor } from "./Corridor";
@@ -24,9 +26,9 @@ const root = "/v1/select-market/iprice/snapshots/";
 const zones = { below_market: "Ниже рынка", in_market: "В рынке", above_market: "Выше рынка", critical_above: "Критически выше рынка", no_market_data: "Нет данных рынка" };
 function readMarketScope(snapshotId) {
   try {
-    const value = JSON.parse(new URLSearchParams(window.location.hash.slice(1)).get("market_scope") || "{}");
+    const value = readScope(new URLSearchParams(window.location.hash.slice(1)), "market_scope");
     if (!value || String(value.snapshotId) !== String(snapshotId)) return {};
-    const hierarchy = value.hierarchy === "classification" ? "classification" : "1c";
+    const hierarchy = value.hierarchy === "1c" ? "1c" : "classification";
     const path = {};
     for (const key of hierarchy === "1c" ? ["group_1", "group_2", "group_3", "group_4"] : ["category", "subcategory", "subcategory_type"]) {
       if (typeof value.path?.[key] !== "string") break;
@@ -43,7 +45,7 @@ function readMarketScope(snapshotId) {
   } catch { return {}; }
 }
 
-export function MarketAnalysis({ snapshotId, canEdit, canEditPrice, onSaved, initialZone = "", onOpenList }) {
+export function MarketAnalysis({ refreshRevision = 0, snapshotId, canEdit, canEditPrice, onSaved, initialZone = "", onOpenList }) {
   const navigate = useNavigate();
   const [product, setProduct] = useState(null);
   const [selection, setSelection] = useState({ key: "", codes: [], all: false });
@@ -76,7 +78,7 @@ export function MarketAnalysis({ snapshotId, canEdit, canEditPrice, onSaved, ini
   const [error, setError] = useState("");
   const [path, setPath] = useState(initial.path || {});
   const [refresh, setRefresh] = useState(0);
-  const [hierarchy, setHierarchy] = useState(initial.hierarchy || "1c");
+  const [hierarchy, setHierarchy] = useState(initial.hierarchy || "classification");
   const [filters, setFilters] = useState(initial.filters || {});
   const filtersKey = JSON.stringify(filters);
   const marketView = !comparison || comparison === "groups";
@@ -85,8 +87,9 @@ export function MarketAnalysis({ snapshotId, canEdit, canEditPrice, onSaved, ini
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.slice(1));
     const encoded = JSON.stringify({ snapshotId, zone, search: query, ordering, comparison, page, hierarchy, path: JSON.parse(pathKey), filters: JSON.parse(filtersKey) });
-    if (params.get("market_scope") === encoded) return;
-    params.set("market_scope", encoded);
+    const before = params.toString();
+    writeScope(params, "market_scope", JSON.parse(encoded));
+    if (params.toString() === before) return;
     navigate({ pathname: window.location.pathname, search: window.location.search, hash: `#${params}` }, { replace: true, state: window.history.state?.usr });
   }, [snapshotId, zone, query, ordering, comparison, page, hierarchy, pathKey, filtersKey, navigate]);
   const queryKey = `${snapshotId}-${comparison}-${page}-${pathKey}-${refresh}-${hierarchy}-${filtersKey}-${zone}-${query}-${ordering}`;
@@ -103,7 +106,7 @@ export function MarketAnalysis({ snapshotId, canEdit, canEditPrice, onSaved, ini
       })
       .catch(err => { if (err.code !== "ERR_CANCELED") setError("Не удалось загрузить сравнение."); });
     return () => controller.abort();
-  }, [snapshotId, comparison, page, queryKey, grouped, pathKey, hierarchy, marketView, filtersKey, zone, query, ordering]);
+  }, [snapshotId, comparison, page, queryKey, grouped, pathKey, hierarchy, marketView, filtersKey, zone, query, ordering, refreshRevision]);
   const selectionKey = JSON.stringify([snapshotId, comparison, pathKey, hierarchy, filtersKey, zone, query]);
   const selectedCodes = selection.key === selectionKey ? selection.codes : [];
   const allSelected = selection.key === selectionKey && selection.all;
@@ -113,11 +116,11 @@ export function MarketAnalysis({ snapshotId, canEdit, canEditPrice, onSaved, ini
   const sum = ready ? data.summary : null;
   const colors = { below_market: "var(--blue-500)", in_market: "var(--green-600)", above_market: "var(--orange-400)", critical_above: "var(--red-600)", no_market_data: "var(--gray-300)" };
   const bar = (items = []) => <div className="ip-bar">{items.filter(z => z.count > 0).map(z => <span key={z.key} style={{ width: `${z.percent}%`, background: colors[z.key] }} title={`${zones[z.key]}: ${z.count}`} />)}</div>;
-  if (product) return <section className="ip-stack"><nav className="ip-crumbs"><Button variant="ghost" icon="chevLeft" onClick={() => setProduct(null)}>К рынку</Button></nav><ProductDetails key={product.id} snapshotId={snapshotId} productId={product.product_id} region={product} canEdit={canEdit} canEditPrice={canEditPrice} onSaved={onSaved} onOpenProduct={openProduct} /></section>;
+  if (product) return <section className="ip-stack"><nav className="ip-crumbs"><Button variant="ghost" icon="chevLeft" onClick={() => setProduct(null)}>К рынку</Button></nav><ProductDetails key={product.id} refreshRevision={refreshRevision} snapshotId={snapshotId} productId={product.product_id} region={product} canEdit={canEdit} canEditPrice={canEditPrice} onSaved={onSaved} onOpenProduct={openProduct} /></section>;
   return <section className="ip-stack sm-market-page"><h3 className="sr-only">Рынок и изменения цен</h3>
     <Panel><div className="ip-stack sm-panel-body">
       <div className="ip-row between"><div className="ip-seg" role="group" aria-label="Разрез"><button aria-pressed={grouped} onClick={() => { setComparison("groups"); setPath({}); setPage(1); }}>По группам товаров</button><button aria-pressed={comparison === ""} onClick={() => { setComparison(""); setPath({}); setPage(1); }}>По регионам</button></div>
-        </div>
+        <ZoneSettings canEdit={canEdit} onSaved={() => setRefresh(value => value + 1)} /></div>
       <div className="ip-affix" style={{ width: 300, maxWidth: "100%" }}><span className="pre"><Icon name="search" size={16} /></span><input className="ip-input" type="search" aria-label="Найти товар на рынке" placeholder="Код 1С или название" value={search} onChange={e => setSearch(e.target.value)} /></div>
       {marketView && <ZonePicker value={zone} onChange={value => { setZone(value); setPage(1); }} />}
       <SelectMarketFilters snapshotId={snapshotId} mode={grouped ? "products" : "regions"} zone={marketView ? zone : ""} comparisonId={marketView ? undefined : comparison} search={query} filters={filters} onChange={value => { setFilters(value); setPath({}); setPage(1); }} />
@@ -140,7 +143,7 @@ export function MarketAnalysis({ snapshotId, canEdit, canEditPrice, onSaved, ini
         return <span className="ip-row" style={{ gap: 6, flexWrap: "nowrap" }} key={key}><Icon name="chev" size={12} /><Button size="s" variant="ghost" disabled={current} aria-current={current ? "page" : undefined} onClick={() => { setPath(Object.fromEntries(entries.slice(0, i + 1))); setPage(1); }}>{value}</Button></span>;
       })}</> : <b>{comparison ? "Изменения между расчётами" : "Цены по регионам"}</b>}</nav></div>
       {sum?.zones && marketView && <div className="sm-zone-summary">{bar(sum.zones)}</div>}
-      {((grouped && data.next_level) || !grouped) ? <div className="ip-tree"><div className="ip-zonebar-row head"><span>Группа</span><span className="num">Товаров</span><span>Распределение по цветам</span><button className="ip-linkbtn num" onClick={() => { setOrdering(ordering === "-median_deviation_percent" ? "median_deviation_percent" : "-median_deviation_percent"); setPage(1); }}>Разница с рынком ↕</button><span className="num">Доля сравнения</span></div>
+      {((grouped && data.next_level) || !grouped) ? <div className="ip-tree"><div className="ip-zonebar-row head"><span>Группа</span><span className="num">Товаров</span><span>Распределение по цветам</span><button className="ip-linkbtn num" onClick={() => { setOrdering(ordering === "-median_deviation_percent" ? "median_deviation_percent" : "-median_deviation_percent"); setPage(1); }}>Разница с рынком ↕</button><span className="num"><Term text="Доля наших товаров, для которых iPrice нашел цены конкурентов">Доля сравнения</Term></span></div>
         {data.results.map(item => <div className="ip-zonebar-row" key={item.key || item.id}><span className="ip-row"><button className="link" onClick={() => { if (grouped) { setPath({ ...path, [data.next_level]: item.key }); setPage(1); } else onOpenList?.({ mode: "regions", zone, search: query, filters: { ...filters, sale_region: [item.key] } }); }}>{item.label}</button>{grouped && onOpenList && <Button size="s" variant="ghost" icon="table" aria-label={`Открыть «${item.label}» в списке цен`} onClick={() => onOpenList({ zone, search: query, filters: { ...filters, ...Object.fromEntries(Object.entries({ ...path, [data.next_level]: item.key }).map(([k, v]) => [k, [v]])) } })} />}</span><span className="num">{item.product_count ?? "—"}</span>{bar(item.zones)}<span className="num">{fmtPct(item.median_deviation_percent, { percent: true, sign: true })}</span><span className="num">{fmtPct(item.market_coverage_percent, { percent: true, digits: 0 })}</span></div>)}
       </div> : <div className="sm-iprice-table"><table className="ip-table"><thead><tr>{["Фото", ...(canEdit ? ["Выбор"] : []), "Товар", ...(grouped ? [] : ["Регион"]), !marketView ? "Было" : "Сейчас", "Новая цена", !marketView ? "Изменение" : "У конкурентов", ...(marketView ? ["Зона"] : [])].map(label => <th key={label}>{label === "Выбор" ? <label className="ip-row small"><input type="checkbox" aria-label="Выбрать все товары выборки" checked={allSelected} ref={node => { if (node) node.indeterminate = !allSelected && selectedCodes.length > 0; }} onChange={event => setSelection({ key: selectionKey, codes: [], all: event.target.checked })} />Все товары</label> : label}</th>)}</tr></thead><tbody>{data.results.map((item, i) => {
         const row = !marketView ? item.comparison || item.base : item;
@@ -153,7 +156,6 @@ export function MarketAnalysis({ snapshotId, canEdit, canEditPrice, onSaved, ini
       {!data.results.length && <div className="ip-empty"><b>Строк нет</b><span>Измените фильтры или выберите другой расчёт.</span></div>}
       <Pager page={data?.pagination?.page || page} totalPages={pages} count={data?.pagination?.count} pageSize={data?.pagination?.page_size || 50} onPage={setPage} disabled={!ready} />
     </Panel>}
-    <ZoneSettings canEdit={canEdit} onSaved={() => setRefresh(value => value + 1)} />
   </section>;
 }
 
@@ -187,7 +189,7 @@ export function ProductDetails(props) {
   </>;
 }
 
-function ProductDetailsBody({ snapshotId, productId, region: initialRegion, canEdit, canEditPrice, onSaved, onOpenProduct, onBack, backLabel = "Цены" }) {
+function ProductDetailsBody({ refreshRevision = 0, snapshotId, productId, region: initialRegion, canEdit, canEditPrice, onSaved, onOpenProduct, onBack, backLabel = "Цены" }) {
   const [competitorTarget, setCompetitorTarget] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [counts, setCounts] = useState({ own: null, market: null });
@@ -202,7 +204,7 @@ function ProductDetailsBody({ snapshotId, productId, region: initialRegion, canE
     api.get(`${root}${snapshotId}/products/${productId}/`, { signal: controller.signal }).then(r => setData(r.data))
       .catch(err => { if (err.code !== "ERR_CANCELED") setError("Не удалось загрузить карточку."); });
     return () => controller.abort();
-  }, [snapshotId, productId]);
+  }, [snapshotId, productId, refreshRevision]);
   useEffect(() => {
     const controller = new AbortController();
     async function loadRegions() {
@@ -213,22 +215,22 @@ function ProductDetailsBody({ snapshotId, productId, region: initialRegion, canE
         collected.push(...response.rows.filter(row => row.product_id === productId));
         pages = response.pages; page++;
       } while (page <= pages && !controller.signal.aborted);
-      if (!controller.signal.aborted) setRegions(collected);
+      if (!controller.signal.aborted) { setRegions(collected); setRegion(current => collected.find(row => row.id === current.id) || collected[0] || current); }
     }
     loadRegions().catch(err => { if (err.code !== "ERR_CANCELED") setError("Не удалось загрузить регионы товара. Показан выбранный регион."); });
     return () => controller.abort();
-  }, [snapshotId, productId, initialRegion.snapshot_product__code_1c]);
+  }, [snapshotId, productId, initialRegion.snapshot_product__code_1c, refreshRevision]);
   const costs = [["product_cost", "Закупочная цена", "Без НДС, за месяц расчёта"],
     ["logistics_unit", "Доставка на единицу", region.include_transport ? "Транспортные расходы учитываются" : "Транспортные расходы выключены"],
     ["cost_with_logistics", "Закупка с доставкой", "Основа расчёта цены"],
     ["regional_competitor_rrp_median", "Цена конкурентов в регионе", "Середина цен пригодных аналогов"],
-    ["preliminary_rrp", "Цена по правилам компании", "С учётом коэффициента аналога или маржи эксклюзива"],
+    ["preliminary_rrp", "Цена по правилам компании", region.regional_competitor_rrp_median != null ? "С учётом коэффициента по рынку" : "С учётом маржи по себестоимости"],
     ["minimum_price", "Нижняя граница", "Защита минимальной маржи"],
     ["calculated_rrp", "Цена по расчёту", "Округлена до целого рубля"],
     ["final", "Новая цена", "С учётом подтверждённой ручной цены"]];
   return <section className="ip-stack sm-product-page">{error && <p role="alert">{error}</p>}{data ? <>
     <nav className="ip-crumbs" aria-label="Путь товара">{onBack && <button className="ip-linkbtn" onClick={onBack}>{backLabel}</button>}{[data.category, data.subcategory, data.subcategory_type].filter(Boolean).map((label, i) => <span className="ip-row" style={{ gap: 6 }} key={i}>{(onBack || i > 0) && <Icon name="chev" size={12} />}<span>{label}</span></span>)}</nav>
-    <div className="ip-row"><div className="ip-thumb"><ProductImage src={data.image} name={data.nom} /></div><div><h1>{data.nom}</h1><div className="ip-row small muted"><span className="mono">код 1С {data.code}</span><span className="ip-tag outline">{data.method === "analog" ? "По рынку" : "Эксклюзив"}</span>{data.assortment_matrix_status && <span className="ip-tag gray"><Term title="САМ" text="Место товара в ассортиментной матрице компании. Например, «2. Активный / складская программа»: товары, которые компания держит в наличии без перерывов.">САМ: {data.assortment_matrix_status}</Term></span>}{[data.material, data.color, data.modification].filter(Boolean).map((v, i) => <span className="ip-tag gray" key={i}>{v}</span>)}{data.url && /^https?:\/\//i.test(data.url) && <a href={data.url} target="_blank" rel="noreferrer">карточка на нашем сайте</a>}</div></div></div>
+    <div className="ip-row sm-product-heading"><div className="ip-thumb"><ProductImage src={data.image} name={data.nom} /></div><div className="sm-product-heading-text"><h1>{data.nom}</h1><div className="ip-row small muted"><span className="mono">код 1С {data.code}</span><span className="ip-tag outline">{data.method === "analog" ? "По рынку" : "По себестоимости"}</span>{data.assortment_matrix_status && <span className="ip-tag gray"><Term title="САМ" text="Место товара в ассортиментной матрице компании. Например, «2. Активный / складская программа»: товары, которые компания держит в наличии без перерывов.">САМ: {data.assortment_matrix_status}</Term></span>}{[data.material, data.modification].filter(Boolean).map((v, i) => <span className="ip-tag gray" key={i}>{v}</span>)}<ColorSwatch color={data.color} />{data.url && /^https?:\/\//i.test(data.url) && <a href={data.url} target="_blank" rel="noreferrer">карточка на нашем сайте</a>}</div></div>{canEdit && <ParameterEditor key={`parameters-${region.id}`} snapshotId={snapshotId} row={region} onSaved={onSaved} />}</div>
     {!![...(data.error_codes || []), ...(data.warning_codes || [])].length && <div role="alert" className={`ip-alert ${data.error_codes?.length ? "error" : "warning"}`}><div className="body"><b>{data.error_codes?.length ? "iPrice посчитал цену не во всех регионах" : "iPrice посчитал цену с замечанием"}</b><span>{[...new Set([...(data.error_codes || []), ...(data.warning_codes || [])])].map(c => issues[c] || c).join(". ")}</span></div></div>}
     <div className="ip-story">
       <div className="cell"><span className="l">Сейчас в прайсе</span><strong className="v">{fmtMoney(data.current_retail_median)}</strong></div><Icon name="chev" className="arrow" />
@@ -245,61 +247,34 @@ function ProductDetailsBody({ snapshotId, productId, region: initialRegion, canE
       <div className="ip-grid k2"><Panel title="Расчёт цены" sub="Шаги от закупочной стоимости до новой цены">
         <ol className="ip-explain sm-panel-body">{costs.map(([key, title, hint], i) => <li className={key === "final" ? "st final" : "st"} key={key}><span className="n">{i + 1}</span><div><b>{title}</b><p className="small muted">{hint}</p></div><strong className="v">{fmtMoney(key === "final" ? region.effective.rrp : region[key])}</strong></li>)}</ol>
       </Panel><Panel title="Цены для разных покупателей" sub="Оптовые цены рассчитаны по скидкам выбранного региона"><div className="sm-panel-body"><PriceLadder region={region} />
-        <dl className="sm-product-params">{[["base_analog", "Коэффициент аналога"], ["base_exclusive", "Маржа эксклюзива"], ["minimum_margin", "Минимальная маржа"], ["quantity_eurotruck", "Количество в еврофуре (справочно)"]].map(([key, title]) => <div key={key}><dt>{title}</dt><dd>{region[key] == null ? "—" : ["base_exclusive", "minimum_margin"].includes(key) ? fmtPct(region[key]) : fmtNumber(region[key], key === "base_analog" ? 6 : 0)}</dd></div>)}</dl>
+        <dl className="sm-product-params">{[...(region.regional_competitor_rrp_median != null ? [["base_analog", "Коэффициент по рынку"]] : [["base_exclusive", "Маржа по себестоимости"]]), ["minimum_margin", "Минимальная маржа"], ["quantity_eurotruck", "Количество в еврофуре (справочно)"]].map(([key, title]) => <div key={key}><dt>{title}</dt><dd>{region[key] == null ? "—" : ["base_exclusive", "minimum_margin"].includes(key) ? fmtPct(region[key]) : fmtNumber(region[key], key === "base_analog" ? 2 : 0)}</dd></div>)}</dl>
       </div></Panel></div>
-      {canEdit && <ParameterEditor key={`parameters-${region.id}`} snapshotId={snapshotId} row={region} onSaved={onSaved} />}
     </>}
-    {tab === "competitors" && <Panel title="Конкуренты в расчёте" sub="Пригодные цены и регионы аналогов" actions={<Button size="s" variant="ghost" onClick={() => setShowHistory(true)}>История и состав аналогов</Button>}><div className="ip-stack sm-panel-body">
+    {tab === "competitors" && <Panel title="Конкуренты в расчёте" sub="Пригодные цены и регионы аналогов" actions={<Button size="s" variant="ghost" onClick={() => setShowHistory(true)}>История учёта</Button>}><div className="ip-stack sm-panel-body">
       {!data.competitors.length && <div className="ip-empty"><b>Данных конкурентов нет</b></div>}
-      <div className="ip-cards">{(data.competitor_cards || []).map(card => <CompetitorCard key={card.group_key} card={card} editable={canEdit} onChangeMode={(item, mode) => setCompetitorTarget({ card: item, mode })} />)}</div>
+      <CardCollection items={data.competitor_cards || []}>{card => <CompetitorCard key={card.group_key} card={card} editable={canEdit} onChangeMode={(item, mode) => setCompetitorTarget({ card: item, mode })} />}</CardCollection>
       {competitorTarget && <SelectionModal target={competitorTarget} snapshotId={snapshotId} productId={productId} revision={data.edit_revision} onClose={() => setCompetitorTarget(null)} onSaved={onSaved} />}
     </div></Panel>}
-    <div hidden={tab !== "market"}><MarketAssortment snapshotId={snapshotId} productId={productId} canEdit={canEdit} onSaved={onSaved} onCount={value => setCounts(current => ({ ...current, market: value }))} onHistory={() => setShowHistory(true)} /></div>
-    <Drawer open={showHistory} onClose={() => setShowHistory(false)} title="История и состав аналогов"><CompetitorEditor expanded snapshotId={snapshotId} productId={productId} canEdit={canEdit} onSaved={onSaved} /></Drawer>
-    <div hidden={tab !== "own"}><OwnAssortment snapshotId={snapshotId} productId={productId} onOpenProduct={onOpenProduct} onCount={value => setCounts(current => ({ ...current, own: value }))} /></div>
-    <Drawer open={editing} onClose={() => setEditing(false)} title={`Цена: ${region.sale_region}`} sub={data.nom}><PriceEditor key={region.id} snapshotId={snapshotId} row={region} onSaved={onSaved} /></Drawer>
+    <div hidden={tab !== "market"}><MarketAssortment refreshRevision={refreshRevision} snapshotId={snapshotId} productId={productId} canEdit={canEdit} onSaved={onSaved} onCount={value => setCounts(current => ({ ...current, market: value }))} onHistory={() => setShowHistory(true)} /></div>
+    <Drawer open={showHistory} onClose={() => setShowHistory(false)} title="История учёта"><CompetitorEditor expanded snapshotId={snapshotId} productId={productId} canEdit={canEdit} onSaved={onSaved} /></Drawer>
+    <div hidden={tab !== "own"}><OwnAssortment refreshRevision={refreshRevision} snapshotId={snapshotId} productId={productId} onOpenProduct={onOpenProduct} onCount={value => setCounts(current => ({ ...current, own: value }))} /></div>
+    <Drawer open={editing} onClose={() => setEditing(false)} title={`Цена: ${region.sale_region}`} sub={data.nom}><PriceEditor key={region.id} refreshRevision={refreshRevision} snapshotId={snapshotId} row={region} onSaved={onSaved} /></Drawer>
   </> : !error && <p role="status" className="sm-iprice-loading">Загружаем карточку…</p>}</section>;
 }
 
-function CompetitorEditor({ snapshotId, productId, canEdit, onSaved, expanded = false }) {
-  const [confirm, confirmation] = useConfirm();
+function CompetitorEditor({ snapshotId, productId }) {
   const [data, setData] = useState(null);
-  const [page, setPage] = useState(1);
-  const [reason, setReason] = useState("");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
-    api.get(`${root}${snapshotId}/products/${productId}/competitors/`, { params: { page }, signal: controller.signal }).then(r => { setData(r.data); setError(""); })
-      .catch(err => { if (err.code !== "ERR_CANCELED") setError("Не удалось загрузить состав аналогов."); });
+    api.get(`${root}${snapshotId}/products/${productId}/competitors/`, { signal: controller.signal }).then(r => setData(r.data))
+      .catch(err => { if (!controller.signal.aborted) setError(errorText(err)); });
     return () => controller.abort();
-  }, [snapshotId, productId, page]);
-  async function change(id, mode) {
-    if (busy || !reason.trim()) return;
-    if (!await confirm("Изменить состав аналогов и пересчитать товар? Ручные цены этого товара потребуется подтвердить заново.")) return;
-    setBusy(true); setError("");
-    try {
-      await saveCompetitorSelection({ snapshotId, productId, keys: [id], mode, reason, revision: data.edit_revision });
-      onSaved();
-    } catch (err) { setError(errorText(err, "Не удалось изменить состав аналогов.")); }
-    finally { setBusy(false); }
-  }
-  const names = { auto: "Авто", include: "Включён вручную", exclude: "Исключён" };
-  return <details className="sm-competitor-editor" open={expanded || undefined}><summary>Состав аналогов и история</summary><div className="sm-competitor-editor-body">{confirmation}
-    <p>Доступны активные позиции конкурентов с той же классификацией. Изменение пересчитывает товар и требует повторного подтверждения ручных цен.</p>
-    {error && <p role="alert">{error}</p>}
-    {data && <>
-      {canEdit && data.editable && <label className="ip-field">Причина изменения аналогов<input className="ip-input" value={reason} maxLength={2000} disabled={busy} onChange={e => setReason(e.target.value)} /></label>}
-      {!data.items.length && <div className="ip-empty"><b>Нет подходящих позиций</b><span>Проверьте наличие активной классификации товара и конкурентов.</span></div>}
-      {data.items.map(item => <div className="sm-competitor-editor-item" key={item.id}><p>{item.source} · {/^https?:\/\//i.test(item.url || "") ? <a href={item.url} target="_blank" rel="noopener noreferrer">{item.url}</a> : item.url} · {names[item.mode]} {item.used_in_snapshot && <span className="ip-tag green">Учтён в расчёте</span>}
-        </p>{canEdit && data.editable && <select className="ip-select" aria-label={`Участие аналога ${item.id}`} value={item.mode} disabled={busy || !reason.trim() || data.page !== page} onChange={e => change(item.id, e.target.value)}>{Object.entries(names).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>}</div>)}
-      <Pager page={page} totalPages={data.pages} count={data.count} pageSize={50} onPage={setPage} disabled={busy} />
-      <h4>Последние 50 изменений</h4>{data.changes.map(item => <p key={item.id}>Аналог {item.override__product_key_competitor} · {names[item.selection_mode]} · {item.changed_by__username} · {new Date(item.date_add).toLocaleString("ru-RU")} · {item.reason}</p>)}
-    </>}
-  </div></details>;
+  }, [snapshotId, productId]);
+  return <div className="ip-stack">{error && <p role="alert">{error}</p>}{!data && !error && <p role="status" className="sm-iprice-loading">Загружаем историю…</p>}{data && <><h3>Последние 50 изменений</h3>{!data.changes.length && <p>Изменений пока нет.</p>}{data.changes.slice(0, 50).map(item => <div className="ip-panel pad" key={item.id}>Аналог {item.override__product_key_competitor} · {({auto:"Авто",include:"Учтён",exclude:"Исключён"})[item.selection_mode]} · {item.changed_by__username} · {new Date(item.date_add).toLocaleString("ru-RU")}<p>{item.reason}</p></div>)}</>}</div>;
 }
 
-function OwnAssortment({ snapshotId, productId, onOpenProduct, onCount }) {
+function OwnAssortment({ refreshRevision, snapshotId, productId, onOpenProduct, onCount }) {
   const countCallback = useRef(onCount);
   useEffect(() => { countCallback.current = onCount; }, [onCount]);
   const [data, setData] = useState(null);
@@ -309,16 +284,22 @@ function OwnAssortment({ snapshotId, productId, onOpenProduct, onCount }) {
     api.get(`${root}${snapshotId}/products/${productId}/own/`, { signal: controller.signal }).then(r => { setData(r.data); countCallback.current(r.data.results.length); })
       .catch(err => { if (err.code !== "ERR_CANCELED") setError("Не удалось загрузить собственную линейку."); });
     return () => controller.abort();
-  }, [snapshotId, productId]);
+  }, [snapshotId, productId, refreshRevision]);
   return <Panel title="Наша линейка" sub="Проверьте порядок цен внутри линейки: ведро на 20 л должно стоить дороже ведра на 10 л."><div className="sm-own-assortment">
     {error && <p role="alert">{error}</p>}{!data && !error && <p className="sm-iprice-loading" role="status">Загружаем линейку…</p>}
     {data?.unavailable_reason && <p role="status">{data.unavailable_reason}</p>}
     {data && !data.results.length && !data.unavailable_reason && <div className="ip-empty"><b>Других товаров этой классификации нет</b></div>}
-    <div className="sm-iprice-table"><table className="ip-table"><thead><tr><th>Товар</th><th>Подкатегория</th><th>Свойства</th><th>Способ расчёта</th><th className="num">У конкурентов <Term icon title="У конкурентов" text="Медиана пригодных цен конкурентов." /></th><th className="num">Новая цена <Term icon title="Новая цена" text="Итоговая цена с учётом подтверждённой ручной цены." /></th></tr></thead><tbody>{data?.results.map(item => <tr key={item.snapshot_product_id}><td><button className="ip-linkbtn sm-own-product-name" onClick={() => onOpenProduct?.(item.snapshot_product_id)}>{item.name}</button><span className="sub">{item.code_1c}</span></td><td>{item.subcategory_type || "—"}</td><td>{[item.material, item.color, item.modification].filter(Boolean).join(", ") || "—"}</td><td><span className="ip-tag outline"><Icon name={item.pricing_method === "analog" ? "compare" : "wallet"} size={12} />{item.pricing_method === "analog" ? "По рынку" : "Эксклюзив"}</span></td><td className="num">{fmtMoney(item.market_price)}</td><td className="num">{fmtMoney(item.final_price)}</td></tr>)}</tbody></table></div>
+    {data && <CardCollection items={data.results} filters={[["modification", "Модификация"], ["material", "Материал"], ["color", "Цвет"]]}>{item => <article className="ip-card sm-own-card" key={item.snapshot_product_id}>
+      <div className="ip-card-top"><div className="ip-thumb"><ProductImage src={item.image} name={item.name} /></div><div style={{minWidth:0,flex:1}}><button className="ip-linkbtn sm-own-product-name" onClick={() => onOpenProduct?.(item.snapshot_product_id)}>{item.name}</button><span className="sub">{item.code_1c}</span></div></div>
+      <div className="ip-row"><span className="ip-tag outline"><Icon name={item.pricing_method === "analog" ? "compare" : "wallet"} size={12} />{item.pricing_method === "analog" ? "По рынку" : "По себестоимости"}</span><ColorSwatch color={item.color} />{[item.material,item.modification].filter(Boolean).map((value,i)=><span className="ip-tag gray" key={i}>{value}</span>)}</div>
+      <div><span className="small muted">Новая цена</span><div className="price">{fmtMoney(item.final_price)}</div></div>
+      <div className="small muted">У конкурентов: {fmtMoney(item.market_price)}</div>
+      <Button size="s" onClick={() => onOpenProduct?.(item.snapshot_product_id)}>Открыть товар</Button>
+    </article>}</CardCollection>}
   </div></Panel>;
 }
 
-function MarketAssortment({ snapshotId, productId, canEdit, onSaved, onCount, onHistory }) {
+function MarketAssortment({ refreshRevision, snapshotId, productId, canEdit, onSaved, onCount, onHistory }) {
   const countCallback = useRef(onCount);
   useEffect(() => { countCallback.current = onCount; }, [onCount]);
   const [target, setTarget] = useState(null);
@@ -330,13 +311,13 @@ function MarketAssortment({ snapshotId, productId, canEdit, onSaved, onCount, on
     api.get(`${root}${snapshotId}/products/${productId}/market/`, { signal: controller.signal }).then(r => { setData(r.data); countCallback.current(r.data.counts.cards); })
       .catch(err => { if (err.code !== "ERR_CANCELED") setError("Не удалось загрузить рынок категории."); });
     return () => controller.abort();
-  }, [snapshotId, productId]);
+  }, [snapshotId, productId, refreshRevision]);
   const cards = (data?.results || []).filter(card => !onlyFree || !card.is_used_in_snapshot);
-  return <Panel title="Рынок категории" sub="Активная классификация конкурентов; цены отбираются на дату расчёта. Эти карточки сами по себе не добавляют аналог в расчёт." actions={<div className="ip-row"><Button size="s" variant="ghost" onClick={onHistory}>История и состав аналогов</Button><label className="ip-check small"><input type="checkbox" checked={onlyFree} onChange={e => setOnlyFree(e.target.checked)} />Только неучтённые</label></div>}>
+  return <Panel title="Рынок категории" sub="Активная классификация конкурентов; цены отбираются на дату расчёта. Эти карточки сами по себе не добавляют аналог в расчёт." actions={<div className="ip-row"><Button size="s" variant="ghost" onClick={onHistory}>История учёта</Button><label className="ip-check small"><input type="checkbox" checked={onlyFree} onChange={e => setOnlyFree(e.target.checked)} />Только неучтённые</label></div>}>
     <div className="ip-stack sm-panel-body">{error && <p role="alert">{error}</p>}{!data && !error && <p className="sm-iprice-loading" role="status">Загружаем рынок категории…</p>}{data?.unavailable_reason && <p>{data.unavailable_reason}</p>}
       {data && <p className="small muted">Всего карточек: {data.counts.cards} · учтены в расчёте: {data.counts.used_in_snapshot ?? 0}</p>}
       {data && !cards.length && !data.unavailable_reason && <div className="ip-empty"><b>Нет товаров для выбранного отбора</b></div>}
-      <div className="ip-cards">{cards.map(card => <CompetitorCard key={JSON.stringify(card.group_key)} card={card} editable={canEdit && data.editable} onChangeMode={(card, mode) => setTarget({ card, mode })} />)}</div>
+      <CardCollection items={cards} filters={[["modification","Модификация"],["material","Материал"],["color","Цвет"],["source","Конкурент",getIPriceCompetitorSourceLabel]]}>{card => <CompetitorCard key={JSON.stringify(card.group_key)} card={card} editable={canEdit && data.editable} onChangeMode={(card, mode) => setTarget({ card, mode })} />}</CardCollection>
       {target && <SelectionModal target={target} snapshotId={snapshotId} productId={productId} revision={data.edit_revision} onClose={() => setTarget(null)} onSaved={onSaved} />}
     </div>
   </Panel>;

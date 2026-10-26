@@ -34,8 +34,9 @@ export function SelectMarketIPrice({ dashboard }) {
   function sectionAddress(next, tab, reset = false) {
     const params = new URLSearchParams(window.location.hash.slice(1));
     if (reset) ["product", "row", "price_scope", "market_scope", "compare_scope", "compare_product", "compare_snapshot", "compare_region"].forEach(key => params.delete(key));
+    if (reset) for (const key of [...params.keys()]) if (/^[pmc]_/.test(key)) params.delete(key);
     params.set("suc", next);
-    if (tab) params.set("data", tab);
+    if (next !== "data") params.delete("data"); else if (tab) params.set("data", tab);
     return { pathname: location.pathname, search: location.search, hash: `#${params}` };
   }
   function setView(next, tab) {
@@ -47,7 +48,7 @@ export function SelectMarketIPrice({ dashboard }) {
   const [statusError, setStatusError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
-  const [priceDate, setPriceDate] = useState("");
+  const [priceDate, setPriceDate] = useState(() => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
   const [uploads, setUploads] = useState({});
   const mounted = useRef(false);
   const actionPending = useRef(false);
@@ -163,7 +164,7 @@ export function SelectMarketIPrice({ dashboard }) {
             <ul>{[
               ...state.price_imports.map(item => ({ ...item, kind: "price", created_at: item.date_add || item.date })),
               ...state.imports,
-            ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 10).map(item => <li key={item.kind + "-" + item.id}>{sources.find(source => source[0] === item.kind)?.[1] || item.kind}: {item.filename} · {new Date(item.created_at).toLocaleString("ru-RU")}{item.kind === "price" && ` · прайс за ${item.date} · ${item.rows} строк · версия ${item.revision}`}</li>)}</ul>
+            ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).filter((item, index, all) => all.findIndex(other => other.kind === item.kind) === index).map(item => <li key={item.kind + "-" + item.id}>{sources.find(source => source[0] === item.kind)?.[1] || item.kind}: {item.filename} · {new Date(item.created_at).toLocaleString("ru-RU")}{item.kind === "price" && ` · прайс за ${item.date} · ${item.rows} строк · версия ${item.revision}`}</li>)}</ul>
           </div></Panel></>}
         </>}
       </>}

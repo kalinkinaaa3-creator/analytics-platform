@@ -6,7 +6,7 @@ import Icon from "./ui/Icon";
 const labels = { sale_region: "Регион продажи", pricing_method: "Способ расчёта", calculation_status: "Статус товара", group_1: "Группа 1", group_2: "Группа 2", group_3: "Группа 3", group_4: "Группа 4",
   is_classified: "Наличие классификации", category: "Категория", subcategory: "Подкатегория",
   subcategory_type: "Тип подкатегории", color: "Цвет", material: "Материал", modification: "Модификация", item_type: "Тип позиции" };
-const display = (key, value) => key === "pricing_method" ? ({ analog: "По рынку", exclusive: "Эксклюзив" })[value] || value : key === "calculation_status" ? ({success: "Готово", warning: "Есть замечание", error: "Нет цены"})[value] || value : value === "__empty__" ? "Не заполнено" : key === "is_classified" ? (value === "true" ? "Классифицирован" : "Без классификации") : value;
+const display = (key, value) => key === "pricing_method" ? ({ analog: "По рынку", exclusive: "По себестоимости" })[value] || value : key === "calculation_status" ? ({success: "Готово", warning: "Есть замечание", error: "Нет цены"})[value] || value : value === "__empty__" ? "Не заполнено" : key === "is_classified" ? (value === "true" ? "Классифицирован" : "Без классификации") : value;
 
 function Options({ name, values, selected, toggle }) {
   const [query, setQuery] = useState("");

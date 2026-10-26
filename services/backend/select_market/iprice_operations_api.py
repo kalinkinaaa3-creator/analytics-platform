@@ -134,7 +134,7 @@ class SnapshotHistoryView(PriceFileView):
             raise ValidationError('Страница не найдена.')
         return Response({'activations': snapshot.parameters.get('activation_history', []),
             'approvals': list(paginator.page(page)), 'page': page, 'pages': paginator.num_pages, 'count': paginator.count,
-            'parameter_changes': list(IPriceParameterChangeLog.objects.filter(snapshot_id=snapshot.pk).order_by('-id').values(
+            'parameter_changes': [] if 'row_id' in request.query_params else list(IPriceParameterChangeLog.objects.filter(snapshot_id=snapshot.pk).order_by('-id').values(
                 'id', 'user__username', 'changes', 'filters', 'affected', 'status', 'created_at', 'reason')[:50])})
 
 
