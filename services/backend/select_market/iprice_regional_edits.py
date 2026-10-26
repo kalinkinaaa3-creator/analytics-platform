@@ -43,10 +43,12 @@ def preview(snapshot, filters, search='', list_scope=None):
 
 
 @transaction.atomic
-def apply(*, snapshot, filters, search='', list_scope=None, expected_scope=None, coefficients=None, discounts=None, delivery=None, user=None, expected_revision=None):
+def apply(*, snapshot, filters, search='', list_scope=None, expected_scope=None, coefficients=None, discounts=None, delivery=None, user=None, expected_revision=None, reason=''):
     from datasets.services.iprice_snapshot_builder import _lock_snapshot_workspace
     from datasets.services.iprice_workspace import IPriceWorkspace
     from datasets.services.iprice_parameter_changes import ensure_snapshot_parameters_editable, IPriceParameterChangeError
+    if not isinstance(reason, str) or not reason.strip() or len(reason.strip()) > 2000:
+        raise IPriceParameterChangeError('Укажите причину изменения (до 2000 символов).')
     workspace = IPriceWorkspace('select-market')
     _lock_snapshot_workspace(workspace)
     snapshot = IPriceSnapshot.objects.select_for_update().get(pk=snapshot.pk)
@@ -101,5 +103,5 @@ def apply(*, snapshot, filters, search='', list_scope=None, expected_scope=None,
     IPriceParameterChangeLog.objects.create(snapshot_id=snapshot.pk, user=user, mode=(list_scope or {}).get('mode', 'regions'),
         filters={**filters, **({'_list_scope': list_scope} if list_scope is not None else {})}, search=search,
         changes={field: value if isinstance(value, bool) else str(value) for field, value in changes.items()},
-        affected=affected, status='success', finished_at=timezone.now())
+        affected=affected, status='success', reason=reason.strip(), finished_at=timezone.now())
     return affected

@@ -5,7 +5,23 @@
 .sm-iprice :where(.sm-iprice-editor, .sm-iprice-toolbar, .sm-market-controls) > label { font-weight: 500; font-size: 13px; line-height: 18px; color: var(--text); }
 .sm-iprice [hidden] { display: none !important; }
 .sm-iprice .ip-main { width: 100%; max-width: none; }
+.sm-iprice input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+.sm-iprice input[type="number"]::-webkit-inner-spin-button,
+.sm-iprice input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .sm-iprice .ip-head { position: relative; }
+.sm-iprice .ip-select.ip-select-version {
+  appearance: none;
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234b5664' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px 16px;
+  cursor: pointer;
+}
+.sm-iprice .ip-select.ip-select-version:disabled { cursor: not-allowed; }
+@media (forced-colors: active) {
+  .sm-iprice .ip-select.ip-select-version { appearance: auto; background-image: none; }
+}
 .sm-iprice .sm-calculation-pages { gap: 20px; min-width: 0; }
 .sm-iprice .sm-panel-body { padding: 20px; }
 .sm-iprice .sm-panel-body > .ip-tag { align-self: flex-start; }
@@ -113,7 +129,7 @@
 
 
 /* Layout overrides for the embedded application shell. */
-.sm-iprice .ip-head-row { padding-left: 64px; height: 48px; }
+.sm-iprice .ip-head-row { padding-left: 64px; height: 40px; }
 .sm-iprice .ip-pager { width: 100%; box-sizing: border-box; }
 .sm-iprice .ip-pager > :last-child { margin-left: auto; }
 .sm-iprice .sm-product-name { text-align: left; justify-content: flex-start; }
@@ -127,3 +143,15 @@
 .sm-iprice .sm-market-page .ip-panel-head > .ip-crumbs { order: -1; flex: 1 1 auto; justify-content: flex-start; }
 
 .sm-iprice .ip-field > .small.muted { font-weight: 400; }
+
+/* Let wrapped segment labels determine the control height. */
+.sm-iprice .sm-competitor-card-actions .ip-seg { align-items: stretch; }
+.sm-iprice .sm-competitor-card-actions .ip-seg button { height: auto; min-height: 28px; padding: 4px 6px; line-height: 20px; overflow-wrap: anywhere; }
+.sm-iprice .sm-own-product-name { text-align: left; justify-content: flex-start; text-decoration: none; }
+.sm-iprice .sm-own-product-name:hover { text-decoration: underline; }
+.sm-iprice .sm-own-assortment > p { margin: 16px; }
+
+/* Align navigation with the platform menu button (top 5px, height 30px). */
+.app-shell.sm-workspace .content:has(.sm-iprice) { padding-top: 0; }
+.sm-iprice .sm-iprice-loading { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: var(--info-bg); color: var(--info-text); border: 1px solid var(--blue-200); border-radius: var(--r-l); font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.sm-iprice .sm-iprice-loading::before { flex: 0 0 14px; margin-right: 0; }

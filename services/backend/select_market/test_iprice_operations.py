@@ -152,7 +152,7 @@ class OperationsTests(TestCase):
         IPriceRegionalInput.objects.update(purchase_cost=999, region='REGION')
         NomenclaturePrice.objects.update(retail=999)
         apply(snapshot=self.snapshot, filters={'code_1c': [code]},
-              delivery={'include_transport': False}, expected_revision=0)
+              delivery={'include_transport': False}, expected_revision=0, reason='Delivery review')
         row.refresh_from_db()
         self.assertEqual(row.product_cost, Decimal('50'))
         self.assertEqual(row.current_retail, Decimal('100'))
@@ -162,7 +162,7 @@ class OperationsTests(TestCase):
         self.assertEqual(IPriceRegionalInput.objects.get().purchase_cost, Decimal('999'))
         self.assertFalse(IPriceRegionalInput.objects.get().include_transport)
         apply(snapshot=self.snapshot, filters={'code_1c': [code]},
-              delivery={'include_transport': True, 'logistics_unit': '12.34'}, expected_revision=1)
+              delivery={'include_transport': True, 'logistics_unit': '12.34'}, expected_revision=1, reason='Delivery review')
         row.refresh_from_db()
         self.assertEqual(row.cost_with_logistics, Decimal('62.34'))
 
@@ -173,7 +173,7 @@ class OperationsTests(TestCase):
         row.save(update_fields=['calculation_details'])
         with self.assertRaises(IPriceParameterChangeError):
             apply(snapshot=self.snapshot, filters={'code_1c': [row.snapshot_product.code_1c]},
-                  delivery={'include_transport': True}, expected_revision=0)
+                  delivery={'include_transport': True}, expected_revision=0, reason='Delivery review')
         self.snapshot.refresh_from_db()
         self.assertEqual(self.snapshot.parameters.get('edit_revision', 0), 0)
         self.assertFalse(IPriceParameterChangeLog.objects.exists())
@@ -218,7 +218,7 @@ class OperationsTests(TestCase):
     def parameters(self, **kwargs):
         return apply_iprice_parameter_changes(snapshot=self.snapshot, mode='regions',
             filters={'code_1c': ['00-А']}, search='', coefficient_values={'minimum_margin': '.2'},
-            discount_values={'small': '.15'}, user=self.user, **kwargs)
+            discount_values={'small': '.15'}, user=self.user, reason='Group review', **kwargs)
 
     def test_manual_price_derives_discounts_and_is_isolated(self):
         result = self.approve(expected_revision=0)
@@ -419,10 +419,17 @@ class OperationsTests(TestCase):
             payload = {'filters': filters, 'delivery': delivery}
             preview = request(ParameterChangeView, 'post', payload, edit=True)
             self.assertEqual(preview.status_code, 200, preview.data)
+            for invalid_reason in ('', '   ', 'x' * 2001):
+                rejected = request(ParameterChangeView, 'post', {**payload, 'preview': False,
+                                   'expected_revision': preview.data['edit_revision'], 'reason': invalid_reason}, edit=True)
+                self.assertEqual(rejected.status_code, 400)
+                self.assertIn('reason', rejected.data)
             response = request(ParameterChangeView, 'post', {**payload, 'preview': False,
-                               'expected_revision': preview.data['edit_revision']}, edit=True)
+                               'expected_revision': preview.data['edit_revision'], 'reason': '  Delivery review  '}, edit=True)
             self.assertEqual(response.status_code, 200, response.data)
             row.refresh_from_db()
             self.assertEqual(row.calculation_details['include_transport'], delivery['include_transport'])
         self.assertEqual(row.logistics_unit, Decimal('12.34'))
+        history = request(SnapshotHistoryView, 'get')
+        self.assertEqual(history.data['parameter_changes'][0]['reason'], 'Delivery review')
         self.assertEqual(request(ParameterChangeView, 'post', {'filters': {'sale_region': ['Region']}, 'delivery': {}}, edit=True).status_code, 400)

@@ -480,6 +480,7 @@ class IPriceSnapshotApproval(models.Model):
         return f'{self.snapshot_region} | revision={self.revision} | rrp={self.approved_rrp}'
 
 class IPriceParameterChangeLog(models.Model):
+    reason = models.TextField(blank=True, default='', verbose_name='Причина изменения')
     STATUS_PENDING = 'pending'
     STATUS_SUCCESS = 'success'
     STATUS_ERROR = 'error'

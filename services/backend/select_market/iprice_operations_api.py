@@ -54,6 +54,7 @@ class DeliveryInput(serializers.Serializer):
 
 
 class ParameterInput(serializers.Serializer):
+    reason = serializers.CharField(max_length=2000, required=False, allow_blank=True, default='')
     filters = serializers.DictField(child=serializers.ListField(child=serializers.CharField(max_length=1000), max_length=100), allow_empty=True)
     list_scope = RowControls(required=False)
     expected_scope = serializers.RegexField(r'^[a-f0-9]{64}$', required=False)
@@ -65,6 +66,8 @@ class ParameterInput(serializers.Serializer):
     delivery = DeliveryInput(required=False)
 
     def validate(self, attrs):
+        if not attrs['preview'] and not attrs['reason'].strip():
+            raise serializers.ValidationError({'reason': 'Укажите причину изменения.'})
         from .iprice_filters import PRODUCT_FILTERS
         from datasets.services.iprice_parameter_changes import COEFFICIENT_FIELDS, DISCOUNT_FIELDS
         if set(attrs['filters']) - set(PRODUCT_FILTERS) - {'code_1c', 'sale_region'} or (not any(attrs['filters'].values()) and 'list_scope' not in attrs):
@@ -100,7 +103,7 @@ class ParameterChangeView(PriceFileView):
                                  'edit_revision': snapshot.parameters.get('edit_revision', 0)})
             from .iprice_regional_edits import apply
             affected = apply(**args, coefficients=values['coefficients'],
-                discounts=values['discounts'], delivery=values.get('delivery'), user=request.user,
+                discounts=values['discounts'], delivery=values.get('delivery'), user=request.user, reason=values['reason'],
                 expected_revision=values['expected_revision'], expected_scope=values.get('expected_scope'))
         except IPriceParameterChangeError as exc:
             raise ValidationError(str(exc)) from exc
@@ -132,7 +135,7 @@ class SnapshotHistoryView(PriceFileView):
         return Response({'activations': snapshot.parameters.get('activation_history', []),
             'approvals': list(paginator.page(page)), 'page': page, 'pages': paginator.num_pages, 'count': paginator.count,
             'parameter_changes': list(IPriceParameterChangeLog.objects.filter(snapshot_id=snapshot.pk).order_by('-id').values(
-                'id', 'user__username', 'changes', 'filters', 'affected', 'status', 'created_at')[:50])})
+                'id', 'user__username', 'changes', 'filters', 'affected', 'status', 'created_at', 'reason')[:50])})
 
 
 class AnalysisQuery(serializers.Serializer):

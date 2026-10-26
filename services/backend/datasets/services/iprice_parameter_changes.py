@@ -304,14 +304,14 @@ def regions_for_products(regions):
 
 def apply_iprice_parameter_changes(
     *, snapshot, mode, filters, search, coefficient_values,
-    discount_values, user, expected_revision=None,
+    discount_values, user, expected_revision=None, reason='',
 ):
     from datasets.services.iprice_snapshot_builder import _snapshot_workspace
     workspace = _snapshot_workspace(snapshot)
     if workspace and workspace.code == 'select-market':
         from select_market.iprice_regional_edits import apply
         return apply(snapshot=snapshot, filters=filters, search=search, coefficients=coefficient_values,
-                     discounts=discount_values, user=user, expected_revision=expected_revision)
+                     discounts=discount_values, user=user, expected_revision=expected_revision, reason=reason)
 
     DepartureDiscount = workspace.model('DepartureDiscount') if workspace else globals()['DepartureDiscount']
     IPriceCalculationConfig = workspace.model('IPriceCalculationConfig') if workspace else globals()['IPriceCalculationConfig']

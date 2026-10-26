@@ -34,7 +34,7 @@ export function SelectionModal({ target, snapshotId, productId, revision, onClos
     finally { setBusy(false); }
   }
   return <Modal title={target.mode === "include" ? "Учитывать цену этого товара?" : target.mode === "exclude" ? "Не учитывать цену этого товара?" : "Вернуть решение системы?"} onClose={() => { if (!busy) onClose(); }} footer={<><Button disabled={busy} onClick={onClose}>Отмена</Button><Button variant="accent" disabled={busy || tooMany || !reason.trim()} onClick={save}>{busy ? "Пересчитываем…" : "Сохранить и пересчитать"}</Button></>}>
-    {tooMany && <p role="alert">В карточке больше 50 региональных позиций. Измените участие по отдельным позициям в блоке «Настроить участие в расчёте» под карточками. Групповое изменение не отправлено.</p>}
+    {tooMany && <p role="alert">В карточке больше 50 региональных позиций. Измените участие по отдельным позициям в окне «История и состав аналогов». Групповое изменение не отправлено.</p>}
     <p className="muted">Цена товара будет пересчитана во всех регионах. Ручные цены потребуется подтвердить повторно.</p><label>Причина<textarea className="ip-textarea" value={reason} maxLength={2000} disabled={busy} onChange={e => setReason(e.target.value)} /></label>{error && <p role="alert">{error}</p>}
   </Modal>;
 }

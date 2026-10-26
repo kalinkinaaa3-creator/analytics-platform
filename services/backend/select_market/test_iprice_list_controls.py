@@ -288,7 +288,7 @@ class ListControlsTests(TestCase):
         response = self.request(ParameterChangeView, 'post', snapshot_id=self.snapshot.pk, data=payload, edit_allowed=True)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['affected']['regions'], 1)
-        payload.update(preview=False, expected_revision=response.data['edit_revision'], expected_scope=response.data['affected']['scope_signature'])
+        payload.update(preview=False, reason='Review', expected_revision=response.data['edit_revision'], expected_scope=response.data['affected']['scope_signature'])
         IPricePriceZoneConfig.objects.create(above_market_threshold=Decimal('.5'), critical_threshold=Decimal('1'))
         response = self.request(ParameterChangeView, 'post', snapshot_id=self.snapshot.pk, data=payload, edit_allowed=True)
         self.assertEqual(response.status_code, 400)
