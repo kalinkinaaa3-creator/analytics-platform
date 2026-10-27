@@ -253,7 +253,11 @@ class OperationsTests(TestCase):
 
     def test_parameters_recalculate_and_preserve_manual_history(self):
         original = self.approve()
-        result = self.parameters(expected_revision=1)
+        from .iprice_regional_edits import apply, preview
+        filters = {'code_1c': [IPriceSnapshotRegion.objects.get().snapshot_product.code_1c]}
+        selection = preview(self.snapshot, filters)
+        result = apply(snapshot=self.snapshot, filters=filters, coefficients={'minimum_margin': '.2'}, discounts={'small': '.15'},
+            user=self.user, reason='Group review', expected_revision=1, preserve_manual_row_ids=[], expected_manual_signature=selection['manual_signature'])
         self.assertEqual(result['regions'], 1)
         row = IPriceSnapshotRegion.objects.get()
         self.assertEqual(row.minimum_margin, Decimal('.2'))
@@ -281,6 +285,67 @@ class OperationsTests(TestCase):
         self.assertEqual(approval.comment, 'Manual decision')
         self.assertFalse(LegacyConfig.objects.exists())
         self.assertFalse(IPriceParameterChangeLog.objects.exclude(status='success').exists())
+
+    def test_manual_price_selection_preserves_only_chosen_regions(self):
+        from .iprice_regional_edits import apply, preview
+        from .iprice_filters import filter_products
+        from .iprice_models import IPriceRegionalInput
+        original = self.approve()
+        row = IPriceSnapshotRegion.objects.get()
+        second = IPriceSnapshotRegion.objects.get()
+        second.pk = None
+        second.sale_region = 'Second region'
+        second.save()
+        second_approval = IPriceSnapshotApproval.objects.create(snapshot_region=second, revision=1, approved_rrp=160, is_current=True)
+        filters = {'code_1c': [row.snapshot_product.code_1c]}
+        selected = preview(self.snapshot, filters)
+        self.assertEqual(len(selected['manual_prices']), 2)
+        args = dict(snapshot=self.snapshot, filters=filters, coefficients={'minimum_margin': '.2'}, user=self.user,
+                    reason='Review manual prices', expected_revision=1)
+        with self.assertRaises(IPriceParameterChangeError):
+            apply(**args)
+        with self.assertRaises(IPriceParameterChangeError):
+            apply(**args, preserve_manual_row_ids=[row.pk], expected_manual_signature='0' * 64)
+        before = row.minimum_margin
+        source = IPriceRegionalInput.objects.get()
+        result = apply(**args, preserve_manual_row_ids=[row.pk], expected_manual_signature=selected['manual_signature'])
+        self.assertEqual(result['row_ids'], [second.pk])
+        self.assertEqual(result['preserved_manual_row_ids'], [row.pk])
+        row.refresh_from_db()
+        source.refresh_from_db()
+        original.refresh_from_db()
+        second_approval.refresh_from_db()
+        self.assertEqual(row.minimum_margin, before)
+        self.assertEqual(source.minimum_margin, before)
+        self.assertTrue(original.is_current)
+        self.assertFalse(second_approval.is_current)
+        self.assertTrue(filter_products(self.snapshot.products.all(), {'has_manual_price': ['true']}).exists())
+        selected = preview(self.snapshot, {'sale_region': [row.sale_region]})
+        self.snapshot.refresh_from_db()
+        apply(snapshot=self.snapshot, filters={'sale_region': [row.sale_region]}, coefficients={'minimum_margin': '.2'}, user=self.user,
+              reason='Recalculate remaining', expected_revision=self.snapshot.parameters['edit_revision'],
+              preserve_manual_row_ids=[], expected_manual_signature=selected['manual_signature'])
+        self.assertFalse(filter_products(self.snapshot.products.all(), {'has_manual_price': ['true']}).exists())
+        self.assertTrue(filter_products(self.snapshot.products.all(), {'has_manual_price': ['false']}).exists())
+
+    def test_manual_price_history_from_old_snapshot_is_informational(self):
+        from .iprice_manual_prices import manual_price_review
+        original = self.approve()
+        row = IPriceSnapshotRegion.objects.get()
+        # A different version of the same product/region has no active manual price.
+        old_product = row.snapshot_product
+        newer = IPriceSnapshot.objects.create(calculation_date=self.day, version_number=2, revision_for_date=2, is_current=False, status='success')
+        old_product.pk = None
+        old_product.snapshot = newer
+        old_product.save()
+        row.pk = None
+        row.snapshot_product = old_product
+        row.save()
+        items, _ = manual_price_review([row])
+        self.assertEqual(len(items), 1)
+        self.assertIsNone(items[0]['current'])
+        self.assertEqual(items[0]['latest']['id'], original.pk)
+        self.assertEqual(items[0]['latest']['version'], self.snapshot.version_number)
 
     def test_manual_price_below_margin_is_rejected_without_losing_approval(self):
         original = self.approve(expected_revision=0)
@@ -453,6 +518,7 @@ class OperationsTests(TestCase):
                 self.assertEqual(rejected.status_code, 400)
                 self.assertIn('reason', rejected.data)
             response = request(ParameterChangeView, 'post', {**payload, 'preview': False,
+                               'preserve_manual_row_ids': [], 'expected_manual_signature': preview.data['affected']['manual_signature'],
                                'expected_revision': preview.data['edit_revision'], 'reason': '  Delivery review  '}, edit=True)
             self.assertEqual(response.status_code, 200, response.data)
             row.refresh_from_db()

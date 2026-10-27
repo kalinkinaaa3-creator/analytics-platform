@@ -63,7 +63,8 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
       };
       else if (path.endsWith('/approval/') && request.method() === 'GET') { const price = new URL(request.url()).searchParams.get('price'); body = { price, prices: { rrp: price, small: price, medium: price, large: price }, gross: { rrp: price, small: price, medium: price, large: price }, margin: 0.4, valid: true }; }
       else if (path.endsWith('/approval/')) { const data = request.postDataJSON(); assert.equal(data.expected_revision, 0); assert.equal(data.comment, 'Причина проверки'); manualPrice = data.approved_rrp; editRevision++; body = { revision: 1 }; }
-      else if (path.endsWith('/parameters/')) { const data = request.postDataJSON(); parameterCalls++; assert.equal(data.coefficients.minimum_margin, "0.200000"); assert.deepEqual(data.delivery, { include_transport: true, logistics_unit: '12.34' }); assert.deepEqual(data.filters, {}); assert.deepEqual(data.list_scope, { mode: 'regions', zone: '', problems_only: false }); if (!data.preview) { assert.equal(data.reason, 'Group price review'); assert.equal(data.expected_revision, editRevision); assert.equal(data.expected_scope, "a".repeat(64)); editRevision++; } body = { affected: { products: 1, regions: 1, routes: 1, scope_signature: "a".repeat(64) }, edit_revision: editRevision }; }
+      else if (path.endsWith('/parameters/')) { const data = request.postDataJSON(); parameterCalls++; assert.equal(data.coefficients.minimum_margin, "0.200000"); assert.deepEqual(data.delivery, { include_transport: true, logistics_unit: '12.34' }); assert.deepEqual(data.filters, {}); assert.deepEqual(data.list_scope, { mode: 'regions', zone: '', problems_only: false }); if (!data.preview) { assert.equal(data.reason, 'Group price review'); assert.equal(data.expected_revision, editRevision); assert.equal(data.expected_scope, "a".repeat(64)); assert.equal(data.expected_manual_signature, "b".repeat(64)); assert.deepEqual(data.preserve_manual_row_ids, []); editRevision++; } body = { affected: { products: 3, regions: 3, routes: 3, scope_signature: "a".repeat(64), manual_signature: "b".repeat(64),
+        manual_prices: [1,2,3].map(id => { const decision = {id,price:"150",user:"reviewer@example.test",at:"2026-10-24T09:00:00Z",version:id === 3 ? 1 : 2}; return {row_id:id,product_id:id,code_1c:"MANUAL-"+id,name:"Manual product "+id,region:"Region",current:id === 3 ? null : decision,latest:decision}; }) }, edit_revision: editRevision }; }
       else if (path.endsWith('/activate/')) { assert.equal(request.postDataJSON().expected_revision, editRevision); approved = true; body = { id: 1, is_active: true }; }
       else if (path.endsWith('/products/3/')) body = { code: 'OWN', nom: 'Другой товар линейки', method: 'exclusive', competitors: [] };
       else if (path.endsWith('/products/1/')) body = { code: '00-А', nom: 'Тестовый ящик', method: 'exclusive', category: 'Ящики', subcategory: 'Пищевые', subcategory_type: 'С крышкой', assortment_matrix_status: '3. Под заказ / заказная позиция', competitors: [] };
@@ -379,6 +380,15 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     await page.getByLabel('Причина изменения', { exact: true }).fill('   ');
     assert.equal(await page.getByRole('button', { name: 'Применить и пересчитать' }).isDisabled(), true);
     await page.getByLabel('Причина изменения', { exact: true }).fill('  Group price review  ');
+    const allManual = page.getByRole('checkbox', {name:'Сохранить все действующие ручные цены',exact:true});
+    assert.equal(await allManual.isChecked(),true);
+    await allManual.uncheck();
+    const firstManual = page.getByRole('checkbox', {name:'Сохранить · Код 1С: MANUAL-1 · Region',exact:true});
+    await firstManual.check();
+    assert.equal(await firstManual.isChecked(),true);
+    assert.equal(await page.getByRole('checkbox', {name:'Сохранить · Код 1С: MANUAL-2 · Region',exact:true}).isChecked(),false);
+    await firstManual.uncheck();
+    await page.getByText('Код 1С: MANUAL-3 · Region · ручная цена не действует',{exact:true}).waitFor();
     await page.getByRole('button', { name: 'Применить и пересчитать' }).click();
     await page.getByRole('dialog', { name: 'Подтверждение действия' }).getByRole('button', { name: 'Подтвердить', exact: true }).click();
     await page.waitForFunction(() => !document.body.textContent.includes('Товаров: 1, региональных строк: 1.'));
@@ -591,13 +601,22 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     const history=page.getByRole('heading',{name:'История изменений параметров',exact:true});
     await history.scrollIntoViewIfNeeded();
     await page.getByRole('dialog').getByText('Система',{exact:true}).waitFor();
-    await page.getByRole('dialog').getByText('Исторический товар',{exact:true}).waitFor();
-    const targets = page.getByRole('dialog').locator('details').filter({has:page.locator('summary',{hasText:'Показать товары · 26'})});
+    await page.getByRole('dialog').getByText('Код 1С: H-ONE · Москва, Казань',{exact:true}).waitFor();
+    assert.equal(await page.getByRole('dialog').getByText('Исторический товар',{exact:true}).count(),0);
+    const targets = page.getByRole('dialog').locator('.sm-history-targets');
     await targets.locator('summary').click();
-    await targets.getByText('History product 0',{exact:true}).waitFor();
+    await targets.getByText('Код 1С: H-0 · Москва',{exact:true}).waitFor();
     await targets.getByRole('button',{name:'2',exact:true}).click();
-    await targets.getByText('History product 25',{exact:true}).waitFor();
-    assert.equal(await targets.locator('tbody tr').count(),1);
+    await targets.getByText('Код 1С: H-25 · Москва',{exact:true}).waitFor();
+    assert.equal(await targets.locator('li').count(),1);
+    const originalViewport = page.viewportSize();
+    await page.setViewportSize({width:390,height:844});
+    await targets.scrollIntoViewIfNeeded();
+    assert.ok(await targets.evaluate(el => el.scrollWidth <= el.clientWidth + 1));
+    assert.ok(await targets.locator('.ip-pager').evaluate(el => el.scrollWidth <= el.clientWidth + 1));
+    await targets.locator('summary').click();
+    assert.equal(await targets.getAttribute('open'),null);
+    await page.setViewportSize(originalViewport);
     await capture('current-parameter-history');
     await page.getByRole('dialog').getByRole('button',{name:'Закрыть',exact:true}).click();
     emptyCards=true;

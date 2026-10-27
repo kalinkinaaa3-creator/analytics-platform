@@ -97,6 +97,27 @@ const fields = [
   ["coefficients", "minimum_margin", "Минимальная маржа"],
   ["discounts", "small", "Скидка малого опта"], ["discounts", "medium", "Скидка среднего опта"], ["discounts", "large", "Скидка крупного опта"],
 ];
+function ManualPriceChoices({ items, preserved, onChange, disabled }) {
+  const [page, setPage] = useState(1);
+  const active = items.filter(item => item.current).map(item => item.row_id);
+  const rows = [...items].sort((a, b) => Number(!!b.current) - Number(!!a.current));
+  const pages = Math.max(1, Math.ceil(rows.length / 25));
+  const currentPage = Math.min(page, pages);
+  const describe = decision => `${fmtMoney(decision.price)} · ${decision.user || "Система"} · ${new Date(decision.at).toLocaleString("ru-RU")} · расчёт №${decision.version}`;
+  return <section className="ip-panel pad ip-stack sm-history-targets"><h3>Ручные цены выбранных товаров</h3>
+    <p className="small muted">Отмеченные позиции: сохранить действующую ручную цену и не менять параметры. Остальные: применить параметры и заменить ручную цену расчётной. Выбор действует отдельно для каждого региона. Цены прошлых версий показаны справочно и не восстанавливаются.</p>
+    {!!active.length && <label className="ip-check"><input type="checkbox" disabled={disabled} checked={active.every(id => preserved.includes(id))} onChange={event => onChange(event.target.checked ? active : [])} />Сохранить все действующие ручные цены</label>}
+    <div className="small muted">Сохранить: {preserved.length} · пересчитать ручные цены: {active.length - preserved.length}</div>
+    {rows.slice((currentPage - 1) * 25, currentPage * 25).map(item => <article className="sm-history-entry" key={item.row_id}>
+      {item.current ? <label className="ip-check"><input type="checkbox" disabled={disabled} checked={preserved.includes(item.row_id)} onChange={event => onChange(event.target.checked ? [...preserved, item.row_id] : preserved.filter(id => id !== item.row_id))} /><span>Сохранить · Код 1С: {item.code_1c} · {item.region}</span></label> : <span className="small muted">Код 1С: {item.code_1c} · {item.region} · ручная цена не действует</span>}
+      <strong>{item.name}</strong>
+      <span className="small">{item.current ? `Действующая ручная цена: ${describe(item.current)}` : `Последняя ручная установка: ${describe(item.latest)}`}</span>
+      {item.current && item.latest.id !== item.current.id && <span className="small muted">Последняя ручная установка в истории: {describe(item.latest)}</span>}
+    </article>)}
+    <Pager page={currentPage} totalPages={pages} count={items.length} pageSize={25} onPage={setPage} disabled={disabled} />
+  </section>;
+}
+
 export function ParameterEditor({ snapshotId, onSaved, row = null, listScope = null, selectionCount = null }) {
   const [confirm, confirmation] = useConfirm();
   const [historyRevision, setHistoryRevision] = useState(0);
@@ -108,6 +129,7 @@ export function ParameterEditor({ snapshotId, onSaved, row = null, listScope = n
   const [reason, setReason] = useState("");
   const [values, setValues] = useState({});
   const [preview, setPreview] = useState(null);
+  const [preservedManual, setPreservedManual] = useState([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
@@ -125,7 +147,7 @@ export function ParameterEditor({ snapshotId, onSaved, row = null, listScope = n
   const hasChanges = Object.values(values).some(value => value.trim()) || deliveryMode !== "" || deliveryCost !== "";
   async function submit(apply) {
     if (pending.current || Object.keys(fieldErrors).length || (apply && (!preview || !hasChanges || !reason.trim()))) return;
-    if (apply && !await confirm(`Пересчитать ${preview.affected.regions} региональных цен? Ручные цены потребуют повторного согласования.`)) return;
+    if (apply && !await confirm(`Применить параметры и пересчитать ${preview.affected.regions - preservedManual.length} региональных цен? Сохранить без изменений ${preservedManual.length} позиций с ручной ценой.`)) return;
     pending.current = true; setBusy(true); setError("");
     const payload = { filters: { ...groupFilters }, coefficients: {}, discounts: {}, preview: !apply };
     if (listScope) {
@@ -140,11 +162,11 @@ export function ParameterEditor({ snapshotId, onSaved, row = null, listScope = n
     }
     Object.entries(filters).forEach(([key, value]) => { if (value.trim()) payload.filters[key] = [value.trim()]; });
     fields.forEach(([group, key]) => { if (values[key]?.trim()) payload[group][key] = (numeric(values[key]) / (key === "base_analog" ? 1 : 100)).toFixed(6); });
-    if (apply) { payload.expected_revision = preview.edit_revision; payload.reason = reason.trim(); }
+    if (apply) { payload.expected_revision = preview.edit_revision; payload.reason = reason.trim(); payload.preserve_manual_row_ids = preservedManual; payload.expected_manual_signature = preview.affected.manual_signature; }
     if (apply && listScope) payload.expected_scope = preview.affected.scope_signature;
     try {
       const { data } = await api.post(`${root}${snapshotId}/parameters/`, payload);
-      if (apply) { setPreview(null); setReason(""); setHistoryRevision(value => value + 1); onSaved(); } else setPreview(data);
+      if (apply) { setPreview(null); setReason(""); setHistoryRevision(value => value + 1); onSaved(); } else { setPreview(data); setPreservedManual((data.affected.manual_prices || []).filter(item => item.current).map(item => item.row_id)); }
     } catch (err) { setPreview(null); setError(errorText(err)); }
     finally { pending.current = false; setBusy(false); }
   }
@@ -162,9 +184,10 @@ export function ParameterEditor({ snapshotId, onSaved, row = null, listScope = n
     <label>Доставка на единицу, руб. без НДС<input type="number" min="0" step="0.01" disabled={busy} value={deliveryCost} onChange={e => { setDeliveryCost(e.target.value); setPreview(null); }} placeholder="Не изменять" /></label>
     {["coefficients", "discounts"].map(group => <section className="ip-stack" key={group}>{group === "discounts" && <div className="ip-cap">Скидки от розничной цены для оптовых покупателей</div>}<div className="ip-grid k2">{fields.filter(([g]) => g === group).map(([, key, title]) => <label className="ip-field" key={key}>{title}<div className="ip-affix"><input className="ip-input num" aria-label={title} inputMode="decimal" disabled={busy} value={values[key] || ""} placeholder="Не изменять" aria-invalid={!!fieldErrors[key]} onChange={e => { setValues({ ...values, [key]: e.target.value }); setPreview(null); }} /><span className="suf">{key === "base_analog" ? "×" : "%"}</span></div>{fieldErrors[key] && <span className="small" role="alert">{fieldErrors[key]}</span>}</label>)}</div></section>)}
     </section>
+    {!!preview?.affected.manual_prices?.length && <ManualPriceChoices key={preview.affected.manual_signature} items={preview.affected.manual_prices} preserved={preservedManual} onChange={setPreservedManual} disabled={busy} />}
     <label className="ip-field">Причина изменения *<textarea className="ip-textarea" aria-label="Причина изменения" required maxLength={2000} disabled={busy} value={reason} onChange={e => setReason(e.target.value)} placeholder="Укажите, почему меняются цены или параметры расчёта" /><span className="small muted">Обязательна при применении. Сохраняется в истории изменений.</span></label>
-    {preview && <div className="ip-row" style={{ justifyContent: "flex-end" }}><Button disabled={busy} onClick={() => setOpen(false)}>Отмена</Button><Button variant="primary" disabled={busy || !preview.affected.regions || !hasChanges || !reason.trim() || !!Object.keys(fieldErrors).length} onClick={() => submit(true)}>Применить и пересчитать</Button></div>}
-    <p>Параметры сохраняются для следующих расчётов. Текущий расчёт пересчитывается; прежние ручные цены остаются в истории и требуют повторного согласования.</p>
+    {preview && <div className="ip-row" style={{ justifyContent: "flex-end" }}><Button disabled={busy} onClick={() => setOpen(false)}>Отмена</Button><Button variant="primary" disabled={busy || preview.affected.regions <= preservedManual.length || !hasChanges || !reason.trim() || !!Object.keys(fieldErrors).length} onClick={() => submit(true)}>Применить и пересчитать</Button></div>}
+    <p>Параметры сохраняются для следующих расчётов. Позиции, отмеченные для сохранения ручной цены, пропускаются. У остальных цена пересчитывается; прежние ручные утверждения остаются в истории.</p>
     {error && <p role="alert">{error}</p>}
     {open && <ParameterHistory key={historyRevision} snapshotId={snapshotId} rowId={row?.id} />}
   </div></Drawer></>;
@@ -236,13 +259,13 @@ function ParameterHistoryTargets({ snapshotId, item }) {
   if (!item.targets?.available) return <p className="small muted">Точный список товаров для этой записи не сохранён.</p>;
   if (item.targets.count === 1) {
     const product = item.targets.first;
-    return <div className="sm-history-product"><strong>{product.name || "Без названия"}</strong><span className="small muted">Код 1С: {product.code_1c} · {product.regions.join(", ")}</span></div>;
+    return <div className="sm-history-product small muted">Код 1С: {product.code_1c} · {product.regions.join(", ")}</div>;
   }
   if (!item.targets.count) return null;
   const ready = data?.page === page;
-  return <details onToggle={event => setOpen(event.currentTarget.open)}><summary>Показать товары · {item.targets.count}</summary>
+  return <details className="sm-history-targets" onToggle={event => setOpen(event.currentTarget.open)}><summary>{open ? "Скрыть товары" : "Показать товары"} · {item.targets.count}</summary>
     {error && <p role="alert">{error}</p>}{open && !ready && !error && <p role="status" className="sm-iprice-loading">Загружаем товары…</p>}
-    {open && ready && <><div className="sm-iprice-table"><table className="ip-table"><thead><tr><th>Товар</th><th>Код 1С</th><th>Регионы</th></tr></thead><tbody>{data.results.map(product => <tr key={product.id}><td>{product.name || "Без названия"}</td><td>{product.code_1c}</td><td>{product.regions.join(", ")}</td></tr>)}</tbody></table></div><Pager page={page} totalPages={data.pages} count={data.count} pageSize={25} onPage={value => { setError(""); setPage(value); }} /></>}
+    {open && ready && <><ul className="sm-history-target-list small muted">{data.results.map(product => <li key={product.id}>Код 1С: {product.code_1c} · {product.regions.join(", ")}</li>)}</ul><Pager page={page} totalPages={data.pages} count={data.count} pageSize={25} onPage={value => { setError(""); setPage(value); }} /></>}
   </details>;
 }
 

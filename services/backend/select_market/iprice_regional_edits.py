@@ -64,13 +64,17 @@ def preview(snapshot, filters, search='', list_scope=None):
     from datasets.services.iprice_parameter_changes import ensure_snapshot_parameters_editable
     ensure_snapshot_parameters_editable(snapshot)
     rows = resolve(snapshot, filters, search, list_scope)
-    selected = list(rows.values_list('pk', 'snapshot_product_id'))
+    rows = list(rows)
+    selected = [(row.pk, row.snapshot_product_id) for row in rows]
+    from .iprice_manual_prices import manual_price_review
+    manual_prices, manual_signature = manual_price_review(rows)
     return {'products': len({product for _, product in selected}), 'regions': len(selected), 'routes': len(selected),
-            'scope_signature': scope_signature(pk for pk, _ in selected)}
+            'scope_signature': scope_signature(pk for pk, _ in selected),
+            'manual_prices': manual_prices, 'manual_signature': manual_signature}
 
 
 @transaction.atomic
-def apply(*, snapshot, filters, search='', list_scope=None, expected_scope=None, coefficients=None, discounts=None, delivery=None, user=None, expected_revision=None, reason=''):
+def apply(*, snapshot, filters, search='', list_scope=None, expected_scope=None, coefficients=None, discounts=None, delivery=None, user=None, expected_revision=None, reason='', preserve_manual_row_ids=None, expected_manual_signature=None):
     from datasets.services.iprice_snapshot_builder import _lock_snapshot_workspace
     from datasets.services.iprice_workspace import IPriceWorkspace
     from datasets.services.iprice_parameter_changes import ensure_snapshot_parameters_editable, IPriceParameterChangeError
@@ -103,6 +107,18 @@ def apply(*, snapshot, filters, search='', list_scope=None, expected_scope=None,
         raise IPriceParameterChangeError('Состав списка изменился. Повторите предварительный просмотр и подтверждение.')
     if not rows:
         raise IPriceParameterChangeError('Нет строк для изменения.')
+    from .iprice_manual_prices import manual_price_review
+    decisions, signature = manual_price_review(rows)
+    manual_ids = {item['row_id'] for item in decisions if item['current']}
+    preserve_ids = set(preserve_manual_row_ids or [])
+    if manual_ids and (preserve_manual_row_ids is None or expected_manual_signature != signature):
+        raise IPriceParameterChangeError('Проверьте ручные цены и выберите, какие сохранить. Повторите предварительный просмотр.')
+    if preserve_ids - manual_ids:
+        raise IPriceParameterChangeError('Список сохраняемых ручных цен изменился. Повторите предварительный просмотр.')
+    preserved = [row for row in rows if row.pk in preserve_ids]
+    rows = [row for row in rows if row.pk not in preserve_ids]
+    if not rows:
+        raise IPriceParameterChangeError('Для всех выбранных позиций сохранены ручные цены. Изменений нет.')
     overrides = {}
     for row in rows:
         values = {**row.calculation_details.get('regional_input', {}), **changes}
@@ -127,7 +143,8 @@ def apply(*, snapshot, filters, search='', list_scope=None, expected_scope=None,
     snapshot.parameters = {**snapshot.parameters, 'edit_revision': snapshot.parameters.get('edit_revision', 0) + 1}
     snapshot.save(update_fields=['parameters'])
     affected = {'products': len({row.snapshot_product_id for row in rows}), 'regions': len(rows), 'routes': len(rows),
-                'row_ids': [row.pk for row in rows], 'product_details': describe_affected_products(rows)}
+                'row_ids': [row.pk for row in rows], 'product_details': describe_affected_products(rows),
+                'preserved_manual_row_ids': sorted(preserve_ids), 'preserved_products': describe_affected_products(preserved)}
     IPriceParameterChangeLog.objects.create(snapshot_id=snapshot.pk, user=user, mode=(list_scope or {}).get('mode', 'regions'),
         filters={**filters, **({'_list_scope': list_scope} if list_scope is not None else {})}, search=search,
         changes={field: value if isinstance(value, bool) else str(value) for field, value in changes.items()},

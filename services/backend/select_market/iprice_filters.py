@@ -4,7 +4,7 @@ from django.db.models import Q
 PRODUCT_FILTERS = {key: key for key in (
     'group_1', 'group_2', 'group_3', 'group_4', 'category', 'subcategory',
     'subcategory_type', 'color', 'material', 'modification', 'item_type', 'is_classified',
-    'pricing_method', 'calculation_status', 'sale_region',
+    'pricing_method', 'calculation_status', 'sale_region', 'has_manual_price',
 )}
 EMPTY = '__empty__'
 
@@ -31,6 +31,16 @@ def filter_products(queryset, filters, search='', *, skip=None, prefix=''):
         if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
             raise ValueError('Значения фильтра должны быть списком строк')
         if key == skip or not values:
+            continue
+        if key == 'has_manual_price':
+            if set(values) - {'true', 'false'}:
+                raise ValueError('Некорректный фильтр ручных цен')
+            from .iprice_domain_models import IPriceSnapshotApproval
+            from django.db.models import Exists, OuterRef
+            approvals = IPriceSnapshotApproval.objects.filter(is_current=True,
+                snapshot_region__snapshot_product_id=OuterRef('snapshot_product_id' if prefix else 'pk'))
+            queryset = queryset.annotate(_has_manual_price=Exists(approvals)).filter(
+                _has_manual_price__in=[value == 'true' for value in values])
             continue
         if key == 'sale_region':
             if prefix:
@@ -60,7 +70,10 @@ def filter_options(queryset, filters, search=''):
     result = {}
     for field in PRODUCT_FILTERS:
         scoped = filter_products(queryset, filters, search, skip=field)
-        if field == 'sale_region':
+        if field == 'has_manual_price':
+            result[field] = [value for value in ('false', 'true') if filter_products(scoped, {field: [value]}).exists()]
+            continue
+        elif field == 'sale_region':
             from .iprice_domain_models import IPriceSnapshotRegion
             values = IPriceSnapshotRegion.objects.filter(snapshot_product_id__in=scoped.values('pk')).order_by().values_list(field, flat=True).distinct()
         else:

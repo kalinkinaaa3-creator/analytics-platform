@@ -54,6 +54,8 @@ class DeliveryInput(serializers.Serializer):
 
 
 class ParameterInput(serializers.Serializer):
+    preserve_manual_row_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), required=False, allow_empty=True)
+    expected_manual_signature = serializers.RegexField(r'^[a-f0-9]{64}$', required=False)
     reason = serializers.CharField(max_length=2000, required=False, allow_blank=True, default='')
     filters = serializers.DictField(child=serializers.ListField(child=serializers.CharField(max_length=1000), max_length=100), allow_empty=True)
     list_scope = RowControls(required=False)
@@ -104,7 +106,8 @@ class ParameterChangeView(PriceFileView):
             from .iprice_regional_edits import apply
             affected = apply(**args, coefficients=values['coefficients'],
                 discounts=values['discounts'], delivery=values.get('delivery'), user=request.user, reason=values['reason'],
-                expected_revision=values['expected_revision'], expected_scope=values.get('expected_scope'))
+                expected_revision=values['expected_revision'], expected_scope=values.get('expected_scope'),
+                preserve_manual_row_ids=values.get('preserve_manual_row_ids'), expected_manual_signature=values.get('expected_manual_signature'))
         except IPriceParameterChangeError as exc:
             raise ValidationError(str(exc)) from exc
         return Response({'affected': affected})

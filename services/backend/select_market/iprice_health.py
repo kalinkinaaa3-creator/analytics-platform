@@ -7,6 +7,48 @@ from .iprice_models import IPricePriceImport, NomenclaturePrice, IPriceRegionalI
 from .iprice_domain_models import IPriceSnapshot, IPriceSnapshotRegion, ParserProductUrl, ParserProductClassification
 
 
+def missing_analog_prices(price_rows, calculation_date):
+    from collections import defaultdict
+    from types import SimpleNamespace
+    from .iprice_domain_models import ParserProductMatch, IPriceCompetitorSelectionOverride
+    from .iprice_regional_calculation import competitor_matches_region
+    from datasets.services.iprice_workspace import IPriceWorkspace
+    from datasets.services.iprice_market_assortment import build_market_group_key_map
+    from datasets.services.iprice_source_selector import get_competitor_price_data, get_competitor_regions
+    workspace = IPriceWorkspace('select-market')
+    classified = set(ParserProductClassification.objects.filter(status='active').values_list('product_key', flat=True))
+    own = dict(ParserProductUrl.objects.filter(source='base', own_code__in=[row['code'] for row in price_rows]).values_list('own_code', 'pk'))
+    excluded = set(IPriceCompetitorSelectionOverride.objects.filter(selection_mode='exclude').values_list('product_key_base', 'product_key_competitor'))
+    pairs = [(base, competitor) for base, competitor in ParserProductMatch.objects.filter(
+        status='active', product_key_base__in=own.values(), product_key_competitor__in=classified).values_list('product_key_base', 'product_key_competitor')
+        if (base, competitor) not in excluded]
+    keys = {competitor for _, competitor in pairs}
+    urls = {row.pk: row for row in ParserProductUrl.objects.filter(pk__in=keys, status='active').exclude(source='base')}
+    groups = build_market_group_key_map(competitor_product_keys=set(urls), workspace=workspace)
+    analogs = defaultdict(lambda: defaultdict(list))
+    for base, competitor in pairs:
+        if competitor in urls:
+            analogs[base][groups.get(competitor, (urls[competitor].source, competitor))].append(competitor)
+    price_data, regions = {}, {}
+    for key, url in urls.items():
+        price_data[key] = get_competitor_price_data(product_key=key, calculation_date=calculation_date, workspace=workspace)
+        info = get_competitor_regions(source=url.source, prefix=url.prefix, workspace=workspace)
+        regions[key] = SimpleNamespace(is_all_regions=info['is_all_regions'], applicable_regions=info['regions'])
+    labels = {'tara': 'Тара', 'tt': 'Топаз', 'ps': 'Пластик Систем'}
+    entries = []
+    for row in price_rows:
+        for group_keys in analogs.get(own.get(row['code']), {}).values():
+            if any(competitor_matches_region(regions[key], row['shipp_region']) and price_data[key]
+                   and price_data[key]['calculation_price'] is not None and price_data[key]['calculation_price'] > 0 for key in group_keys):
+                continue
+            key = group_keys[0]
+            entries.append({'id': f"source-competitor-price-{row['pk']}-{key}", 'severity': 'warning',
+                'section': 'sources', 'code': 'competitor_price', 'code_1c': row['code'], 'nom': row['nom'], 'region': row['shipp_region'],
+                'message': f"Нет цены актуального аналога в регионе: {labels.get(urls[key].source, urls[key].source)} · ключи {', '.join(map(str, group_keys))}",
+                'fix': 'Проверьте загрузку положительных цен, регионы конкурента и актуальность связи с аналогом.'})
+    return entries
+
+
 def health_report(*, page=1, search='', level='', section='', code='', page_size=50):
     latest = IPricePriceImport.objects.order_by('-date').first()
     source_checks = []
@@ -42,6 +84,9 @@ def health_report(*, page=1, search='', level='', section='', code='', page_size
             for item in prices.filter(condition).values('pk', 'code', 'nom', 'shipp_region').iterator(chunk_size=1000):
                 entries.append({'id': f"source-{key}-{item['pk']}", 'severity': 'warning' if key == 'classification' else 'error', 'section': 'sources', 'code': key,
                                 'message': label, 'code_1c': item['code'], 'nom': item['nom'], 'region': item['shipp_region'], 'fix': fix})
+        competitor_issues = missing_analog_prices(list(prices.values('pk', 'code', 'nom', 'shipp_region')), latest.date)
+        source_checks.append({'key': 'competitor_price', 'label': 'Нет цены актуального аналога в регионе', 'count': len(competitor_issues)})
+        entries.extend(competitor_issues)
     snapshot = IPriceSnapshot.objects.filter(status='success').order_by('-version_number', '-id').first()
     errors, warnings = Counter(), Counter()
     if snapshot:

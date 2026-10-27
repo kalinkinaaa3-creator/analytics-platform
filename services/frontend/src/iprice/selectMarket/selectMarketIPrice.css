@@ -194,3 +194,9 @@
 
 .sm-iprice .ip-card.sm-automatic-analog { box-shadow: inset 3px 0 0 var(--primary); }
 .sm-history-product { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; overflow-wrap: anywhere; }
+.sm-iprice .sm-history-entry > * { min-width: 0; }
+.sm-iprice .sm-history-targets { min-width: 0; max-width: 100%; }
+.sm-iprice .sm-history-target-list { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 8px; overflow-wrap: anywhere; }
+.sm-iprice .sm-history-targets .ip-pager { flex-wrap: wrap; gap: 8px; padding: 10px 0; }
+.sm-iprice .sm-history-targets .ip-pager > .ip-row { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+.sm-iprice .sm-history-targets .ip-pager .pages { flex-wrap: wrap; }

@@ -72,6 +72,27 @@ class ListControlsTests(TestCase):
         log.save()
         self.assertEqual(self.get(SnapshotHistoryView, parameter_change_id=log.pk).status_code, 404)
 
+    def test_manual_price_filter_is_shared_by_prices_market_comparison_and_facets(self):
+        import json
+        from .iprice_domain_models import IPriceSnapshotApproval
+        row = self.row(100, 'M')
+        approval = IPriceSnapshotApproval.objects.create(snapshot_region=row, revision=1, approved_rrp=150)
+        base = IPriceSnapshot.objects.create(calculation_date=date(2026, 9, 30), version_number=2, revision_for_date=1, status='success')
+        filters = json.dumps({'has_manual_price': ['true']})
+        for active, count in [(True, 1), (False, 0)]:
+            approval.is_current = active
+            approval.save()
+            self.assertEqual(self.get(mode='products', filters=filters).data['count'], count)
+            self.assertEqual(self.get(mode='regions', filters=filters).data['count'], count)
+            market = self.request(SnapshotAnalysisView, 'get', snapshot_id=self.snapshot.pk, data={'view': 'groups', 'filters': filters})
+            self.assertEqual(market.status_code, 200, market.data)
+            self.assertEqual(market.data['summary']['total_products'], count)
+            compare = self.get(SnapshotAnalysisView, comparison_id=base.pk, mode='products', filters=filters)
+            self.assertEqual(compare.status_code, 200, compare.data)
+            self.assertEqual(compare.data['filtered_count'], count)
+            facets = self.get(SnapshotFiltersView)
+            self.assertEqual(facets.data['has_manual_price'], ['true' if active else 'false'])
+
     def test_product_prices_sort_and_zone_follow_selected_regions(self):
         import json
         self.row(100, 'M')
@@ -199,7 +220,7 @@ class ListControlsTests(TestCase):
         IPriceRegionalInput.objects.create(code='C', region='other', month=batch.date, purchase_cost=10)
         response = self.request(HealthView, 'get')
         self.assertEqual({r['key']: r['count'] for r in response.data['source_checks']},
-                         {'purchase': 1, 'delivery': 1, 'retail': 0, 'classification': 3, 'parameters': 3})
+                         {'purchase': 1, 'delivery': 1, 'retail': 0, 'classification': 3, 'parameters': 3, 'competitor_price': 0})
 
     def test_health_checks_classification_and_parameters_before_calculation(self):
         from .iprice_health import health_report
@@ -433,6 +454,7 @@ class ListControlsTests(TestCase):
             source.close()
             IPriceSourceImport.objects.create(kind='product_cost', filename='cost.xlsx', checksum=code, content=stream.getvalue())
         ParserProductUrl.objects.create(pk=900, source='base', own_code='00-OUR', url='https://example.test/own')
+        ParserProductUrl.objects.create(pk=123, source='tt', url='https://example.test/competitor')
         ParserProductClassification.objects.create(product_key=900, status='active', category='Active')
         ParserProductMatch.objects.create(product_key_base=900, product_key_competitor=123, status='active')
         ParserProductClassification.objects.create(product_key=901, status='inactive', category='Inactive')
@@ -442,9 +464,9 @@ class ListControlsTests(TestCase):
         self.assertEqual(book['Последние закупочные цены']['E2'].data_type, 's')
         self.assertEqual(list(book['Действующая классификация'].values)[1][1], 'Active')
         self.assertEqual(book['Действующая классификация'].max_row, 2)
-        self.assertEqual(list(book['Действующая классификация'].values)[0][-1], 'Код 1С')
-        self.assertEqual(list(book['Действующая классификация'].values)[1][-1], '00-OUR')
-        self.assertEqual(list(book['Действующие аналоги'].values)[1][-1], '00-OUR')
+        self.assertEqual(list(book['Действующая классификация'].values)[0][-1], 'Источник')
+        self.assertEqual(list(book['Действующая классификация'].values)[1][-2:], ('00-OUR', 'Селект Маркет'))
+        self.assertEqual(list(book['Действующие аналоги'].values)[1][-2:], ('00-OUR', 'Топаз'))
         book.close()
 
     def test_product_details_and_snapshot_counts(self):
