@@ -108,7 +108,7 @@ export function MarketAnalysis({ refreshRevision = 0, snapshotId, canEdit, initi
       <div className="ip-affix" style={{ width: 300, maxWidth: "100%" }}><span className="pre"><Icon name="search" size={16} /></span><input className="ip-input" type="search" aria-label="Найти товар на рынке" placeholder="Код 1С или название" value={search} onChange={e => setSearch(e.target.value)} /></div>
       {marketView && <ZonePicker value={zone} onChange={value => { setZone(value); setPage(1); }} />}
       <SelectMarketFilters snapshotId={snapshotId} mode={grouped ? "products" : "regions"} zone={marketView ? zone : ""} comparisonId={marketView ? undefined : comparison} search={query} filters={filters} onChange={value => { setFilters(value); setPage(1); }} />
-      <div className="ip-row sm-market-controls">{grouped && <label>Группировка<select className="ip-select" aria-label="Группировка" value={hierarchy} onChange={event => { setHierarchy(event.target.value); setPath({}); setPage(1); }}><option value="1c">Группы 1С</option><option value="classification">Классификация iPrice</option></select></label>}
+      <div className="ip-row sm-market-controls">{grouped && <div className="ip-seg" role="group" aria-label="Группировка">{[["1c", "Группы 1С"], ["classification", "Классификация iPrice"]].map(([key, label]) => <button type="button" key={key} aria-pressed={hierarchy === key} onClick={() => { setHierarchy(key); setPath({}); setPage(1); }}>{label}</button>)}</div>}
       </div>
     </div></Panel>
     {error && <p role="alert">{error}</p>}
