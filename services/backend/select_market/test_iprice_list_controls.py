@@ -35,6 +35,43 @@ class ListControlsTests(TestCase):
         self.assertEqual(self.get(zone='invalid').status_code, 400)
         self.assertEqual(self.get(mode='invalid').status_code, 400)
 
+    def test_parameter_history_product_list_is_frozen_and_paginated(self):
+        from .iprice_operations_api import SnapshotHistoryView
+        from .iprice_domain_models import IPriceParameterChangeLog
+        from .iprice_regional_edits import describe_affected_products
+        row = self.row(100, 'M')
+        second = self.row(200, 'K')
+        details = describe_affected_products([row, second])
+        self.assertEqual(details[0]['regions'], ['K', 'M'])
+        log = IPriceParameterChangeLog.objects.create(snapshot_id=self.snapshot.pk, mode='products', status='success',
+            changes={}, affected={'row_ids': [row.pk, second.pk], 'product_details': details})
+        self.product.nom = 'Renamed later'
+        self.product.save()
+        response = self.get(SnapshotHistoryView)
+        targets = response.data['parameter_changes'][0]['targets']
+        self.assertEqual(targets['first']['name'], 'Box')
+        self.assertEqual(targets['first']['code_1c'], '00-A')
+        self.assertEqual(targets['count'], 1)
+        self.assertNotIn('product_details', response.data['parameter_changes'][0]['affected'])
+        details = [dict(id=i, name=f'Product {i}', code_1c=str(i), regions=['M']) for i in range(26)]
+        log.affected = {'product_details': details}
+        log.save()
+        response = self.get(SnapshotHistoryView, parameter_change_id=log.pk, page=2)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual((response.data['count'], response.data['pages']), (26, 2))
+        self.assertEqual(response.data['results'], details[25:])
+        self.assertEqual(self.get(SnapshotHistoryView, parameter_change_id=log.pk, page=3).status_code, 400)
+        log.affected = {'row_ids': [row.pk]}
+        log.save()
+        self.assertTrue(self.get(SnapshotHistoryView, parameter_change_id=log.pk).data['available'])
+        log.affected = {'products': 1}
+        log.save()
+        self.assertFalse(self.get(SnapshotHistoryView, parameter_change_id=log.pk).data['available'])
+        other = IPriceSnapshot.objects.create(calculation_date=date(2026, 10, 2), version_number=2, revision_for_date=1)
+        log.snapshot_id = other.pk
+        log.save()
+        self.assertEqual(self.get(SnapshotHistoryView, parameter_change_id=log.pk).status_code, 404)
+
     def test_product_prices_sort_and_zone_follow_selected_regions(self):
         import json
         self.row(100, 'M')
@@ -161,7 +198,39 @@ class ListControlsTests(TestCase):
         IPriceRegionalInput.objects.create(code='B', region='R', month=batch.date, purchase_cost=10, include_transport=True)
         IPriceRegionalInput.objects.create(code='C', region='other', month=batch.date, purchase_cost=10)
         response = self.request(HealthView, 'get')
-        self.assertEqual({r['key']: r['count'] for r in response.data['source_checks']}, {'purchase': 1, 'delivery': 1, 'retail': 0})
+        self.assertEqual({r['key']: r['count'] for r in response.data['source_checks']},
+                         {'purchase': 1, 'delivery': 1, 'retail': 0, 'classification': 3, 'parameters': 3})
+
+    def test_health_checks_classification_and_parameters_before_calculation(self):
+        from .iprice_health import health_report
+        from .iprice_models import IPricePriceImport, NomenclaturePrice, IPriceRegionalInput
+        from .iprice_domain_models import ParserProductUrl, ParserProductClassification
+        IPriceSnapshot.objects.all().delete()
+        batch = IPricePriceImport.objects.create(date=date(2026, 10, 27), rows=2)
+        for region in ('M', 'K'):
+            NomenclaturePrice.objects.create(batch=batch, date=batch.date, code='A', shipp_region=region, retail=100)
+        product = ParserProductUrl.objects.create(source='base', own_code='A', on_website=False)
+        classification = ParserProductClassification.objects.create(product_key=product.pk, status='inactive')
+        values = dict(purchase_cost=10, base_analog=1, base_exclusive='.2', minimum_margin='.1', small=0, medium=0, large=0)
+        IPriceRegionalInput.objects.create(code='A', region='m', month=date(2026, 10, 1), **values)
+        IPriceRegionalInput.objects.create(code='A', region='K', month=date(2026, 9, 1), **values)
+        report = health_report()
+        self.assertIsNone(report['snapshot'])
+        checks = {item['key']: item['count'] for item in report['source_checks']}
+        self.assertEqual(checks['classification'], 2)
+        self.assertEqual(checks['parameters'], 1)
+        self.assertEqual([item['region'] for item in health_report(code='parameters')['results']], ['K'])
+        self.assertTrue(all(item['severity'] == 'warning' for item in health_report(code='classification')['results']))
+        classification.status = 'active'
+        classification.save()
+        settings = IPriceRegionalInput.objects.create(code='A', region='K', month=date(2026, 10, 1), **values)
+        self.assertTrue(all(item['count'] == 0 for item in health_report()['source_checks']))
+        settings.large = None
+        settings.save()
+        self.assertEqual(health_report(code='parameters')['count'], 1)
+        settings.large = 1
+        settings.save()
+        self.assertEqual(health_report(code='parameters')['count'], 1)
 
     def test_facets_follow_zone_and_problem_controls(self):
         self.product.group_1 = 'Below'

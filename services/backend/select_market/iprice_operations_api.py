@@ -122,6 +122,16 @@ class SnapshotHistoryView(PriceFileView):
                 raise ValueError()
         except (TypeError, ValueError):
             raise ValidationError('Некорректная страница.') from None
+        from .iprice_regional_edits import parameter_change_products
+        if 'parameter_change_id' in request.query_params:
+            log_id = serializers.IntegerField(min_value=1).run_validation(request.query_params['parameter_change_id'])
+            log = get_object_or_404(IPriceParameterChangeLog, pk=log_id, snapshot_id=snapshot.pk)
+            products = parameter_change_products(snapshot.pk, log.affected)
+            pager = Paginator(products or [], 25)
+            if page > pager.num_pages:
+                raise ValidationError('Страница не найдена.')
+            return Response({'available': products is not None, 'results': list(pager.page(page)),
+                             'count': pager.count, 'page': page, 'pages': pager.num_pages})
         approvals = IPriceSnapshotApproval.objects.filter(snapshot_region__snapshot_product__snapshot=snapshot).order_by('-approved_at', '-id').values(
             'id', 'revision', 'approved_rrp', 'approved_by__username', 'approved_at', 'comment', 'is_current',
             'snapshot_region__snapshot_product__code_1c', 'snapshot_region__sale_region')
@@ -154,6 +164,10 @@ class SnapshotHistoryView(PriceFileView):
                                 continue
                         except (ValueError, ValidationError):
                             continue
+                products = parameter_change_products(snapshot.pk, log['affected'])
+                log['targets'] = {'available': products is not None, 'count': len(products or []),
+                                  'first': products[0] if products else None}
+                log['affected'] = {key: value for key, value in log['affected'].items() if key != 'product_details'}
                 parameter_changes.append(log)
                 if len(parameter_changes) == 50:
                     break

@@ -48,12 +48,17 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
         if (new URL(request.url()).searchParams.get('mode') === 'products') body = { rows: [{ product_id: 1, regions: [first], summary: { current_retail_median: '100', effective_approved_rrp_median: manualPrice || '110', competitor_rrp_median: '105', competitor_count: 1, pricing_method: 'analog', calculation_status: 'warning', error_codes: [], warning_codes: row.warning_codes, zone: 'below_market' } }], page: 1, pages: 1, count: 1 };
       }
       else if (path.endsWith('/price-file/') && request.method() === 'POST') { await route.fulfill({ status: 400, json: { file: ['В файле не заполнен код товара.'] } }); return; }
+      else if (path.endsWith('/history/') && new URL(request.url()).searchParams.has('parameter_change_id')) {
+        const page = Number(new URL(request.url()).searchParams.get('page') || 1);
+        body = { available: true, page, pages: 2, count: 26,
+          results: Array.from({length: page === 1 ? 25 : 1}, (_, i) => ({id:(page-1)*25+i, name:`History product ${(page-1)*25+i}`, code_1c:`H-${(page-1)*25+i}`, regions:['Москва']})) };
+      }
       else if (path.endsWith('/history/')) body = {
         activations: [{ at: '2026-10-24T10:00:00Z', username: 'reviewer@example.test', action: 'deactivate', previous_snapshot_ids: [2] }],
         approvals: [{ id: 1, snapshot_region__snapshot_product__code_1c: '00-А', snapshot_region__sale_region: 'СПБ', approved_rrp: '150', approved_by__username: 'reviewer@example.test', approved_at: '2026-10-24T09:00:00Z', comment: 'Длинная причина согласования цены для проверки переноса строк. '.repeat(8), is_current: false }],
         parameter_changes: [
-          { id: 1, created_at: '2026-10-24T09:00:00Z', user__username: null, status: 'success', changes: { minimum_margin: '0.20', include_transport: false, logistics_unit: '12.34' } },
-          { id: 2, created_at: '2026-10-24T08:00:00Z', user__username: 'reviewer@example.test', status: 'pending', changes: { coefficients: { base_analog: '1.050000' }, discounts: { small: '0.04' } } },
+          { id: 1, targets:{available:true,count:1,first:{id:1,name:'Исторический товар',code_1c:'H-ONE',regions:['Москва','Казань']}}, created_at: '2026-10-24T09:00:00Z', user__username: null, status: 'success', changes: { minimum_margin: '0.20', include_transport: false, logistics_unit: '12.34' } },
+          { id: 2, targets:{available:true,count:26}, created_at: '2026-10-24T08:00:00Z', user__username: 'reviewer@example.test', status: 'pending', changes: { coefficients: { base_analog: '1.050000' }, discounts: { small: '0.04' } } },
         ], page: 1, pages: 1, count: 1,
       };
       else if (path.endsWith('/approval/') && request.method() === 'GET') { const price = new URL(request.url()).searchParams.get('price'); body = { price, prices: { rrp: price, small: price, medium: price, large: price }, gross: { rrp: price, small: price, medium: price, large: price }, margin: 0.4, valid: true }; }
@@ -586,6 +591,13 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     const history=page.getByRole('heading',{name:'История изменений параметров',exact:true});
     await history.scrollIntoViewIfNeeded();
     await page.getByRole('dialog').getByText('Система',{exact:true}).waitFor();
+    await page.getByRole('dialog').getByText('Исторический товар',{exact:true}).waitFor();
+    const targets = page.getByRole('dialog').locator('details').filter({has:page.locator('summary',{hasText:'Показать товары · 26'})});
+    await targets.locator('summary').click();
+    await targets.getByText('History product 0',{exact:true}).waitFor();
+    await targets.getByRole('button',{name:'2',exact:true}).click();
+    await targets.getByText('History product 25',{exact:true}).waitFor();
+    assert.equal(await targets.locator('tbody tr').count(),1);
     await capture('current-parameter-history');
     await page.getByRole('dialog').getByRole('button',{name:'Закрыть',exact:true}).click();
     emptyCards=true;

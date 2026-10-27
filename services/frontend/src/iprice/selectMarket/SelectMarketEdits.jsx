@@ -220,6 +220,32 @@ function PriceHistory({ snapshotId, rowId }) {
   return <section className="ip-panel pad"><h3>История цены</h3><p className="small muted">Последние 50 изменений</p>{error && <p role="alert">{error}</p>}{!result && !error && <p role="status" className="sm-iprice-loading">Загружаем историю…</p>}{result && <>{!result.approvals.length && <p className="muted">Ручных изменений пока нет.</p>}{result.approvals.slice(0,50).map(item => <article className="sm-history-entry" key={item.id}><b>{fmtMoney(item.approved_rrp)}</b><div className="sm-history-meta"><span>{item.approved_by__username || "Система"}</span><time>{new Date(item.approved_at).toLocaleString("ru-RU")}</time></div><p>{item.comment}</p></article>)}</>}</section>;
 }
 
+function ParameterHistoryTargets({ snapshotId, item }) {
+  const [open, setOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    api.get(root + snapshotId + "/history/", { params: { parameter_change_id: item.id, page }, signal: controller.signal })
+      .then(({ data }) => { setData(data); setError(""); })
+      .catch(() => { if (!controller.signal.aborted) setError("Не удалось загрузить список товаров."); });
+    return () => controller.abort();
+  }, [snapshotId, item.id, open, page]);
+  if (!item.targets?.available) return <p className="small muted">Точный список товаров для этой записи не сохранён.</p>;
+  if (item.targets.count === 1) {
+    const product = item.targets.first;
+    return <div className="sm-history-product"><strong>{product.name || "Без названия"}</strong><span className="small muted">Код 1С: {product.code_1c} · {product.regions.join(", ")}</span></div>;
+  }
+  if (!item.targets.count) return null;
+  const ready = data?.page === page;
+  return <details onToggle={event => setOpen(event.currentTarget.open)}><summary>Показать товары · {item.targets.count}</summary>
+    {error && <p role="alert">{error}</p>}{open && !ready && !error && <p role="status" className="sm-iprice-loading">Загружаем товары…</p>}
+    {open && ready && <><div className="sm-iprice-table"><table className="ip-table"><thead><tr><th>Товар</th><th>Код 1С</th><th>Регионы</th></tr></thead><tbody>{data.results.map(product => <tr key={product.id}><td>{product.name || "Без названия"}</td><td>{product.code_1c}</td><td>{product.regions.join(", ")}</td></tr>)}</tbody></table></div><Pager page={page} totalPages={data.pages} count={data.count} pageSize={25} onPage={value => { setError(""); setPage(value); }} /></>}
+  </details>;
+}
+
 function ParameterHistory({ snapshotId, rowId }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -230,5 +256,5 @@ function ParameterHistory({ snapshotId, rowId }) {
       .catch(() => { if (!controller.signal.aborted) setError("Не удалось загрузить историю параметров."); });
     return () => controller.abort();
   }, [snapshotId, rowId]);
-  return <section className="ip-panel pad"><h3>История изменений параметров</h3><p className="small muted">Последние 50 изменений</p>{error && <p role="alert">{error}</p>}{!data && !error && <p role="status" className="sm-iprice-loading">Загружаем историю…</p>}{data && <>{!data.parameter_changes.length && <p className="muted">Параметры не изменялись.</p>}{data.parameter_changes.slice(0,50).map(item => <article className="sm-history-entry" key={item.id}><div className="ip-row"><span className="ip-tag gray">{({success:"Применено",error:"Ошибка",pending:"Ожидает применения"})[item.status]}</span><span className="small muted">Товаров: {item.affected?.products ?? "—"} · регионов: {item.affected?.regions ?? "—"}</span></div><div className="sm-history-meta"><span>{item.user__username || "Система"}</span><time>{new Date(item.created_at).toLocaleString("ru-RU")}</time></div><p>{parameterChangesText(item.changes)}</p>{item.reason && <p>{item.reason}</p>}</article>)}</>}</section>;
+  return <section className="ip-panel pad"><h3>История изменений параметров</h3><p className="small muted">Последние 50 изменений</p>{error && <p role="alert">{error}</p>}{!data && !error && <p role="status" className="sm-iprice-loading">Загружаем историю…</p>}{data && <>{!data.parameter_changes.length && <p className="muted">Параметры не изменялись.</p>}{data.parameter_changes.slice(0,50).map(item => <article className="sm-history-entry" key={item.id}><div className="ip-row"><span className="ip-tag gray">{({success:"Применено",error:"Ошибка",pending:"Ожидает применения"})[item.status]}</span><span className="small muted">Товаров: {item.affected?.products ?? "—"} · регионов: {item.affected?.regions ?? "—"}</span></div><div className="sm-history-meta"><span>{item.user__username || "Система"}</span><time>{new Date(item.created_at).toLocaleString("ru-RU")}</time></div><ParameterHistoryTargets snapshotId={snapshotId} item={item} /><p>{parameterChangesText(item.changes)}</p>{item.reason && <p>{item.reason}</p>}</article>)}</>}</section>;
 }
