@@ -10,7 +10,7 @@ from datasets.services.iprice_upload_template_export import UPLOAD_TEMPLATE_HEAD
 from .iprice_prices import COLUMNS
 from .iprice_purchase_import import HEADERS as PURCHASE_HEADERS
 from .iprice_regional_import import HEADERS as PARAMETER_HEADERS
-from .iprice_classification_columns import HEADERS as CLASSIFICATION_HEADERS, FILE_TO_MODEL
+from .iprice_classification_columns import HEADERS as CLASSIFICATION_HEADERS
 
 
 def export_template(kind):
@@ -21,7 +21,7 @@ def export_template(kind):
             raise ValueError('Неизвестный тип источника.')
         headers = UPLOAD_TEMPLATE_HEADERS[kind]
     if kind == 'product_classification':
-        headers = (*CLASSIFICATION_HEADERS, 'code_1c', 'name', 'on_website')
+        headers = CLASSIFICATION_HEADERS
     book = Workbook()
     sheet = book.active
     sheet.title = 'Шаблон загрузки'
@@ -78,34 +78,6 @@ def export_template(kind):
         for row in sheet.iter_rows(min_row=2, max_row=1001, min_col=index, max_col=index):
             row[0].number_format = number_format
     sheet.row_dimensions[1].height = 32
-    if kind == 'product_classification':
-        from .iprice_domain_models import (ParserProductUrl, ParserProductClassification,
-                                           BaseProductPrice, TtProductPrice, PsProductPrice, TaraProductPrice)
-        from .iprice_models import IPricePriceImport, NomenclaturePrice
-        batch = IPricePriceImport.objects.order_by('-date').first()
-        names = dict(NomenclaturePrice.objects.filter(batch=batch).values_list('code', 'nom')) if batch else {}
-        classes = {row.product_key: row for row in ParserProductClassification.objects.filter(status='active')}
-        urls = list(ParserProductUrl.objects.filter(status='active').order_by('pk'))
-        source_names = {}
-        for source, model in [('base', BaseProductPrice), ('tt', TtProductPrice), ('ps', PsProductPrice), ('tara', TaraProductPrice)]:
-            keys = [url.pk for url in urls if url.source == source and (source == 'base' or url.pk in classes)]
-            for key, name in model.objects.filter(product_key__in=keys).order_by('-date_add', '-pk').values_list('product_key', 'name').iterator():
-                source_names.setdefault(key, name)
-        row_number = 2
-        for url in urls:
-            classification = classes.get(url.pk)
-            if url.source != 'base' and classification is None:
-                continue
-            values = [url.pk] + [getattr(classification, FILE_TO_MODEL.get(key, key), None) if classification else ('product' if key == 'item_type' else None) for key in headers[1:-3]]
-            name = names.get(url.own_code) if url.source == 'base' and url.own_code in names else source_names.get(url.pk)
-            values += [url.own_code, name, ('Да' if url.on_website else 'Нет') if url.source == 'base' else None]
-            for column, value in enumerate(values, 1):
-                cell = sheet.cell(row_number, column, value)
-                if isinstance(value, str):
-                    cell.data_type = 's'
-                    cell.number_format = '@'
-            row_number += 1
-        sheet.auto_filter.ref = f'A1:{get_column_letter(len(headers))}{max(1, row_number - 1)}'
     output = BytesIO()
     book.save(output)
     book.close()

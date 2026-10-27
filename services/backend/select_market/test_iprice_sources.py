@@ -38,11 +38,10 @@ class SourceTests(TestCase):
         headers = [cell.value for cell in book.active[1]]
         self.assertEqual(headers[1:4], ['type', 'category', 'subcategory'])
         self.assertNotIn('subcategory_type', headers)
-        self.assertEqual([book.active.cell(2, column).value for column in (2, 3, 4)],
-                         ['Type value', 'Category value', 'Subcategory value'])
-        book.active.cell(2, 2, 'Updated type')
-        book.active.cell(2, 3, 'Updated category')
-        book.active.cell(2, 4, 'Updated subcategory')
+        self.assertFalse(set(headers) & {'code_1c', 'name', 'on_website'})
+        self.assertFalse(any(value is not None for row in book.active.iter_rows(min_row=2, values_only=True) for value in row))
+        for column, value in enumerate([product.pk, 'Updated type', 'Updated category', 'Updated subcategory', 'Green', 'PP', '', 'GROUP', 'product'], 1):
+            book.active.cell(2, column, value)
         content = BytesIO()
         book.save(content)
         book.close()

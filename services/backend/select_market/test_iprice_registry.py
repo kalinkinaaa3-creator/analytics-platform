@@ -135,19 +135,16 @@ class RegistryTests(TestCase):
         with self.assertRaises(IntegrityError), transaction.atomic():
             ParserProductUrl.objects.create(source='base', own_code='001-A')
 
-    def test_template_includes_own_product_without_url(self):
+    def test_template_is_empty_without_reference_columns(self):
         self.price()
         book = load_workbook(export_template('product_classification'))
         rows = list(book.active.values)
-        fields = dict(zip(rows[0], rows[1]))
-        self.assertEqual(fields['product_key'], ParserProductUrl.objects.get().pk)
-        self.assertEqual(fields['code_1c'], '001-A')
-        self.assertEqual(fields['name'], 'Product')
-        self.assertEqual(fields['on_website'], 'Нет')
-        self.assertEqual(book.active.auto_filter.ref, f'A1:L2')
+        self.assertFalse(set(rows[0]) & {'code_1c', 'name', 'on_website'})
+        self.assertFalse(any(value is not None for row in rows[1:] for value in row))
+        self.assertEqual(book.active.auto_filter.ref, 'A1:I1')
         book.close()
 
-    def test_template_names_for_site_only_product_and_competitor(self):
+    def test_template_does_not_export_existing_classification_or_names(self):
         from .iprice_domain_models import TtProductPrice
         own = ParserProductUrl.objects.create(source='base', own_code='0001', on_website=True, url='https://example.test/own')
         BaseProductPrice.objects.create(product_key=own.pk, code_1c='0001', name='Site-only product')
@@ -156,10 +153,7 @@ class RegistryTests(TestCase):
         ParserProductClassification.objects.create(product_key=competitor.pk, category='Boxes', item_type='product')
         book = load_workbook(export_template('product_classification'))
         rows = list(book.active.values)
-        records = {row[0]: dict(zip(rows[0], row)) for row in rows[1:] if row[0]}
-        self.assertEqual(records[own.pk]['name'], 'Site-only product')
-        self.assertEqual(records[competitor.pk]['name'], 'Competitor name')
-        self.assertEqual(book.active.cell(2, rows[0].index('code_1c') + 1).number_format, '@')
+        self.assertFalse(any(value is not None for row in rows[1:] for value in row))
         book.close()
 
     def test_download_fill_upload_classification_without_site(self):
@@ -167,7 +161,7 @@ class RegistryTests(TestCase):
         self.price()
         book = load_workbook(export_template('product_classification'))
         headers = [cell.value for cell in book.active[1]]
-        for field, value in {'type': 'Boxes', 'category': 'Plastic', 'subcategory': 'Small',
+        for field, value in {'product_key': ParserProductUrl.objects.get().pk, 'type': 'Boxes', 'category': 'Plastic', 'subcategory': 'Small',
                              'article_number_analogs': '001', 'color': '-', 'item_type': 'product'}.items():
             book.active.cell(2, headers.index(field) + 1, value)
         output = BytesIO()

@@ -44,7 +44,7 @@ def missing_analog_prices(price_rows, calculation_date):
             key = group_keys[0]
             entries.append({'id': f"source-competitor-price-{row['pk']}-{key}", 'severity': 'warning',
                 'section': 'sources', 'code': 'competitor_price', 'code_1c': row['code'], 'nom': row['nom'], 'region': row['shipp_region'],
-                'message': f"Нет цены актуального аналога в регионе: {labels.get(urls[key].source, urls[key].source)} · ключи {', '.join(map(str, group_keys))}",
+                'message': f"Нет цены актуального аналога в регионе: {labels.get(urls[key].source, urls[key].source)} · {'ключ' if len(group_keys) == 1 else 'ключи'} {', '.join(map(str, group_keys))}",
                 'fix': 'Проверьте загрузку положительных цен, регионы конкурента и актуальность связи с аналогом.'})
     return entries
 

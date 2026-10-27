@@ -62,8 +62,8 @@ def parser_sheets(sheet):
                            *['; '.join(properties[url.pk].get(name, [])) for name in columns]]
         sheet(SOURCE_LABELS[source].upper(), ['Товар классифицирован', 'Товар с найденным аналогом',
             *[url_labels[field] for field in url_fields],
-            *['Цена: ' + price_labels.get(field.name, str(field.verbose_name)) for field in price_fields],
-            *['Свойство: ' + name for name in columns]], rows())
+            *[price_labels.get(field.name, str(field.verbose_name)) for field in price_fields],
+            *columns], rows())
 
 
 def review_workbook(kind):

@@ -200,3 +200,7 @@
 .sm-iprice .sm-history-targets .ip-pager { flex-wrap: wrap; gap: 8px; padding: 10px 0; }
 .sm-iprice .sm-history-targets .ip-pager > .ip-row { min-width: 0; max-width: 100%; flex-wrap: wrap; }
 .sm-iprice .sm-history-targets .ip-pager .pages { flex-wrap: wrap; }
+.sm-iprice .sm-manual-prices-body { margin-top: 12px; }
+.sm-iprice .sm-iprice-editor label.sm-manual-check { display: flex; align-items: flex-start; gap: 8px; }
+.sm-iprice .sm-iprice-editor .sm-manual-check input[type="checkbox"] { flex: 0 0 auto; width: 16px; height: 16px; min-height: 0; padding: 0; margin: 2px 0 0; }
+.sm-iprice .sm-manual-check > span { min-width: 0; overflow-wrap: anywhere; }

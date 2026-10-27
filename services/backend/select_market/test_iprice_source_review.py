@@ -38,9 +38,10 @@ class SourceReviewTests(TestCase):
         variants = [row for row in parsed if row['Ключ товара'] == competitor.pk]
         self.assertEqual(len(variants), 2)
         self.assertTrue(all(row['Товар классифицирован'] and row['Товар с найденным аналогом'] for row in variants))
-        self.assertEqual({row['Цена: Цена без НДС'] for row in variants}, {100, 200})
-        self.assertTrue(all(row['Статус'] == 'Неактивен' and row['Свойство: Объём'] == '20 л' for row in variants))
-        self.assertEqual(book['ТАРА'].cell(2, headers.index('Свойство: Формула') + 1).data_type, 's')
+        self.assertFalse(any(label.startswith(('Цена:', 'Свойство:')) for label in headers))
+        self.assertEqual({row['Цена без НДС'] for row in variants}, {100, 200})
+        self.assertTrue(all(row['Статус'] == 'Неактивен' and row['Объём'] == '20 л' for row in variants))
+        self.assertEqual(book['ТАРА'].cell(2, headers.index('Формула') + 1).data_type, 's')
         self.assertTrue(any(row['Ключ товара'] == empty.pk for row in parsed))
         own_rows = list(book['СЕЛЕКТ МАРКЕТ'].values)
         own = dict(zip(own_rows[0], own_rows[1]))
@@ -64,6 +65,7 @@ class SourceReviewTests(TestCase):
         for value in (None, 0):
             models.TaraProductPrice.objects.create(product_key=competitor.pk, final_price=value)
         self.assertEqual(health_report(code='competitor_price')['count'], 1)
+        self.assertIn(f' · ключ {competitor.pk}', health_report(code='competitor_price')['results'][0]['message'])
         good = models.TaraProductPrice.objects.create(product_key=competitor.pk, final_price=100)
         models.TaraProductPrice.objects.filter(pk=good.pk).update(date_add=timezone.now() - timedelta(days=1))
         self.assertEqual(health_report(code='competitor_price')['count'], 0)
