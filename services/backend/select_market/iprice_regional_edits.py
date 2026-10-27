@@ -99,7 +99,7 @@ def apply(*, snapshot, filters, search='', list_scope=None, expected_scope=None,
     build_regions(snapshot=snapshot, snapshot_product_ids={row.snapshot_product_id for row in rows}, input_overrides=overrides)
     snapshot.parameters = {**snapshot.parameters, 'edit_revision': snapshot.parameters.get('edit_revision', 0) + 1}
     snapshot.save(update_fields=['parameters'])
-    affected = {'products': len({row.snapshot_product_id for row in rows}), 'regions': len(rows), 'routes': len(rows)}
+    affected = {'products': len({row.snapshot_product_id for row in rows}), 'regions': len(rows), 'routes': len(rows), 'row_ids': [row.pk for row in rows]}
     IPriceParameterChangeLog.objects.create(snapshot_id=snapshot.pk, user=user, mode=(list_scope or {}).get('mode', 'regions'),
         filters={**filters, **({'_list_scope': list_scope} if list_scope is not None else {})}, search=search,
         changes={field: value if isinstance(value, bool) else str(value) for field, value in changes.items()},

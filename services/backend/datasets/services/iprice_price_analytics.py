@@ -229,7 +229,7 @@ def _empty_zone_counts():
     return {key: 0 for key in ZONE_ORDER}
 
 
-def _summarize_rows(rows, config):
+def _summarize_rows(rows, config, *, coverage_by_price=False):
     zone_counts = _empty_zone_counts()
     deviations = []
     final_prices = []
@@ -254,7 +254,7 @@ def _summarize_rows(rows, config):
         competitor_count += int(row.get("competitor_count") or 0)
 
     total = len(rows)
-    covered = total - zone_counts[ZONE_NO_DATA]
+    covered = sum(row["market_price"] is not None and row["market_price"] > 0 for row in rows) if coverage_by_price else total - zone_counts[ZONE_NO_DATA]
 
     median_retail_price = _median(retail_prices)
     median_final_rrp = _median(final_prices)
@@ -511,7 +511,7 @@ def _paginate(items, page, page_size):
     }
 
 
-def _group_rows(rows, field, config):
+def _group_rows(rows, field, config, *, coverage_by_price=False):
     grouped = defaultdict(list)
     for row in rows:
         value = row.get(field)
@@ -521,7 +521,7 @@ def _group_rows(rows, field, config):
 
     result = []
     for key, group in grouped.items():
-        summary = _summarize_rows(group, config)
+        summary = _summarize_rows(group, config, coverage_by_price=coverage_by_price)
         label = "Не указано" if key == EMPTY_GROUP_KEY else key
         result.append({
             "key": key,
@@ -622,7 +622,7 @@ def build_iprice_price_analytics(
     workspace = _snapshot_workspace(snapshot)
     IPriceSnapshotProduct = workspace.model('IPriceSnapshotProduct') if workspace else globals()['IPriceSnapshotProduct']
     IPriceSnapshotRegion = workspace.model('IPriceSnapshotRegion') if workspace else globals()['IPriceSnapshotRegion']
-    group_fields = tuple(f'group_{i}' for i in range(1, 5)) if hierarchy == '1c' and workspace and workspace.code == 'select-market' else ()
+    group_fields = tuple(f'group_{i}' for i in range(2, 5)) if hierarchy == '1c' and workspace and workspace.code == 'select-market' else ()
     if group_fields:
         levels = ('root', *group_fields)
         if drill_level not in levels or set(drill_path) != set(group_fields[:levels.index(drill_level)]):
@@ -670,9 +670,11 @@ def build_iprice_price_analytics(
         ]
         if normalized_zones else rows
     )
+    if workspace and workspace.code == "select-market":
+        summary = _summarize_rows(display_rows, config, coverage_by_price=True)
     if group_fields:
         index = levels.index(drill_level)
-        next_field = group_fields[index] if index < 4 else None
+        next_field = group_fields[index] if index < len(group_fields) else None
         next_label = f'Группа {index + 1}' if next_field else 'Товар'
     else:
         next_field, next_label = DRILL_LEVELS[drill_level]
@@ -709,7 +711,7 @@ def build_iprice_price_analytics(
         result_type = "products"
     else:
         items = _sort_items(
-            _group_rows(display_rows, next_field, config),
+            _group_rows(display_rows, next_field, config, coverage_by_price=bool(workspace and workspace.code == "select-market")),
             ordering,
         )
         result_type = "groups"
@@ -888,10 +890,21 @@ def build_iprice_regional_price_analytics(
             counts = {zone: sum(row['zone'] == zone for row in rows) for zone in ZONE_ORDER}
             groups.append({'key': region, 'label': region, 'product_count': len(rows),
                 'median_deviation_percent': _median([row['deviation_percent'] for row in rows]),
-                'market_coverage_percent': Decimal(100) * (len(rows) - counts['no_market_data']) / len(rows),
+                'market_coverage_percent': Decimal(100) * sum(row['market_price'] is not None and row['market_price'] > 0 for row in rows) / len(rows),
                 'zones': [{'key': zone, 'count': count, 'percent': Decimal(100) * count / len(rows)} for zone, count in counts.items()]})
         paginated, pagination = _paginate(_sort_items(groups, ordering), page, page_size)
-        return {'snapshot_id': snapshot.id, 'view': 'region_groups', 'results': paginated,
+        product_groups = defaultdict(list)
+        for item in items:
+            product_groups[item['product_id']].append(item)
+        product_rows = []
+        for product_id, rows in product_groups.items():
+            final = _median([row['final_rrp'] for row in rows])
+            market = _median([row['market_price'] for row in rows])
+            product_rows.append({'id': product_id, 'final_rrp': final, 'market_price': market,
+                'retail_price': _median([row['retail_price'] for row in rows]), 'deviation': _deviation(final, market),
+                'competitor_count': 0, 'calculation_status': 'error' if all(row['calculation_status'] == 'error' for row in rows) else 'success'})
+        summary = _summarize_rows(product_rows, config, coverage_by_price=bool(workspace and workspace.code == "select-market"))
+        return {'snapshot_id': snapshot.id, 'view': 'region_groups', 'results': paginated, 'summary': {**summary, 'zones': _serialize_zones(summary)},
                 'pagination': pagination, 'price_zones': serialize_price_zone_config(config)}
     allowed_ordering = {
         "code_1c", "nom", "sale_region", "departure", "retail_price",

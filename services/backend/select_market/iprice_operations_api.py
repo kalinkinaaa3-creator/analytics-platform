@@ -132,10 +132,34 @@ class SnapshotHistoryView(PriceFileView):
         paginator = Paginator(approvals, 50)
         if page > paginator.num_pages:
             raise ValidationError('Страница не найдена.')
+        parameter_changes = []
+        if 'row_id' not in request.query_params:
+            logs = IPriceParameterChangeLog.objects.filter(snapshot_id=snapshot.pk).order_by('-id')
+            parameter_row = None
+            if request.query_params.get('parameter_row_id'):
+                key = serializers.IntegerField(min_value=1).run_validation(request.query_params['parameter_row_id'])
+                parameter_row = get_object_or_404(IPriceSnapshotRegion, pk=key, snapshot_product__snapshot=snapshot)
+            for log in logs.values('id', 'user__username', 'changes', 'filters', 'affected', 'status', 'created_at', 'reason', 'search').iterator():
+                if parameter_row:
+                    ids = log['affected'].get('row_ids')
+                    if ids is not None:
+                        if parameter_row.pk not in ids:
+                            continue
+                    else:
+                        from .iprice_regional_edits import resolve
+                        filters = dict(log['filters'])
+                        scope = filters.pop('_list_scope', None)
+                        try:
+                            if not resolve(snapshot, filters, log['search'], scope).filter(pk=parameter_row.pk).exists():
+                                continue
+                        except (ValueError, ValidationError):
+                            continue
+                parameter_changes.append(log)
+                if len(parameter_changes) == 50:
+                    break
         return Response({'activations': snapshot.parameters.get('activation_history', []),
             'approvals': list(paginator.page(page)), 'page': page, 'pages': paginator.num_pages, 'count': paginator.count,
-            'parameter_changes': [] if 'row_id' in request.query_params else list(IPriceParameterChangeLog.objects.filter(snapshot_id=snapshot.pk).order_by('-id').values(
-                'id', 'user__username', 'changes', 'filters', 'affected', 'status', 'created_at', 'reason')[:50])})
+            'parameter_changes': parameter_changes})
 
 
 class AnalysisQuery(serializers.Serializer):
@@ -144,7 +168,7 @@ class AnalysisQuery(serializers.Serializer):
     validate_zone = RowControls.validate_zone
     page = serializers.IntegerField(min_value=1, default=1)
     search = serializers.CharField(max_length=200, allow_blank=True, default='')
-    ordering = serializers.ChoiceField(choices=['', 'median_deviation_percent', '-median_deviation_percent', 'product_count', '-product_count'], default='')
+    ordering = serializers.ChoiceField(choices=[''] + [prefix + field for field in ('median_deviation_percent', 'product_count', 'nom', 'median_retail_price', 'median_final_rrp', 'median_market_price', 'zone', 'deviation_percent') for prefix in ('', '-')], default='')
     comparison_id = serializers.IntegerField(min_value=1, required=False)
     mode = serializers.ChoiceField(choices=['products', 'regions'], default='regions')
     from datasets.services.iprice_snapshot_compare import ALLOWED_CHANGE_TYPES
@@ -230,6 +254,8 @@ class ProductDetailsView(PriceFileView):
                 product_key=card.get('competitor_product_key'), name=next((v.get('name') for v in variants if v.get('name')), None),
                 image=next((v.get('image') for v in variants if v.get('image')), None), is_used_in_snapshot=bool(used.intersection(keys)),
                 selection_mode=next(iter(chosen)) if len(chosen) == 1 else 'mixed')
+        from .iprice_card_prices import regional_card_prices
+        cards = [regional_card_prices(card) for card in cards]
         return Response({**summary, 'competitor_cards': cards, 'edit_revision': product.snapshot.parameters.get('edit_revision', 0),
             'code': product.code_1c, 'nom': product.nom, 'method': product.pricing_method,
             'details': product.calculation_details, 'competitors': list(product.competitors.order_by('source', 'id').values(
@@ -252,10 +278,34 @@ class OwnAssortmentView(PriceFileView):
                 from datasets.services.iprice_competitor_selection import is_selection_editable
                 from .iprice_domain_models import IPriceCompetitorSelectionOverride
                 modes = dict(IPriceCompetitorSelectionOverride.objects.filter(product_key_base=product.base_product_key).values_list('product_key_competitor', 'selection_mode'))
+                from .iprice_card_prices import regional_card_prices
                 for card in result['results']:
+                    regional_card_prices(card)
                     selections = {modes.get(key, 'auto') for key in card['competitor_product_keys']}
                     card['selection_mode'] = next(iter(selections)) if len(selections) == 1 else 'mixed'
                 result.update(editable=is_selection_editable(product.snapshot), edit_revision=product.snapshot.parameters.get('edit_revision', 0))
+            if kind == 'own':
+                from datasets.services.iprice_price_analytics import _with_effective_approved_rrp
+                from collections import defaultdict
+                from statistics import median
+                rows = _with_effective_approved_rrp(IPriceSnapshotRegion.objects.filter(
+                    snapshot_product_id__in=[item['snapshot_product_id'] for item in result['results']]))
+                regional = defaultdict(lambda: defaultdict(list))
+                for row in rows:
+                    regional[row.snapshot_product_id][row.sale_region.casefold()].append({
+                        'region': row.sale_region, 'price': row.current_retail,
+                        'final_price': row.effective_approved_rrp})
+                for item in result['results']:
+                    entries = []
+                    for _, values in sorted(regional[item['snapshot_product_id']].items()):
+                        entry = {'region': values[0]['region'], 'url': item.get('url')}
+                        for field in ('price', 'final_price'):
+                            prices = [row[field] for row in values if row[field] is not None]
+                            entry[field] = median(prices) if prices else None
+                        entries.append(entry)
+                    item['regional_prices'] = entries
+                    prices = [row['final_price'] for row in item['regional_prices'] if row['final_price'] is not None]
+                    item['final_price'] = median(prices) if prices else None
             return Response(result)
         except (IPriceOwnAssortmentError, IPriceMarketAssortmentError) as exc:
             return Response({'results': [], 'counts': {'cards': 0}, 'unavailable_reason': str(exc)})

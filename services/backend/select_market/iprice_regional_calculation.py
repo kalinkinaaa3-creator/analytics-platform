@@ -74,6 +74,17 @@ def calculate_region(*, inputs, market_prices=()):
             'error_codes': errors}
 
 
+def competitor_matches_region(competitor, sale_region):
+    from datasets.services.iprice_snapshot_builder import competitor_applies_to_region
+    # An explicitly unspecified region is universal on either side.
+    dashes = {'-', '—', '–'}
+    if str(sale_region or '').strip() in dashes:
+        return True
+    if any(str(value).strip() in dashes for value in (competitor.applicable_regions or [])):
+        return True
+    return competitor_applies_to_region(competitor=competitor, sale_region=sale_region)
+
+
 def build_regions(*, snapshot, snapshot_product_ids=None, input_overrides=None):
     """Write a row for every price-list pair, including rows with missing inputs."""
     from django.db import transaction
@@ -81,7 +92,7 @@ def build_regions(*, snapshot, snapshot_product_ids=None, input_overrides=None):
     from .iprice_prices import prices_as_of
     from .iprice_domain_models import IPriceSnapshotRegion, ParserProductProperty
     from datasets.services.iprice_snapshot_builder import (
-        competitor_applies_to_region, decimal_min, decimal_max,
+        decimal_min, decimal_max,
         calculate_margin, calculate_deviation, IPriceSnapshotBuildError,
     )
     if snapshot.status != 'building' and input_overrides is None:
@@ -128,7 +139,7 @@ def build_regions(*, snapshot, snapshot_product_ids=None, input_overrides=None):
             if input_overrides is not None:
                 source = input_overrides.get((price.code, price.shipp_region.casefold()), source)
             competitors = [row.competitor_final_price_max for row in product.competitors.all()
-                           if row.calculation_status == 'success' and competitor_applies_to_region(competitor=row, sale_region=price.shipp_region)
+                           if row.calculation_status == 'success' and competitor_matches_region(row, price.shipp_region)
                            and row.competitor_final_price_max is not None and row.competitor_final_price_max > 0]
             result = calculate_region(inputs=source, market_prices=competitors)
             net = result['prices_net']

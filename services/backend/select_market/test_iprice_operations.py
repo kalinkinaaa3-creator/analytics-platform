@@ -126,7 +126,7 @@ class OperationsTests(TestCase):
         product.save(update_fields=['group_1', 'group_2'])
         args = dict(snapshot=self.snapshot, filters={}, search='', page=1, page_size=50, ordering='', hierarchy='1c')
         path = {}
-        for level, value in zip(('root', 'group_1', 'group_2', 'group_3'), ('Assortment', 'Boxes', EMPTY_GROUP_KEY, EMPTY_GROUP_KEY)):
+        for level, value in zip(('root', 'group_2', 'group_3'), ('Boxes', EMPTY_GROUP_KEY, EMPTY_GROUP_KEY)):
             result = build_iprice_price_analytics(**args, drill_level=level, drill_path=path)
             self.assertEqual(result['results'][0]['key'], value)
             self.assertEqual(result['results'][0]['product_count'], 1)

@@ -1,5 +1,5 @@
 import { ZoneTag } from "./ZoneTag";
-import { fmtPct, fmtMoney } from "./archiveFormat";
+import { fmtPct, fmtMoney, fmtNumber } from "./archiveFormat";
 import { Pager } from "./ui/Pager";
 import { PriceLadder } from "./PriceLadder";
 import { useEffect, useRef, useState } from "react";
@@ -20,7 +20,7 @@ export function PriceEditor({ snapshotId, row: initialRow, onSaved, refreshRevis
     const controller = new AbortController();
     api.get(`${root}${snapshotId}/rows/`, { params: { product_id: initialRow.product_id }, signal: controller.signal }).then(({data}) => {
       const next = data.rows.find(item => item.id === initialRow.id);
-      if (next) setCurrentRow(next);
+      if (next) { setCurrentRow(next); setError(""); }
     }).catch(err => { if (!controller.signal.aborted) setError(errorText(err)); });
     return () => controller.abort();
   }, [snapshotId, initialRow.id, initialRow.product_id, refreshRevision]);
@@ -59,7 +59,7 @@ export function PriceEditor({ snapshotId, row: initialRow, onSaved, refreshRevis
   return <div className="ip-stack">
     <div className="ip-row between"><div className="ip-row"><span className="muted">Новая цена</span><b style={{ fontSize: 20 }}>{fmtMoney(row.effective.rrp)}</b><span className="ip-tag blue">{row.effective.approval_source === "manual" ? "Цена сотрудника" : "Расчёт iPrice"}</span></div><ZoneTag zone={row.zone} percent={Number(row.regional_competitor_rrp_median) > 0 && row.effective.rrp != null ? (Number(row.effective.rrp) / Number(row.regional_competitor_rrp_median) - 1) * 100 : null} /></div>
     <Corridor region={{ ...row, effective_approved_rrp: row.effective.rrp }} preview={previewPrice?.valid ? previewPrice.requested : undefined} />
-    <form onSubmit={save} className="ip-panel pad ip-stack sm-iprice-editor">
+    <form onSubmit={save} onChangeCapture={() => setError("")} className="ip-panel pad ip-stack sm-iprice-editor">
       <div className="ip-section-title">Своя цена</div>
       <p className="small muted">Введите цену без НДС целыми рублями. iPrice покажет маржу и цены для оптовиков. Утверждение версии выполняется отдельно, отправки в 1С нет.</p>
       <label className="ip-field">Ваша цена *
@@ -79,7 +79,6 @@ export function PriceEditor({ snapshotId, row: initialRow, onSaved, refreshRevis
         <Button type="submit" variant="accent" icon="check" disabled={busy || !checked?.valid || !comment.trim()}>{busy ? "Сохраняем…" : "Сохранить цену"}</Button>
       </div>{error && <p role="alert">{error}</p>}
     </form>
-    <PriceHistory key={refreshRevision} snapshotId={snapshotId} rowId={row.id} />
     <details className="ip-advanced"><summary>Расчёт iPrice по шагам</summary><div className="ip-explain sm-panel-body">{[
       ["Закупочная цена", row.product_cost],
       [row.include_transport ? "Доставка на единицу" : "Доставка не учитывается", row.logistics_unit],
@@ -88,17 +87,19 @@ export function PriceEditor({ snapshotId, row: initialRow, onSaved, refreshRevis
       ["Нижняя граница", row.minimum_price],
       ["Цена по расчёту", row.calculated_rrp],
     ].map(([title, value], i) => <div className="st" key={title}><span className="n">{i + 1}</span><span>{title}</span><strong className="v">{fmtMoney(value)}</strong></div>)}</div></details>
+    <PriceHistory key={refreshRevision} snapshotId={snapshotId} rowId={row.id} />
   </div>;
 }
 
 const fields = [
-  ["coefficients", "base_analog", "Коэффициент аналога"],
-  ["coefficients", "base_exclusive", "Маржа без конкурентов"],
+  ["coefficients", "base_analog", "Коэффициент по рынку"],
+  ["coefficients", "base_exclusive", "Маржа по себестоимости"],
   ["coefficients", "minimum_margin", "Минимальная маржа"],
   ["discounts", "small", "Скидка малого опта"], ["discounts", "medium", "Скидка среднего опта"], ["discounts", "large", "Скидка крупного опта"],
 ];
-export function ParameterEditor({ snapshotId, onSaved, row = null, listScope = null, selectionCount = null, buttonTitle }) {
+export function ParameterEditor({ snapshotId, onSaved, row = null, listScope = null, selectionCount = null }) {
   const [confirm, confirmation] = useConfirm();
+  const [historyRevision, setHistoryRevision] = useState(0);
   const [open, setOpen] = useState(false);
   const [filters, setFilters] = useState({ code_1c: row?.snapshot_product__code_1c || "", sale_region: row?.sale_region || "" });
   const [groupFilters, setGroupFilters] = useState({});
@@ -143,12 +144,12 @@ export function ParameterEditor({ snapshotId, onSaved, row = null, listScope = n
     if (apply && listScope) payload.expected_scope = preview.affected.scope_signature;
     try {
       const { data } = await api.post(`${root}${snapshotId}/parameters/`, payload);
-      if (apply) { setPreview(null); setReason(""); onSaved(); } else setPreview(data);
+      if (apply) { setPreview(null); setReason(""); setHistoryRevision(value => value + 1); onSaved(); } else setPreview(data);
     } catch (err) { setPreview(null); setError(errorText(err)); }
     finally { pending.current = false; setBusy(false); }
   }
-  const title = buttonTitle || (row ? "Параметры позиции и доставка" : selectionCount ? `Изменить цены выбранных (${selectionCount})` : "Правила для списка");
-  return <>{confirmation}<Button variant="ghost" icon="settings" onClick={() => { setPreview(null); setOpen(true); }}>{title}</Button><Drawer open={open} onClose={() => { if (!busy) setOpen(false); }} title={title}><div className="ip-stack sm-iprice-editor">
+  const title = "Настройки параметров расчета";
+  return <>{confirmation}<Button variant="ghost" icon="settings" onClick={() => { setPreview(null); setError(""); setOpen(true); }}>{title}</Button><Drawer open={open} onClose={() => { if (!busy) setOpen(false); }} title={title}><div className="ip-stack sm-iprice-editor" onChangeCapture={() => setError("")}>
     <section className="ip-panel pad ip-stack"><div className="ip-section-title">1. Область изменения</div>
     <p>{selectionCount ? `Изменяются выбранные товары (${selectionCount}) во всех регионах. Состав будет проверен перед применением.` : listScope ? "Изменяются все строки текущего списка, включая другие страницы. Учитываются поиск, фильтры, зоны и замечания." : "Фильтры применяются совместно по точному значению. Заполните хотя бы один."} Пустые параметры сохраняют прежние значения. Маржа и скидки задаются в процентах: 15 означает 15%.</p>
     {!listScope && <div className="sm-iprice-sources">{[["code_1c", "Код 1С"], ["sale_region", "Регион"]].map(([key, title]) => <label key={key}>{title}<input disabled={busy || !!row} value={filters[key]} onChange={e => { setFilters({ ...filters, [key]: e.target.value }); setPreview(null); }} /></label>)}</div>}
@@ -165,6 +166,7 @@ export function ParameterEditor({ snapshotId, onSaved, row = null, listScope = n
     {preview && <div className="ip-row" style={{ justifyContent: "flex-end" }}><Button disabled={busy} onClick={() => setOpen(false)}>Отмена</Button><Button variant="primary" disabled={busy || !preview.affected.regions || !hasChanges || !reason.trim() || !!Object.keys(fieldErrors).length} onClick={() => submit(true)}>Применить и пересчитать</Button></div>}
     <p>Параметры сохраняются для следующих расчётов. Текущий расчёт пересчитывается; прежние ручные цены остаются в истории и требуют повторного согласования.</p>
     {error && <p role="alert">{error}</p>}
+    {open && <ParameterHistory key={historyRevision} snapshotId={snapshotId} rowId={row?.id} />}
   </div></Drawer></>;
 }
 
@@ -175,7 +177,7 @@ function parameterChangesText(changes = {}) {
     const text = key === "include_transport" ? value === true ? "Да" : value === false ? "Нет" : "—"
       : key === "logistics_unit" ? `${fmtMoney(value)} без НДС`
       : ["base_exclusive", "minimum_margin", "small", "medium", "large"].includes(key) ? value == null || value === "" || !Number.isFinite(Number(value)) ? "—" : `${Number(Number(value) * 100).toLocaleString("ru-RU", { maximumFractionDigits: 4 })} %`
-      : value == null ? "—" : String(value).replace(".", ",");
+      : key === "base_analog" ? fmtNumber(value, 2) : value == null ? "—" : String(value).replace(".", ",");
     return `${label}: ${text}`;
   }).filter(Boolean).join("; ");
 }
@@ -206,16 +208,27 @@ export function SnapshotHistory({ snapshotId }) {
 }
 
 function PriceHistory({ snapshotId, rowId }) {
-  const [page, setPage] = useState(1);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   useEffect(() => {
     const controller = new AbortController();
-    api.get(`${root}${snapshotId}/history/`, { params: { row_id: rowId, page }, signal: controller.signal })
-      .then(({ data }) => { setResult({ ...data, requestedPage: page }); setError(""); })
-      .catch(e => { if (e.code !== "ERR_CANCELED") setError("Не удалось загрузить историю цены."); });
+    api.get(root + snapshotId + "/history/", { params: { row_id: rowId, page: 1 }, signal: controller.signal })
+      .then(({data}) => { setResult(data); setError(""); })
+      .catch(() => { if (!controller.signal.aborted) setError("Не удалось загрузить историю цены."); });
     return () => controller.abort();
-  }, [snapshotId, rowId, page]);
-  const ready = result?.requestedPage === page;
-  return <section className="ip-panel pad ip-stack"><h3>История цены</h3>{error && <p role="alert">{error}</p>}{!ready && !error && <p role="status" className="sm-iprice-loading">Загружаем историю…</p>}{ready && <>{!result.approvals.length && <p className="muted">Ручных изменений пока нет.</p>}{result.approvals.map(item => <div key={item.id}><b>{priceText(item.approved_rrp)} ₽</b><span className="sub">{item.approved_by__username || "Система"} · {new Date(item.approved_at).toLocaleString("ru-RU")}</span><p>{item.comment}</p></div>)}{result.pages > 1 && <Pager page={page} totalPages={result.pages} count={result.count} pageSize={50} onPage={setPage} />}</>}</section>;
+  }, [snapshotId, rowId]);
+  return <section className="ip-panel pad"><h3>История цены</h3><p className="small muted">Последние 50 изменений</p>{error && <p role="alert">{error}</p>}{!result && !error && <p role="status" className="sm-iprice-loading">Загружаем историю…</p>}{result && <>{!result.approvals.length && <p className="muted">Ручных изменений пока нет.</p>}{result.approvals.slice(0,50).map(item => <article className="sm-history-entry" key={item.id}><b>{fmtMoney(item.approved_rrp)}</b><div className="sm-history-meta"><span>{item.approved_by__username || "Система"}</span><time>{new Date(item.approved_at).toLocaleString("ru-RU")}</time></div><p>{item.comment}</p></article>)}</>}</section>;
+}
+
+function ParameterHistory({ snapshotId, rowId }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    api.get(root + snapshotId + "/history/", { params: { parameter_row_id: rowId }, signal: controller.signal })
+      .then(({data}) => { setData(data); setError(""); })
+      .catch(() => { if (!controller.signal.aborted) setError("Не удалось загрузить историю параметров."); });
+    return () => controller.abort();
+  }, [snapshotId, rowId]);
+  return <section className="ip-panel pad"><h3>История изменений параметров</h3><p className="small muted">Последние 50 изменений</p>{error && <p role="alert">{error}</p>}{!data && !error && <p role="status" className="sm-iprice-loading">Загружаем историю…</p>}{data && <>{!data.parameter_changes.length && <p className="muted">Параметры не изменялись.</p>}{data.parameter_changes.slice(0,50).map(item => <article className="sm-history-entry" key={item.id}><div className="ip-row"><span className="ip-tag gray">{({success:"Применено",error:"Ошибка",pending:"Ожидает применения"})[item.status]}</span><span className="small muted">Товаров: {item.affected?.products ?? "—"} · регионов: {item.affected?.regions ?? "—"}</span></div><div className="sm-history-meta"><span>{item.user__username || "Система"}</span><time>{new Date(item.created_at).toLocaleString("ru-RU")}</time></div><p>{parameterChangesText(item.changes)}</p>{item.reason && <p>{item.reason}</p>}</article>)}</>}</section>;
 }

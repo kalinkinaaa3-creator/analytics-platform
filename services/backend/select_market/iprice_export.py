@@ -6,8 +6,8 @@ def append_prices(*, workbook, regions):
     from datasets.services.iprice_snapshot_export import get_effective_prices, apply_header_style, apply_worksheet_dimensions
     labels = (('rrp', 'Розница'), ('small', 'Мелкий опт'), ('medium', 'Средний опт'), ('large', 'Крупный опт'))
     sheet = workbook.create_sheet('Цены')
-    sheet.append(['Код 1С', 'Номенклатура', 'Группа 1', 'Группа 2', 'Группа 3', 'Группа 4',
-                  'Категория', 'Подкатегория', 'Тип подкатегории', 'Цвет', 'Материал', 'Модификация',
+    sheet.append(['Код 1С', 'Номенклатура', 'Группа 1', 'Группа 2', 'Группа 3',
+                  'Тип', 'Категория', 'Подкатегория', 'Цвет', 'Материал', 'Модификация',
                   'Регион', 'Закупочная цена без НДС', 'Учитывать транспортные расходы',
                   'Доставка на единицу без НДС', 'Стоимость с доставкой без НДС',
                   *[f'{title}, руб. {tax}' for _, title in labels for tax in ('без НДС', 'с НДС')],
@@ -24,7 +24,7 @@ def append_prices(*, workbook, regions):
         warnings = ', '.join(dict.fromkeys([*product.warning_codes, *row.warning_codes]))
         issues = ', '.join(dict.fromkeys([*product.error_codes, *row.error_codes]))
         sheet.append([product.code_1c, product.nom,
-                      *[getattr(product, f'group_{level}') or '—' for level in range(1, 5)],
+                      *[getattr(product, f'group_{level}') or '—' for level in range(2, 5)],
                       *[getattr(product, field) for field in ('category', 'subcategory', 'subcategory_type', 'color', 'material', 'modification')],
                       row.sale_region, row.product_cost, 'Да' if row.calculation_details.get('include_transport') else 'Нет',
                       row.logistics_unit, row.cost_with_logistics, *values, row.calculation_status, warnings, issues])
@@ -38,4 +38,4 @@ def append_prices(*, workbook, regions):
         for cell in row:
             if cell.data_type == 'n':
                 cell.alignment = Alignment(horizontal='right')
-                cell.number_format = '#,##0' if 18 <= cell.column <= 25 else '#,##0.00'
+                cell.number_format = '#,##0' if 17 <= cell.column <= 24 else '#,##0.00'

@@ -1,3 +1,4 @@
+import { Notice } from "./Notice";
 import { PriceZonesProvider } from "./PriceZones";
 import { SelectMarketHealth } from "./SelectMarketHealth";
 import { useEffect, useRef, useState } from "react";
@@ -33,7 +34,7 @@ export function SelectMarketIPrice({ dashboard }) {
   const dataTab = ["uploads", "parser", "health"].includes(address.get("data")) ? address.get("data") : "uploads";
   function sectionAddress(next, tab, reset = false) {
     const params = new URLSearchParams(window.location.hash.slice(1));
-    if (reset) ["product", "row", "price_scope", "market_scope", "compare_scope", "compare_product", "compare_snapshot", "compare_region"].forEach(key => params.delete(key));
+    if (reset) ["product", "row", "product_region", "price_scope", "market_scope", "compare_scope", "compare_product", "compare_snapshot", "compare_region"].forEach(key => params.delete(key));
     if (reset) for (const key of [...params.keys()]) if (/^[pmc]_/.test(key)) params.delete(key);
     params.set("suc", next);
     if (next !== "data") params.delete("data"); else if (tab) params.set("data", tab);
@@ -123,15 +124,15 @@ export function SelectMarketIPrice({ dashboard }) {
     if (input instanceof HTMLInputElement && input.type === "number" && event.currentTarget.contains(input)) input.blur();
   }}>
     <header className="ip-head"><div className="ip-head-row">
-      <nav className="ip-nav" aria-label="Разделы iPrice">{[["home", "Главная", "home"], ["prices", "Цены", "table"], ["market", "Рынок", "chart"], ["versions", "Расчёты", "layers"], ["data", "Данные", "data"]].map(([key, title, icon]) => <a href={`${location.pathname}${location.search}${sectionAddress(key, undefined, true).hash}`} key={key} className={(view === key || (key === "versions" && view === "compare")) ? "active" : ""} aria-current={(view === key || (key === "versions" && view === "compare")) ? "page" : undefined} onClick={e => { if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return; e.preventDefault(); navigate(sectionAddress(key, undefined, true), { state: location.state }); setNavigationRevision(value => value + 1); }}><Icon name={icon} size={16} />{title}</a>)}</nav>
+      <nav className="ip-nav" aria-label="Разделы iPrice">{[["home", "Главная", "home"], ["prices", "Цены", "table"], ["market", "Рынок", "chart"], ["versions", "Расчёты", "layers"], ["data", "Данные", "data"]].map(([key, title, icon]) => <a href={`${location.pathname}${location.search}${sectionAddress(key, undefined, true).hash}`} key={key} className={(view === key || (key === "versions" && view === "compare")) ? "active" : ""} aria-current={(view === key || (key === "versions" && view === "compare")) ? "page" : undefined} onClick={e => { if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return; e.preventDefault(); navigate(sectionAddress(key, undefined, true), { state: {...location.state, sucReturn: undefined} }); setNavigationRevision(value => value + 1); }}><Icon name={icon} size={16} />{title}</a>)}</nav>
       <div className="ip-head-spacer" /><div id="sm-iprice-version-slot" />
       <Button variant="ghost" icon="help" aria-label="Справка" title="Справка: шаги работы, цвета, словарь" onClick={() => setHelp(true)} />
     </div></header>
     <SelectMarketHelp open={help} onClose={() => setHelp(false)} />
     <main className="ip-main">
-      {error && <p role="alert" className="sm-iprice-error">{error}</p>}
+      {error && <Notice key={"error:" + error} error onClose={() => setError("")}>{error}</Notice>}
       {statusError && <p role="alert" className="sm-iprice-error">{statusError}</p>}
-      {message && <p role="status">{message}</p>}
+      {message && <Notice key={"message:" + message} onClose={() => setMessage("")}>{message}</Notice>}
       {!state && <p role="status" className="sm-iprice-loading">Загружаем источники…</p>}
       {state && <>
         <SelectMarketCalculations navigationRevision={navigationRevision} canEdit={state.can_edit} view={view} onNavigate={setView} onHelp={() => setHelp(view === "market" ? "colors" : "steps")} sourceState={state} />

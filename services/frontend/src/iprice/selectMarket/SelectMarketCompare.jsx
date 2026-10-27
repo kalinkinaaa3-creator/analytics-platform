@@ -8,7 +8,6 @@ import { api } from "../../api/client";
 import { Button, Panel, PageHead } from "./ui/primitives";
 import { SelectMarketFilters } from "./SelectMarketFilters";
 import Icon from "./ui/Icon";
-import { ProductDetails } from "./SelectMarketAnalysis";
 import { errorText } from "./format";
 
 const types = [["all", "Все товары"], ["changed", "С изменениями"], ["final_rrp_increased", "Цена выросла"], ["final_rrp_decreased", "Цена снизилась"], ["price_increased", "Цена в прайсе выросла"], ["price_decreased", "Цена в прайсе снизилась"], ["added", "Новые товары"], ["removed", "Выбывшие товары"], ["new_error", "Потеряли цену"], ["resolved_error", "Получили цену"], ["status_changed", "Сменили статус"]];
@@ -26,7 +25,7 @@ function readScope(snapshotId, baseId) {
   } catch { return {}; }
 }
 
-export function SelectMarketCompare({ snapshotId, baseId, onBack, exportAction }) {
+export function SelectMarketCompare({ snapshotId, baseId, onBack, exportAction, onOpenProduct }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [initial] = useState(() => readScope(snapshotId, baseId));
@@ -37,30 +36,15 @@ export function SelectMarketCompare({ snapshotId, baseId, onBack, exportAction }
   const [page, setPage] = useState(initial.page || 1);
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
-  const [loadedProduct, setProduct] = useState(null);
   const address = new URLSearchParams(location.hash.slice(1));
   const productId = address.get("compare_product") || "";
   const productSnapshot = address.get("compare_snapshot") || "";
   const productRegion = address.get("compare_region") || "";
-  const productKey = JSON.stringify([snapshotId, baseId, productSnapshot, productId, productRegion]);
-  const product = loadedProduct?.key === productKey ? loadedProduct : null;
-  function openProduct(id, productId, region = "") {
-    const params = new URLSearchParams(window.location.hash.slice(1));
-    if (productId) { params.set("compare_product", String(productId)); params.set("compare_snapshot", String(id)); }
-    else { params.delete("compare_product"); params.delete("compare_snapshot"); }
-    if (productId && region) params.set("compare_region", region); else params.delete("compare_region");
-    navigate({ pathname: location.pathname, search: location.search, hash: `#${params}` }, { state: location.state });
-  }
   useEffect(() => {
-    if (!/^[1-9][0-9]*$/.test(productId) || ![String(snapshotId), String(baseId)].includes(productSnapshot)) return;
-    const controller = new AbortController();
-    api.get(`/v1/select-market/iprice/snapshots/${productSnapshot}/rows/`, { params: { product_id: productId }, signal: controller.signal }).then(({ data }) => {
-      const row = productRegion ? data.rows.find(item => item.sale_region === productRegion) : data.rows[0];
-      if (row) { setProduct({ key: productKey, snapshotId: productSnapshot, row }); setError(""); }
-      else setError("Товар или регион отсутствуют в выбранной версии расчёта.");
-    }).catch(e => { if (e.code !== "ERR_CANCELED") setError(errorText(e)); });
-    return () => controller.abort();
-  }, [snapshotId, baseId, productId, productSnapshot, productRegion, productKey]);
+    if (/^[1-9][0-9]*$/.test(productId) && [String(snapshotId), String(baseId)].includes(productSnapshot)) {
+      onOpenProduct(productSnapshot, productId, productRegion);
+    }
+  }, [snapshotId, baseId, productId, productSnapshot, productRegion, onOpenProduct]);
   const key = JSON.stringify({ mode, type, search, filters, page, snapshotId, baseId });
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.slice(1));
@@ -82,10 +66,10 @@ export function SelectMarketCompare({ snapshotId, baseId, onBack, exportAction }
     const id = item.comparison ? snapshotId : baseId;
     const productId = mode === "products" ? value.id : value.snapshot_product_id;
     if (!productId) { setError("В строке сравнения отсутствует идентификатор товара."); return; }
-    openProduct(id, productId, mode === "regions" ? value.sale_region : "");
+    onOpenProduct(id, productId, mode === "regions" ? value.sale_region : "");
   }
   if (!baseId || String(baseId) === String(snapshotId)) return <Button onClick={onBack}>Выберите два разных расчёта для сравнения</Button>;
-  if (product) return <><div className="ip-crumbs"><Button variant="ghost" icon="chevLeft" onClick={() => openProduct(null, null)}>К сравнению</Button></div><ProductDetails key={`${product.snapshotId}-${product.row.id}`} snapshotId={product.snapshotId} productId={product.row.product_id} region={product.row} canEdit={false} canEditPrice={false} onOpenProduct={id => openProduct(product.snapshotId, id)} /></>;
+
   const ready = data?.key === key;
   const finalField = mode === "products" ? "effective_approved_rrp_median" : "effective_approved_rrp";
   const currentField = mode === "products" ? "current_retail_median" : "current_retail";
@@ -94,10 +78,10 @@ export function SelectMarketCompare({ snapshotId, baseId, onBack, exportAction }
   const title = summary?.final_rrp_increased != null && summary?.final_rrp_decreased != null
     ? `Изменения: ${countText(summary.final_rrp_increased, "цена выросла", "цены выросли", "цен выросли")}, ${countText(summary.final_rrp_decreased, "снизилась", "снизились", "снизились")}` : "Изменения между расчётами";
   return <><nav className="ip-crumbs"><Button variant="ghost" icon="chevLeft" onClick={onBack}>К расчётам</Button><Icon name="chev" size={12} /><span>Изменения</span></nav>
-    <PageHead title={title} text={`Было: ${versionName(ready && data.base_snapshot, baseId)}. Стало: ${versionName(ready && data.comparison_snapshot, snapshotId)}. При изменении старая цена зачёркнута, новая стоит рядом.`} actions={<>{exportAction}<div className="ip-seg" role="group" aria-label="Уровень сравнения">{[["products", "Товары"], ["regions", "Товары по регионам"]].map(([value, label]) => <button key={value} aria-pressed={mode === value} onClick={() => { setMode(value); setFilters({}); setPage(1); }}>{label}</button>)}</div></>} />
+    <PageHead title={title} text={`Было: ${versionName(ready && data.base_snapshot, baseId)}. Стало: ${versionName(ready && data.comparison_snapshot, snapshotId)}. При изменении старая цена зачёркнута, новая стоит рядом.`} actions={<>{exportAction}<div className="ip-seg" role="group" aria-label="Уровень сравнения">{[["products", "По товарам"], ["regions", "По регионам"]].map(([value, label]) => <button key={value} aria-pressed={mode === value} onClick={() => { setMode(value); setFilters({}); setPage(1); }}>{label}</button>)}</div></>} />
     <Panel><div className="ip-stack sm-panel-body">
-      <div className="ip-filters">{types.map(([value, label]) => <button className={`ip-chip ${type === value ? "on" : ""}`} key={value} aria-pressed={type === value} onClick={() => { setType(value); setPage(1); }}>{label}{data?.summary && <span className="small quiet">{data.summary[({ all: "total", new_error: "new_errors", resolved_error: "resolved_errors" })[value] || value] ?? "—"}</span>}</button>)}</div>
       <div className="ip-affix" style={{ width: 300, maxWidth: "100%" }}><span className="pre"><Icon name="search" size={16} /></span><input className="ip-input" type="search" aria-label="Найти товар в сравнении" placeholder="Код 1С или название" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
+      <div className="ip-filters">{types.map(([value, label]) => <button className={`ip-chip ${type === value ? "on" : ""}`} key={value} aria-pressed={type === value} onClick={() => { setType(value); setPage(1); }}>{label}{data?.summary && <span className="small quiet">{data.summary[({ all: "total", new_error: "new_errors", resolved_error: "resolved_errors" })[value] || value] ?? "—"}</span>}</button>)}</div>
       <SelectMarketFilters snapshotId={snapshotId} comparisonId={baseId} mode={mode} search={search} filters={filters} onChange={value => { setFilters(value); setPage(1); }} />
     </div>
     {error && <p role="alert">{error}</p>}{!ready && !error && <p role="status" className="sm-iprice-loading">Загружаем сравнение…</p>}
@@ -135,9 +119,9 @@ const fieldLabels = {
     const label = ["Малый опт", "Средний опт", "Крупный опт", "Дистрибьютор", "Дистрибьютор 1"][i];
     return [[`discount_${key}`, `Скидка: ${label}`], [`discount_${key}_median`, `Скидка: ${label}`], [`effective_${key}_median`, `Новая цена: ${label}`], [`effective_${key}`, `Новая цена: ${label}`], [`current_${key}`, `Прайс: ${label}`], [`calculated_${key}`, `Расчёт: ${label}`]];
   })) ,
-  category: "Категория", subcategory: "Подкатегория", subcategory_type: "Тип подкатегории",
+  category: "Тип", subcategory: "Категория", subcategory_type: "Подкатегория",
   material: "Материал", color: "Цвет", modification: "Модификация", item_type: "Тип позиции",
-  group_1: "Группа 1", group_2: "Группа 2", group_3: "Группа 3", group_4: "Группа 4",
+  group_1: "Раздел 1С", group_2: "Группа 1", group_3: "Группа 2", group_4: "Группа 3",
   pricing_method: "Способ расчёта",
   calculation_status: "Готовность",
   competitor_count: "Число конкурентов",

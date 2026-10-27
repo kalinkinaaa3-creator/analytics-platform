@@ -63,3 +63,6 @@
   .sm-system-grid .sm-system-card { padding: 20px; gap: 16px; min-height: 120px; }
 }
 @media (prefers-reduced-motion: reduce) { .sm-system-grid .sm-system-card { transition: none; } }
+
+.app-shell.sm-workspace .sidebar-toggle-btn { background: rgba(64, 116, 171, .55); }
+.app-shell.sm-workspace .sidebar-toggle-btn:hover, .app-shell.sm-workspace .sidebar-toggle-btn:focus-visible { background: var(--sm-primary); }

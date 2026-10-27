@@ -70,6 +70,18 @@ class ListControlsTests(TestCase):
         self.assertEqual([r['code_1c'] for r in result.data['results']], ['00-B'])
         self.assertEqual(result.data['results'][0]['price'], 123)
 
+    def test_own_cards_show_medians_and_one_row_per_region(self):
+        other = IPriceSnapshotProduct.objects.create(snapshot=self.snapshot, code_1c='00-B', nom='Second',
+            pricing_method='exclusive', category='C', subcategory='S', subcategory_type='T', item_type='item')
+        for region, price in [('North', 100), ('South', 200), ('West', 1000)]:
+            IPriceSnapshotRegion.objects.create(snapshot_product=other, sale_region=region,
+                current_retail=price, default_approved_rrp=price)
+        result = self.request(OwnAssortmentView, 'get', snapshot_id=self.snapshot.pk, product_id=self.product.pk)
+        card = result.data['results'][0]
+        self.assertEqual(card['final_price'], 200)
+        self.assertEqual(card['price'], 200)
+        self.assertEqual([row['final_price'] for row in card['regional_prices']], [100, 200, 1000])
+
     def test_health_missing_data_is_not_success(self):
         self.row(100, 'R', error_codes=['MISSING_PRODUCT_COST', 'MISSING_PRODUCT_COST'])
         response = self.request(HealthView, 'get')
@@ -202,6 +214,33 @@ class ListControlsTests(TestCase):
         self.assertEqual([row['key'] for row in response.data['results']], ['North', 'South'])
         self.assertEqual(response.data['results'][0]['product_count'], 1)
         self.assertEqual(response.data['results'][0]['market_coverage_percent'], 100)
+        self.assertEqual(response.data['summary']['total_products'], 1)
+        self.assertEqual(response.data['summary']['median_final_rrp'], 100)
+
+    def test_market_summary_obeys_zone_and_accepts_product_sort(self):
+        self.product.effective_approved_rrp_median = 120
+        self.product.competitor_rrp_median = 100
+        self.product.save()
+        response = self.request(SnapshotAnalysisView, 'get', snapshot_id=self.snapshot.pk,
+            data={'view': 'groups', 'hierarchy': 'classification', 'zone': 'below_market', 'ordering': '-median_final_rrp'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['summary']['total_products'], 0)
+        self.assertEqual(response.data['results'], [])
+
+    def test_parameter_history_is_limited_and_scoped_to_frozen_rows(self):
+        from .iprice_domain_models import IPriceParameterChangeLog
+        from .iprice_operations_api import SnapshotHistoryView
+        selected, other = self.row(100, 'North'), self.row(110, 'South')
+        for number in range(55):
+            IPriceParameterChangeLog.objects.create(snapshot_id=self.snapshot.pk, mode='regions',
+                changes={'base_analog': '1.1'}, affected={'row_ids': [selected.pk]}, reason=str(number))
+        IPriceParameterChangeLog.objects.create(snapshot_id=self.snapshot.pk, mode='regions',
+            changes={'base_analog': '1.2'}, affected={'row_ids': [other.pk]}, reason='Other region')
+        response = self.get(SnapshotHistoryView, parameter_row_id=selected.pk)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data['parameter_changes']), 50)
+        self.assertEqual(response.data['parameter_changes'][0]['reason'], '54')
+        self.assertNotIn('Other region', [item['reason'] for item in response.data['parameter_changes']])
 
     def test_rows_page_size_is_bounded_and_does_not_truncate_product_regions(self):
         for index in range(26):
@@ -260,14 +299,14 @@ class ListControlsTests(TestCase):
                                      'Действующие префиксы', 'Настройки расчёта',
                                      'Последние закупочные цены'}.issubset(book.sheetnames))
                     self.assertEqual(next(book['Последние закупочные цены'].values),
-                                     ('Дата', 'Код 1С', 'Наименование', 'Регион', 'Закупочная цена без НДС, руб.'))
+                                     ('Дата', 'Наименование', 'Регион', 'Закупочная цена без НДС, руб.', 'Код 1С'))
                 book.close()
 
     def test_review_exports_latest_purchase_file_and_active_classification(self):
         from io import BytesIO
         from openpyxl import Workbook, load_workbook
         from .iprice_models import IPriceSourceImport
-        from .iprice_domain_models import ParserProductClassification
+        from .iprice_domain_models import ParserProductClassification, ParserProductUrl, ParserProductMatch
         from .iprice_review_export import review_workbook
         for code in ['OLD', '=TEXT-CODE']:
             source = Workbook()
@@ -277,14 +316,19 @@ class ListControlsTests(TestCase):
             source.save(stream)
             source.close()
             IPriceSourceImport.objects.create(kind='product_cost', filename='cost.xlsx', checksum=code, content=stream.getvalue())
+        ParserProductUrl.objects.create(pk=900, source='base', own_code='00-OUR', url='https://example.test/own')
         ParserProductClassification.objects.create(product_key=900, status='active', category='Active')
+        ParserProductMatch.objects.create(product_key_base=900, product_key_competitor=123, status='active')
         ParserProductClassification.objects.create(product_key=901, status='inactive', category='Inactive')
         book = load_workbook(BytesIO(review_workbook('preparation_check')))
         self.assertEqual(book['Последние закупочные цены'].max_row, 2)
-        self.assertEqual(book['Последние закупочные цены']['B2'].value, '=TEXT-CODE')
-        self.assertEqual(book['Последние закупочные цены']['B2'].data_type, 's')
+        self.assertEqual(book['Последние закупочные цены']['E2'].value, '=TEXT-CODE')
+        self.assertEqual(book['Последние закупочные цены']['E2'].data_type, 's')
         self.assertEqual(list(book['Действующая классификация'].values)[1][1], 'Active')
         self.assertEqual(book['Действующая классификация'].max_row, 2)
+        self.assertEqual(list(book['Действующая классификация'].values)[0][-1], 'Код 1С')
+        self.assertEqual(list(book['Действующая классификация'].values)[1][-1], '00-OUR')
+        self.assertEqual(list(book['Действующие аналоги'].values)[1][-1], '00-OUR')
         book.close()
 
     def test_product_details_and_snapshot_counts(self):

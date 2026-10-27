@@ -1,3 +1,4 @@
+import { Notice } from "./Notice";
 import { readScope, writeScope } from "./scopeAddress";
 import { ProductImage } from "./ProductImage";
 import { Pager } from "./ui/Pager";
@@ -63,24 +64,30 @@ function CalculationRows({ revision, id, canEdit, canEditParameters, onSaved, in
   const address = new URLSearchParams(location.hash.slice(1));
   const productAddress = address.get("product") || "";
   const rowAddress = address.get("row") || "";
+  const regionAddress = address.get("product_region") || "";
   const product = loadedProduct?.address === `${id}:${productAddress}:${rowAddress}` ? loadedProduct.row : null;
   function setProduct(row) {
+    if (!row && location.state?.sucReturn) {
+      const state = {...location.state}; delete state.sucReturn;
+      navigate({pathname:location.pathname, search:location.search, hash:location.state.sucReturn}, {state});
+      return;
+    }
     const params = new URLSearchParams(location.hash.slice(1));
     params.set("snapshot", String(id));
     if (row) { params.set("product", String(row.product_id)); if (row.id != null) params.set("row", String(row.id)); else params.delete("row"); }
-    else { params.delete("product"); params.delete("row"); }
+    else { params.delete("product"); params.delete("row"); params.delete("product_region"); }
     navigate({ pathname: location.pathname, search: location.search, hash: `#${params}` }, { state: location.state });
   }
   useEffect(() => {
     if (!/^[1-9][0-9]*$/.test(productAddress)) return;
     const controller = new AbortController();
     api.get(`${root}${id}/rows/`, { params: { product_id: productAddress }, signal: controller.signal }).then(({ data }) => {
-      const row = rowAddress ? data.rows.find(item => String(item.id) === rowAddress) : data.rows[0];
+      const row = rowAddress ? data.rows.find(item => String(item.id) === rowAddress) : regionAddress ? data.rows.find(item => item.sale_region === regionAddress) : data.rows[0];
       if (row) { storeProduct({ address: `${id}:${productAddress}:${rowAddress}`, row }); setError(""); }
       else setError("Товар или региональная строка отсутствуют в выбранном расчёте.");
     }).catch(err => { if (err.code !== "ERR_CANCELED") setError(errorText(err)); });
     return () => controller.abort();
-  }, [id, productAddress, rowAddress, revision]);
+  }, [id, productAddress, rowAddress, regionAddress, revision]);
   const [retry, setRetry] = useState(0);
   function openProduct(productId) { setProduct({ product_id: productId }); }
   useEffect(() => {
@@ -105,11 +112,12 @@ function CalculationRows({ revision, id, canEdit, canEditParameters, onSaved, in
   });
   const heading = (key, label) => <th className={["market", "current", "final", "deviation", "margin"].includes(key) ? "num" : undefined} aria-sort={ordering.replace("-", "") === key ? ordering.startsWith("-") ? "descending" : "ascending" : "none"}><span className="th-in"><button className="sort" onClick={() => { setOrdering(ordering === key ? "-" + key : key); setPage(1); }}>{label} {ordering === key ? "↑" : ordering === "-" + key ? "↓" : "↕"}</button>{({deviation: "Отклонение новой итоговой цены от медианы цен конкурентов.", margin: "Доля новой цены, остающаяся после закупки и включённой доставки.", market: "Медиана пригодных цен конкурентов.", current: "Текущая цена из загруженного прайса без НДС.", final: "Итоговая цена с учётом ручного согласования. Для товара — медиана по регионам."})[key] && <Term icon title={label} text={({deviation: "Отклонение новой итоговой цены от медианы цен конкурентов.", margin: "Доля новой цены, остающаяся после закупки и включённой доставки.", market: "Медиана пригодных цен конкурентов.", current: "Текущая цена из загруженного прайса без НДС.", final: "Итоговая цена с учётом ручного согласования. Для товара — медиана по регионам."})[key]} />}</span></th>;
   if (product) return <div className="ip-stack">
-    {error && <p role="alert">{error}</p>}<ProductDetails key={`details-${product.id}`} refreshRevision={revision} snapshotId={id} productId={product.product_id} onBack={() => setProduct(null)} region={product} canEdit={canEditParameters} canEditPrice={canEdit} onSaved={onSaved} onOpenProduct={openProduct} />
+    {error && <Notice key={"error:" + error} error onClose={() => setError("")}>{error}</Notice>}<ProductDetails key={`details-${product.id}`} refreshRevision={revision} snapshotId={id} productId={product.product_id} onBack={() => setProduct(null)} backLabel={location.state?.sucReturn?.includes("suc=market") ? "К рынку" : location.state?.sucReturn?.includes("suc=compare") ? "К сравнению" : "Цены"} region={product} canEdit={canEditParameters} canEditPrice={canEdit} onSaved={onSaved} onOpenProduct={openProduct} />
   </div>;
   return <div className="ip-panel sm-price-panel" aria-busy={loading}>
+    {document.getElementById("sm-view-controls") && createPortal(<div className="ip-seg" role="group" aria-label="Представление цен">{[["products", "По товарам"], ["regions", "По регионам"]].map(([key, label]) => <button key={key} aria-pressed={mode === key} onClick={() => { setMode(key); setOrdering("nom"); setPage(1); setEditing(null); }}>{label}</button>)}</div>, document.getElementById("sm-view-controls"))}
     {canEditParameters && document.getElementById("sm-list-parameters") && createPortal(<ParameterEditor snapshotId={id} onSaved={onSaved} listScope={{ filters, search: query, mode, zone, problems_only: problemsOnly }} />, document.getElementById("sm-list-parameters"))}
-    <div className="ip-stack" style={{ padding: 16, gap: 12 }}><div className="ip-row between"><div className="ip-row"><div className="ip-seg" role="group" aria-label="Представление цен">{[["products", "Товары"], ["regions", "По регионам"]].map(([key, label]) => <button key={key} aria-pressed={mode === key} onClick={() => { setMode(key); setOrdering("nom"); setPage(1); setEditing(null); }}>{label}</button>)}</div><div className="ip-affix" style={{ width: 320, maxWidth: "100%" }}><span className="pre"><Icon name="search" size={16} /></span><input className="ip-input" type="search" aria-label="Найти товар" placeholder="Код 1С или название" value={search} onChange={e => setSearch(e.target.value)} maxLength={200} /></div></div><div className="ip-seg" role="group" aria-label="Фильтр по статусу">{[[false, "Все"], [true, "Только с проблемами"]].map(([value, label]) => <button key={label} aria-pressed={problemsOnly === value} onClick={() => { setProblemsOnly(value); setPage(1); setEditing(null); }}>{label}</button>)}</div></div>
+    <div className="ip-stack" style={{ padding: 16, gap: 12 }}><div className="ip-row between"><div className="ip-row"><div className="ip-affix" style={{ width: 320, maxWidth: "100%" }}><span className="pre"><Icon name="search" size={16} /></span><input className="ip-input" type="search" aria-label="Найти товар" placeholder="Код 1С или название" value={search} onChange={e => setSearch(e.target.value)} maxLength={200} /></div></div><div className="ip-seg" role="group" aria-label="Фильтр по статусу">{[[false, "Все"], [true, "Только с проблемами"]].map(([value, label]) => <button key={label} aria-pressed={problemsOnly === value} onClick={() => { setProblemsOnly(value); setPage(1); setEditing(null); }}>{label}</button>)}</div></div>
       <ZonePicker value={zone} onChange={value => { setZone(value); setPage(1); setEditing(null); }} />
       <SelectMarketFilters snapshotId={id} search={query} mode={mode} zone={zone} problemsOnly={problemsOnly} filters={filters} onChange={value => { setFilters(value); setPage(1); setEditing(null); setProduct(null); }} />
     </div>
@@ -189,6 +197,7 @@ export function SelectMarketCalculations({ navigationRevision = 0, canEdit, view
   }, [navigate]);
   const [confirm, confirmation] = useConfirm();
   const [versions, setVersions] = useState(null);
+  const versionsRef = useRef(null);
   const [compareFrom, setCompareFrom] = useState("");
   const [compareTo, setCompareTo] = useState("");
 
@@ -206,17 +215,19 @@ export function SelectMarketCalculations({ navigationRevision = 0, canEdit, view
   const requestedSnapshot = new URLSearchParams(location.hash.slice(1)).get("snapshot") || "";
   const initialSnapshot = /^[1-9][0-9]*$/.test(requestedSnapshot) ? requestedSnapshot : "";
   const selected = initialSnapshot;
+  const selectedRef = useRef(initialSnapshot);
+  const loadedSnapshot = useRef("");
   const setSelected = useCallback(value => {
     loadedSnapshot.current = value;
     const params = new URLSearchParams(window.location.hash.slice(1));
     if (value) params.set("snapshot", value); else params.delete("snapshot");
-    params.delete("product"); params.delete("row");
+    params.delete("product"); params.delete("row"); params.delete("product_region");
     navigate({ pathname: window.location.pathname, search: window.location.search, hash: `#${params}` }, { replace: true, state: window.history.state?.usr });
   }, [navigate]);
-  const selectedRef = useRef(initialSnapshot);
-  const loadedSnapshot = useRef("");
   useEffect(() => {
     selectedRef.current = initialSnapshot;
+    const current = versionsRef.current?.find(item => String(item.id) === initialSnapshot);
+    if (current) { loadedSnapshot.current = initialSnapshot; setReviewedRevision(current.edit_revision || 0); }
   }, [initialSnapshot]);
   const [error, setError] = useState("");
   const [versionsError, setVersionsError] = useState("");
@@ -237,7 +248,7 @@ export function SelectMarketCalculations({ navigationRevision = 0, canEdit, view
       try {
         const { data } = await api.get(root, { signal: controller.signal });
         if (!controller.signal.aborted) {
-          setVersions(data); setVersionsError("");
+          versionsRef.current = data; setVersions(data); setVersionsError("");
           const latest = data.find(v => v.status === "success");
           const old = data.find(v => v.is_active && v.id !== latest?.id) || data.find(v => v.was_active && v.id !== latest?.id) || data.find(v => v.status === "success" && v.id !== latest?.id);
           setCompareTo(value => value || String(latest?.id || ""));
@@ -353,6 +364,18 @@ export function SelectMarketCalculations({ navigationRevision = 0, canEdit, view
       if (alive.current) setActivating(false);
     }
   }
+  function openPriceProduct(snapshotId, productId, region = "") {
+    selectedRef.current = String(snapshotId);
+    loadedSnapshot.current = String(snapshotId);
+    setReviewedRevision(versions.find(item => String(item.id) === String(snapshotId))?.edit_revision || 0);
+    const returnParams = new URLSearchParams(window.location.hash.slice(1));
+    ["compare_product", "compare_snapshot", "compare_region"].forEach(key => returnParams.delete(key));
+    const params = new URLSearchParams(returnParams);
+    params.set("snapshot", String(snapshotId)); params.set("suc", "prices"); params.set("product", String(productId));
+    params.delete("row"); params.delete("compare_product"); params.delete("compare_snapshot"); params.delete("compare_region");
+    if (region) params.set("product_region", region); else params.delete("product_region");
+    navigate({ pathname: window.location.pathname, search: window.location.search, hash: "#" + params }, { state: {...window.history.state?.usr, sucReturn: "#" + returnParams} });
+  }
   const activationActions = <div className="ip-row">{canEdit && !historicalRoutes && selectedVersion?.status === "success" && selectedVersion.is_current && <Button variant="primary" disabled={activating || building || stale || selectedVersion.is_active} onClick={activate}>{selectedVersion.is_active ? "Версия утверждена" : activating ? "Проверяем и утверждаем…" : "Утвердить внутри системы"}</Button>}{canEdit && selectedVersion?.is_active && <Button variant="danger" disabled={activating} onClick={deactivate}>Снять утверждение</Button>}</div>;
   const parameterAction = editableParameters && view === "prices" && <span id="sm-list-parameters" />;
   const picker = !!versions?.length && <select className="ip-select ip-select-version" aria-label="Последние 50 версий" disabled={activating || starting || exporting || view === "compare"} value={selected} onChange={event => { selectedRef.current = event.target.value; setSelected(event.target.value); setError(""); setMessage(""); setReviewedRevision(versions.find(version => String(version.id) === event.target.value)?.edit_revision || 0); }}><option value="">Выберите версию</option>{versions.map(version => <option key={version.id} value={version.id}>Расчёт №{version.version_number} · {fmtDate(version.calculation_date)} · {versionLabel(version, versions.find(item => item.status === "success")?.id)}</option>)}</select>;
@@ -360,8 +383,8 @@ export function SelectMarketCalculations({ navigationRevision = 0, canEdit, view
   return <div className="sm-calculation-pages ip-stack" hidden={view === "data"}>
     {confirmation}
     {slot && view !== "data" && view !== "versions" && createPortal(picker, slot)}
-    {view !== "compare" && <PageHead title={{ home: "Главная", prices: "Цены", market: "Рынок", versions: "Расчёты", compare: "Изменения между расчётами" }[view]} text={{ home: "Следующий шаг, товары для проверки и состояние данных.", prices: "Проверьте цены товаров по регионам. Откройте товар, чтобы увидеть расчёт и аналоги.", market: "Разница наших цен с ценами конкурентов по группам товаров и регионам.", versions: "Сохранённые расчёты, утверждение и история изменений. Цены автоматически в 1С не передаются." }[view]} onHelp={onHelp} actions={<>{parameterAction}{selectedVersion?.status === "success" && view !== "home" && <Button icon="download" disabled={exporting} onClick={() => download()}>{exporting ? "Готовим документ…" : "Скачать Excel"}</Button>}</>} />}
-    {message && <p role="status">{message}</p>}{error && <p role="alert">{error}</p>}{versionsError && <p role="alert">{versionsError}</p>}
+    {view !== "compare" && <PageHead title={{ home: "Главная", prices: "Цены", market: "Рынок", versions: "Расчёты", compare: "Изменения между расчётами" }[view]} text={{ home: "Следующий шаг, товары для проверки и состояние данных.", prices: "Проверьте цены товаров по регионам. Откройте товар, чтобы увидеть расчёт и аналоги.", market: "Разница наших цен с ценами конкурентов по группам товаров и регионам.", versions: "Сохранённые расчёты, утверждение и история изменений. Цены автоматически в 1С не передаются." }[view]} onHelp={onHelp} actions={<>{parameterAction}{selectedVersion?.status === "success" && view !== "home" && <Button icon="download" disabled={exporting} onClick={() => download()}>{exporting ? "Готовим документ…" : "Скачать Excel"}</Button>}<span id="sm-view-controls" /></>} />}
+    {message && <Notice key={"message:" + message} onClose={() => setMessage("")}>{message}</Notice>}{error && <Notice key={"error:" + error} error onClose={() => setError("")}>{error}</Notice>}{versionsError && <p role="alert">{versionsError}</p>}
     {versions && selected && !selectedVersion && <p role="alert">Версия из ссылки отсутствует среди доступных последних 50 расчётов. Выберите версию из списка.</p>}
     {!versions && !versionsError && <p role="status" className="sm-iprice-loading">Загружаем версии…</p>}
     {view === "home" && versions && <SelectMarketOverview key={`overview-${selected}-${revision}`} snapshot={selectedVersion} activeSnapshot={versions.find(v => v.is_active)} onCompare={() => { const active = versions.find(v => v.is_active); if (active) { setInitialComparison(String(active.id)); onNavigate("compare"); } }} sourceState={sourceState} onNavigate={onNavigate} onHelp={onHelp} onZone={zone => { setPriceScope({ zone, snapshotId: selected }); onNavigate("prices"); }} />}
@@ -370,8 +393,8 @@ export function SelectMarketCalculations({ navigationRevision = 0, canEdit, view
         <form className="sm-iprice-toolbar sm-panel-body" onSubmit={start}><label>Дата расчёта<input type="date" value={day} required disabled={starting || building || !canEdit} onChange={event => setDay(event.target.value)} /></label>
         {canEdit ? <Button variant="primary" icon="play" type="submit" disabled={!versions || starting || building}>{starting ? "Запускаем…" : building ? "Расчёт выполняется" : "Посчитать цены"}</Button> : <span className="small muted">Расчёт запускают сотрудники с правом редактирования.</span>}</form>
       </Panel><Panel title="Изменения между расчётами" sub="Товары с новой ценой, новые и выбывшие товары."><div className="ip-stack sm-panel-body"><div className="ip-grid k2">
-        <label className="ip-field">Старый<select className="ip-select" aria-label="Старый расчёт" value={compareFrom} onChange={e => setCompareFrom(e.target.value)}><option value="">Выберите расчёт</option>{versions?.filter(v => v.status === "success").map(v => <option key={v.id} value={v.id}>{fmtDate(v.calculation_date)} · №{v.version_number}</option>)}</select></label>
-        <label className="ip-field">Новый<select className="ip-select" aria-label="Новый расчёт" value={compareTo} onChange={e => setCompareTo(e.target.value)}><option value="">Выберите расчёт</option>{versions?.filter(v => v.status === "success").map(v => <option key={v.id} value={v.id}>{fmtDate(v.calculation_date)} · №{v.version_number}</option>)}</select></label>
+        <label className="ip-field">Старый<select className="ip-select" aria-label="Старый расчёт" value={compareFrom} onChange={e => setCompareFrom(e.target.value)}><option value="">Выберите расчёт</option>{versions?.filter(v => v.status === "success").map(v => <option key={v.id} value={v.id}>Расчёт №{v.version_number} · {fmtDate(v.calculation_date)} · {versionLabel(v, versions.find(item => item.status === "success")?.id)}</option>)}</select></label>
+        <label className="ip-field">Новый<select className="ip-select" aria-label="Новый расчёт" value={compareTo} onChange={e => setCompareTo(e.target.value)}><option value="">Выберите расчёт</option>{versions?.filter(v => v.status === "success").map(v => <option key={v.id} value={v.id}>Расчёт №{v.version_number} · {fmtDate(v.calculation_date)} · {versionLabel(v, versions.find(item => item.status === "success")?.id)}</option>)}</select></label>
         </div><div className="ip-row" style={{ justifyContent: "flex-end" }}><Button icon="compare" disabled={!compareFrom || !compareTo || compareFrom === compareTo} onClick={() => { selectedRef.current = compareTo; setSelected(compareTo); setReviewedRevision(versions.find(v => String(v.id) === compareTo)?.edit_revision || 0); setInitialComparison(compareFrom); onNavigate("compare"); }}>Показать изменения</Button></div></div></Panel></div>
       <Panel title="Все расчёты" sub="Утверждение действует внутри системы. Автоматической отправки цен в 1С нет."><div className="sm-iprice-table"><table className="ip-table"><thead><tr><th>Расчёт</th><th>Состояние</th><th>Запуск</th><th className="num">Товаров</th><th className="num">Цен по регионам</th><th className="num">Без цены</th><th /></tr></thead><tbody>{versions?.map(version => <tr key={`version-${version.id}`} className={String(version.id) === selected ? "selected" : ""}><td>{fmtDate(version.calculation_date)}<span className="sub">№{version.version_number}{!version.is_current && " · есть новее за эту дату"}</span></td><td><span className={`ip-tag ${version.is_active ? "orange" : version.status === "failed" ? "red" : "gray"}`}>{versionLabel(version, versions.find(item => item.status === "success")?.id)}</span>{version.error && <span className="sub">{version.error}</span>}</td><td>{version.created_by__username || "—"}<span className="sub">{version.created_at ? fmtDateTime(version.created_at) : "—"}</span></td><td className="num">{version.products_count ?? "—"}</td><td className="num">{version.regions_count ?? "—"}</td><td className="num">{version.errors_count ?? "—"}</td><td><div className="ip-row"><Button size="s" onClick={() => { selectedRef.current = String(version.id); setSelected(String(version.id)); setReviewedRevision(version.edit_revision || 0); }}>{String(version.id) === selected ? "Выбран" : "Открыть"}</Button>{version.status === "success" && <Button size="s" variant="ghost" icon="download" aria-label="Скачать цены версии" disabled={exporting} onClick={() => download(version)} />}{String(version.id) === selected && activationActions}{version.status === "success" && !version.is_active && <Button variant="ghost" size="s" icon="compare" onClick={() => { const base = versions.find(v => v.is_active && v.id !== version.id) || versions.find(v => v.status === "success" && v.id !== version.id); if (base) { selectedRef.current = String(version.id); setSelected(String(version.id)); setInitialComparison(String(base.id)); onNavigate("compare"); } }}>Изменения</Button>}{version.status === "success" && <Button variant="ghost" size="s" icon="table" onClick={() => { selectedRef.current = String(version.id); setSelected(String(version.id)); setReviewedRevision(version.edit_revision || 0); onNavigate("prices"); }}>Цены</Button>}</div></td></tr>)}</tbody></table></div></Panel>
       {versions?.length === 0 && <div className="ip-empty"><b>Расчётов пока нет</b><span>Загрузите данные и посчитайте цены.</span></div>}
@@ -380,7 +403,7 @@ export function SelectMarketCalculations({ navigationRevision = 0, canEdit, view
     {historicalRoutes && <p role="status">Историческая версия с маршрутами: доступны просмотр и выгрузка. Для изменения цен создайте новый расчёт.</p>}
 
     {selected && view === "prices" && selectedVersion?.status === "success" && <CalculationRows key={`rows-${selected}-${selectedVersion.status}-${restoration}`} revision={revision} id={selected} initialScope={priceScope.snapshotId === selected ? priceScope : {}} onScopeChange={rememberScope} canEdit={editable} canEditParameters={editableParameters} onSaved={changed} />}
-    {selected && view === "compare" && <SelectMarketCompare key={`compare-${selected}-${initialComparison}-${restoration}`} snapshotId={selected} baseId={initialComparison} exportAction={selectedVersion?.status === "success" ? <Button icon="download" disabled={exporting} onClick={() => download()}>{exporting ? "Готовим документ…" : "Скачать Excel"}</Button> : null} onBack={() => onNavigate("versions")} />}
-    {selected && view === "market" && selectedVersion?.status === "success" && <MarketAnalysis key={`market-${selected}-${restoration}`} refreshRevision={revision} snapshotId={selected} canEdit={editableParameters} canEditPrice={editable} onSaved={changed} initialZone={initialZone} onOpenList={scope => { setPriceScope({ ...scope, snapshotId: selected }); onNavigate("prices"); }} />}
+    {selected && view === "compare" && <SelectMarketCompare key={`compare-${selected}-${initialComparison}-${restoration}`} snapshotId={selected} baseId={initialComparison} onOpenProduct={openPriceProduct} exportAction={selectedVersion?.status === "success" ? <Button icon="download" disabled={exporting} onClick={() => download()}>{exporting ? "Готовим документ…" : "Скачать Excel"}</Button> : null} onBack={() => onNavigate("versions")} />}
+    {selected && view === "market" && selectedVersion?.status === "success" && <MarketAnalysis key={`market-${selected}-${restoration}`} refreshRevision={revision} snapshotId={selected} canEdit={editableParameters} canEditPrice={editable} onSaved={changed} initialZone={initialZone} onOpenProduct={openPriceProduct} onOpenList={scope => { setPriceScope({ ...scope, snapshotId: selected }); onNavigate("prices"); }} />}
   </div>;
 }

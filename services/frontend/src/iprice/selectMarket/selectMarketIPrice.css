@@ -157,7 +157,7 @@
 .sm-iprice .sm-iprice-loading::before { flex: 0 0 14px; margin-right: 0; }
 
 .sm-iprice .sm-competitor-card-actions .ip-seg button { font-size: 12px; padding-inline: 4px; white-space: nowrap; overflow-wrap: normal; flex: 1 0 auto; }
-.sm-iprice .ip-select.ip-select-version { width: 420px; max-width: min(420px, 55vw); }
+.sm-iprice .ip-select.ip-select-version { width: 365px; max-width: min(365px, 55vw); }
 .sm-iprice .sm-own-card .sm-own-product-name { font-size: 16px; font-weight: 600; line-height: 20px; }
 .sm-iprice .sm-product-heading { align-items: flex-start; flex-wrap: nowrap; gap: 16px; }
 .sm-iprice .sm-product-heading > .ip-thumb { flex: 0 0 56px; }
@@ -173,3 +173,21 @@
 .sm-iprice .sm-iprice-source-grid > .ip-panel:nth-child(n+3) .sm-source-date { display: block; }
 @media(max-width:1100px) { .sm-iprice .sm-iprice-source-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media(max-width:700px) { .sm-iprice .sm-iprice-source-grid { grid-template-columns: 1fr; } .sm-iprice .sm-product-heading { flex-wrap: wrap; } .sm-iprice .sm-product-heading-text { flex-basis: calc(100% - 80px); } }
+
+/* Shared tracks align cards without truncating product names. */
+.sm-iprice .ip-cards > .sm-own-card { display: grid; grid-template-rows: subgrid; grid-row: span 5; gap: 12px; }
+.sm-iprice .ip-cards > .sm-competitor-card { grid-row: span 6; }
+.sm-iprice .ip-cards > .sm-competitor-card-readonly { grid-row: span 5; }
+.sm-iprice .sm-zone-fields > .ip-field { display: grid; grid-template-rows: subgrid; grid-row: span 3; align-content: start; }
+.sm-iprice .sm-history-entry { padding: 14px 0; border-bottom: 1px solid var(--border); display: grid; gap: 8px; overflow-wrap: anywhere; }
+.sm-iprice .sm-history-entry:last-child { border-bottom: 0; }
+.sm-iprice .sm-history-entry p { margin: 0; white-space: pre-wrap; }
+.sm-iprice .sm-history-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.sm-iprice .sm-regional-prices { min-width: 0; }
+.sm-iprice .sm-regional-prices summary { cursor: pointer; color: var(--blue-600); font-size: 12px; }
+.sm-iprice .sm-regional-prices .ip-table { font-size: 12px; width: 100%; }
+.sm-iprice .sm-regional-prices td, .sm-iprice .sm-regional-prices th { padding: 8px 4px; white-space: normal; }
+.sm-iprice .sm-regional-prices .num { white-space: nowrap; }
+
+.sm-iprice .ip-zonebar-row.head button.sort { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+.sm-iprice .ip-zonebar-row.head button.sort:focus-visible { outline: 2px solid var(--focus); }
