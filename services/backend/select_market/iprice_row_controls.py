@@ -20,7 +20,19 @@ class RowControls(serializers.Serializer):
         return ','.join(zones)
 
 
-def filter_rows(rows, values):
+def regional_product_summaries(rows):
+    """Product prices within the selected regional scope, before zone filtering."""
+    from datasets.services.iprice_price_analytics import _build_regional_product_metrics, classify_price_zone, _deviation
+    config = get_active_price_zone_config(workspace=IPriceWorkspace('select-market'))
+    return {pk: {
+        'current_retail_median': metrics['retail_price'],
+        'effective_approved_rrp_median': metrics['final_rrp'],
+        'competitor_rrp_median': metrics['market_price'],
+        'zone': classify_price_zone(_deviation(metrics['final_rrp'], metrics['market_price']), config),
+    } for pk, metrics in _build_regional_product_metrics(rows).items()}
+
+
+def filter_rows(rows, values, *, summaries=None):
     product_mode = values['mode'] == 'products'
     prefix = 'snapshot_product__' if product_mode else ''
     if values['problems_only']:
@@ -29,6 +41,9 @@ def filter_rows(rows, values):
     zone = values['zone']
     if not zone:
         return rows
+    if product_mode and summaries is not None:
+        return rows.filter(snapshot_product_id__in=[pk for pk, summary in summaries.items()
+                                                  if summary['zone'] in zone.split(',')])
     current = 'snapshot_product__effective_approved_rrp_median' if product_mode else 'effective_approved_rrp'
     if not product_mode:
         from datasets.services.iprice_price_analytics import _with_effective_approved_rrp

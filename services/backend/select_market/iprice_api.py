@@ -255,7 +255,16 @@ class SnapshotFiltersView(PriceFileView):
             base = get_object_or_404(IPriceSnapshot, pk=comparison_id, status='success')
             products = comparison_products(base=base, comparison=snapshot)
         elif controls.validated_data['zone'] or controls.validated_data['problems_only']:
-            scoped_rows = filter_rows(IPriceSnapshotRegion.objects.filter(snapshot_product__snapshot=snapshot), controls.validated_data)
+            from .iprice_row_controls import regional_product_summaries
+            scoped_rows = IPriceSnapshotRegion.objects.filter(snapshot_product__snapshot=snapshot)
+            try:
+                regions = query_filters(request.query_params).get('sale_region')
+            except ValueError as exc:
+                raise ValidationError(str(exc)) from exc
+            if regions:
+                scoped_rows = scoped_rows.filter(sale_region__in=regions)
+            summaries = regional_product_summaries(scoped_rows) if regions and controls.validated_data['mode'] == 'products' else None
+            scoped_rows = filter_rows(scoped_rows, controls.validated_data, summaries=summaries)
             products = products.filter(pk__in=scoped_rows.values('snapshot_product_id'))
         try:
             return Response(filter_options(products, query_filters(request.query_params),
@@ -301,7 +310,12 @@ class SnapshotRowsView(PriceFileView):
         from .iprice_row_controls import RowControls, filter_rows
         controls = RowControls(data=request.query_params)
         controls.is_valid(raise_exception=True)
-        rows = filter_rows(rows, controls.validated_data)
+        from .iprice_row_controls import regional_product_summaries
+        scoped_summaries = regional_product_summaries(rows) if (
+            controls.validated_data['mode'] == 'products' and
+            (query_filters(request.query_params).get('sale_region') or request.query_params.get('sale_region'))
+        ) else None
+        rows = filter_rows(rows, controls.validated_data, summaries=scoped_summaries)
         grouped = controls.validated_data['mode'] == 'products'
         ordering = request.query_params.get('ordering', 'nom')
         field = ordering.lstrip('-')
@@ -320,6 +334,16 @@ class SnapshotRowsView(PriceFileView):
             if field == 'deviation':
                 products_query = metric(products_query, 'effective_approved_rrp_median', 'competitor_rrp_median')
             items = products_query.order_by(direction + path, 'pk').values_list('pk', flat=True)
+            if scoped_summaries is not None and field in {'market', 'current', 'final', 'deviation'}:
+                from datasets.services.iprice_price_analytics import _deviation
+                def scoped_value(pk):
+                    summary = scoped_summaries[pk]
+                    return (_deviation(summary['effective_approved_rrp_median'], summary['competitor_rrp_median'])
+                            if field == 'deviation' else summary[path])
+                ids = sorted(items)
+                items = sorted((pk for pk in ids if scoped_value(pk) is not None),
+                               key=scoped_value, reverse=bool(direction))
+                items += [pk for pk in ids if scoped_value(pk) is None]
         else:
             from datasets.services.iprice_price_analytics import _with_effective_approved_rrp
             rows = _with_effective_approved_rrp(rows)
@@ -352,6 +376,8 @@ class SnapshotRowsView(PriceFileView):
                     'pricing_method', 'calculation_status', 'warning_codes', 'error_codes')}
                 product_summaries[row.snapshot_product_id]['zone'] = classify_price_zone(_deviation(
                     row.snapshot_product.effective_approved_rrp_median, row.snapshot_product.competitor_rrp_median), zone_config)
+                if scoped_summaries is not None:
+                    product_summaries[row.snapshot_product_id].update(scoped_summaries[row.snapshot_product_id])
             values = {field: getattr(row, field) for field in (
                 'id', 'sale_region', 'current_retail', 'cost_with_logistics', 'calculated_rrp',
                 'minimum_price', 'regional_competitor_rrp_median', 'regional_competitor_rrp_min', 'regional_competitor_rrp_max', 'base_analog', 'base_exclusive', 'minimum_margin',

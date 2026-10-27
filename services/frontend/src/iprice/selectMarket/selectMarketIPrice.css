@@ -191,3 +191,6 @@
 
 .sm-iprice .ip-zonebar-row.head button.sort { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
 .sm-iprice .ip-zonebar-row.head button.sort:focus-visible { outline: 2px solid var(--focus); }
+
+.sm-iprice .ip-card.sm-automatic-analog { box-shadow: inset 3px 0 0 var(--primary); }
+.sm-history-product { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; overflow-wrap: anywhere; }

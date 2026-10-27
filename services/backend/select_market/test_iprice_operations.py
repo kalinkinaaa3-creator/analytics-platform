@@ -348,6 +348,34 @@ class OperationsTests(TestCase):
         self.assertEqual(IPriceSnapshotApproval.objects.count(), 1)
         self.assertEqual(IPriceCompetitorSelectionChange.objects.count(), 1)
         self.assertEqual(product.competitors.get().competitor_final_price_max, Decimal('120'))
+        apply_competitor_selection(**args, selection_mode='auto', expected_revision=2)
+        self.assertTrue(product.competitors.exists())
+        self.assertEqual(ParserProductMatch.objects.get(product_key_competitor=competitor.pk).match_type, 'auto')
+
+    def test_manually_added_competitor_returns_to_market_on_auto(self):
+        from datasets.services.iprice_competitor_selection import apply_competitor_selection
+        from .iprice_domain_models import ParserProductUrl, ParserProductClassification, TtProductPrice
+        competitor = ParserProductUrl.objects.create(source='tt', url='https://example.test/manual', status='active')
+        ParserProductClassification.objects.create(product_key=competitor.pk, status='active', item_type='product')
+        TtProductPrice.objects.create(product_key=competitor.pk, final_price=120, name='Test competitor product')
+        product = self.snapshot.products.get()
+        args = dict(snapshot_id=self.snapshot.pk, product_id=product.pk, competitor_product_keys=[competitor.pk],
+                    user=self.user, reason='Test', workspace=self.workspace)
+        apply_competitor_selection(**args, selection_mode='include', expected_revision=0)
+        self.assertTrue(product.competitors.exists())
+        apply_competitor_selection(**args, selection_mode='auto', expected_revision=1)
+        self.assertFalse(product.competitors.exists())
+        from .iprice_operations_api import CompetitorSelectionView
+        from organizations.models import Organization
+        req = APIRequestFactory().get('/')
+        req.organization = Organization.objects.get(code='select-market')
+        force_authenticate(req, self.user)
+        with patch('select_market.iprice_api.Dashboard.objects') as dashboard, patch('select_market.iprice_api.user_can_view_dashboard', return_value=True):
+            dashboard.filter.return_value.first.return_value = object()
+            response = CompetitorSelectionView.as_view()(req, snapshot_id=self.snapshot.pk, product_id=product.pk)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['changes'][0]['source'], 'tt')
+        self.assertEqual(response.data['changes'][0]['product_name'], 'Test competitor product')
 
     def test_market_groups_and_zone_settings_are_local(self):
         from datasets.services.iprice_price_analytics import build_iprice_price_analytics, activate_price_zone_config, get_active_price_zone_config

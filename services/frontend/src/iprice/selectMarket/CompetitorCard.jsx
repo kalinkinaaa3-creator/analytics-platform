@@ -5,16 +5,15 @@ import { fmtMoney } from "./archiveFormat";
 import { getIPriceCompetitorSourceLabel, getIPriceCompetitorPriceProperties } from "../product/ipriceProductLabels";
 import { useState } from "react";
 import { Button, Modal } from "./ui/primitives";
-import Icon from "./ui/Icon";
 import { errorText } from "./format";
 import { saveCompetitorSelection } from "./competitorSelection";
 
 export function CompetitorCard({ card, editable, onChangeMode }) {
   const mode = card.selection_mode || "auto";
   const properties = getIPriceCompetitorPriceProperties(card.source, card.price_variants || card.variants);
-  return <article className={`ip-card sm-competitor-card ${editable ? "" : "sm-competitor-card-readonly"} ${mode === "exclude" ? "excluded" : mode === "include" ? "included" : ""}`}>
+  return <article className={`ip-card sm-competitor-card ${editable ? "" : "sm-competitor-card-readonly"} ${mode === "exclude" ? "excluded" : mode === "include" ? "included" : mode === "auto" && card.is_used_in_snapshot ? "sm-automatic-analog" : ""}`}>
     <div className="ip-card-top"><div className="ip-thumb"><ProductImage src={card.image} name={card.name} /></div><div style={{ minWidth: 0, flex: 1 }}><div className="ip-row"><span className="ip-tag outline">{getIPriceCompetitorSourceLabel(card.source)}</span><span className={`ip-tag ${card.is_used_in_snapshot ? "blue" : "gray"}`}>{mode === "exclude" ? "Исключён" : card.is_used_in_snapshot ? "Учтён в расчёте" : "Не учтён"}</span></div><h3 className="ip-card-title">{card.name || `Товар ${card.product_key}`}</h3></div></div>
-    <div className="ip-row between"><span className="price">{fmtMoney(card.price)}</span>{/^https?:\/\//i.test(card.url || "") && <a className="small ip-row" href={card.url} target="_blank" rel="noopener noreferrer">На сайте конкурента <Icon name="ext" /></a>}</div>
+    <div className="ip-row between"><span className="price">{fmtMoney(card.price)}</span><span className="small muted">Медиана по регионам</span></div>
     <div className="ip-props"><ColorSwatch color={card.color} />{[...new Set([card.material, card.modification, card.additional_property].filter(Boolean))].map(value => <span key={value} className="ip-tag gray">{value}</span>)}{properties.map(({ label, value }) => <span key={JSON.stringify([label, value])} className="ip-tag gray">{label}: {value}</span>)}</div>
     <div className="small muted">Без НДС.{card.competitor_price_date && ` Цена от ${new Date(card.competitor_price_date).toLocaleDateString("ru-RU")}.`}{card.article_number_analogs && ` Группа аналогов: ${card.article_number_analogs}.`}</div>
     <RegionalPrices entries={card.regional_entries || []} />

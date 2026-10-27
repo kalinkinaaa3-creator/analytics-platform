@@ -83,8 +83,11 @@ def _automatic_keys(base_product_key: int, *, workspace=None) -> set[int]:
     ParserProductMatch = workspace.model('ParserProductMatch') if workspace else globals()['ParserProductMatch']
     if workspace:
         from django.db.models import Q
+        Override = workspace.model('IPriceCompetitorSelectionOverride')
+        overridden = Override.objects.filter(product_key_base=base_product_key).values('product_key_competitor')
         return set(ParserProductMatch.objects.filter(product_key_base=base_product_key).filter(
-            Q(status=ParserProductMatch.STATUS_ACTIVE) | Q(match_type=ParserProductMatch.MATCH_TYPE_AUTO)
+            Q(match_type=ParserProductMatch.MATCH_TYPE_AUTO) |
+            (Q(status=ParserProductMatch.STATUS_ACTIVE) & ~Q(product_key_competitor__in=overridden))
         ).values_list('product_key_competitor', flat=True))
     return set(
         ParserProductMatch.objects.filter(
@@ -122,6 +125,9 @@ def _replace_operational_matches(
     IPriceCompetitorSelectionOverride = workspace.model('IPriceCompetitorSelectionOverride') if workspace else globals()['IPriceCompetitorSelectionOverride']
     ParserProductMatch = workspace.model('ParserProductMatch') if workspace else globals()['ParserProductMatch']
     manual_keys = manual_keys or set()
+    automatic_keys = set(ParserProductMatch.objects.filter(
+        product_key_base=base_product_key, match_type=ParserProductMatch.MATCH_TYPE_AUTO,
+    ).values_list('product_key_competitor', flat=True)) if workspace else set()
     ParserProductMatch.objects.filter(
         product_key_base=base_product_key,
         status=ParserProductMatch.STATUS_ACTIVE,
@@ -134,8 +140,9 @@ def _replace_operational_matches(
             match_type=(
                 ParserProductMatch.MATCH_TYPE_MANUAL
                 if (
-                    key in manual_keys
+                    (key in manual_keys
                     or modes.get(key) == IPriceCompetitorSelectionOverride.MODE_INCLUDE
+                    ) and key not in automatic_keys
                 )
                 else ParserProductMatch.MATCH_TYPE_AUTO
             ),

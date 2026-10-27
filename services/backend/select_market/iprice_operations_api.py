@@ -371,11 +371,23 @@ class CompetitorSelectionView(PriceFileView):
         modes = dict(IPriceCompetitorSelectionOverride.objects.filter(product_key_base=product.base_product_key).values_list('product_key_competitor', 'selection_mode'))
         from datasets.services.iprice_market_assortment import get_used_competitor_keys
         used = get_used_competitor_keys(snapshot_product=product)
+        changes = list(product.snapshot.competitor_selection_changes.filter(
+            override__product_key_base=product.base_product_key).order_by('-id').values(
+                'id', 'selection_mode', 'reason', 'date_add', 'changed_by__username', 'override__product_key_competitor')[:50])
+        history_keys = {item['override__product_key_competitor'] for item in changes}
+        sources = dict(ParserProductUrl.objects.filter(pk__in=history_keys).values_list('pk', 'source'))
+        from .iprice_domain_models import TaraProductPrice, PsProductPrice, TtProductPrice
+        names = {}
+        for model in (TaraProductPrice, PsProductPrice, TtProductPrice):
+            for key, name in model.objects.filter(product_key__in=history_keys).exclude(name__isnull=True).exclude(name='').order_by('-date_add', '-pk').values_list('product_key', 'name'):
+                names.setdefault(key, name)
+        for item in changes:
+            key = item['override__product_key_competitor']
+            item.update(source=sources.get(key), product_name=names.get(key))
         return Response({'items': [{'id': row.pk, 'source': row.source, 'url': row.url, 'mode': modes.get(row.pk, 'auto'), 'used_in_snapshot': row.pk in used} for row in paginator.page(page)],
             'page': page, 'pages': paginator.num_pages, 'count': paginator.count, 'edit_revision': product.snapshot.parameters.get('edit_revision', 0),
             'editable': is_selection_editable(product.snapshot),
-            'changes': list(product.snapshot.competitor_selection_changes.filter(override__product_key_base=product.base_product_key).order_by('-id').values(
-                'id', 'selection_mode', 'reason', 'date_add', 'changed_by__username', 'override__product_key_competitor')[:50])})
+            'changes': changes})
 
     def post(self, request, snapshot_id, product_id):
         from datasets.services.iprice_workspace import IPriceWorkspace

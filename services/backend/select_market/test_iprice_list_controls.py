@@ -35,6 +35,53 @@ class ListControlsTests(TestCase):
         self.assertEqual(self.get(zone='invalid').status_code, 400)
         self.assertEqual(self.get(mode='invalid').status_code, 400)
 
+    def test_product_prices_sort_and_zone_follow_selected_regions(self):
+        import json
+        self.row(100, 'M')
+        self.row(200, 'K')
+        self.row(300, 'S')
+        self.product.current_retail_median = 200
+        self.product.effective_approved_rrp_median = 200
+        self.product.competitor_rrp_median = 100
+        self.product.save()
+        other = IPriceSnapshotProduct.objects.create(snapshot=self.snapshot, code_1c='B', nom='B',
+            current_retail_median=50, effective_approved_rrp_median=50, competitor_rrp_median=100)
+        IPriceSnapshotRegion.objects.create(snapshot_product=other, sale_region='M',
+            current_retail=180, default_approved_rrp=180, regional_competitor_rrp_median=100)
+        for regions, expected in [(['M'], 100), (['M', 'K'], 150), (['M', 'K', 'S'], 200)]:
+            result = self.get(mode='products', filters=json.dumps({'sale_region': regions}), ordering='final')
+            self.assertEqual(result.status_code, 200)
+            item = next(item for item in result.data['rows'] if item['product_id'] == self.product.pk)
+            self.assertEqual(item['summary']['current_retail_median'], expected)
+            self.assertEqual(item['summary']['effective_approved_rrp_median'], expected)
+            self.assertEqual(item['summary']['competitor_rrp_median'], 100)
+        filters = json.dumps({'sale_region': ['M']})
+        result = self.get(mode='products', filters=filters, ordering='-final')
+        self.assertEqual([item['product_id'] for item in result.data['rows']], [other.pk, self.product.pk])
+        result = self.get(mode='products', filters=filters, zone='in_market')
+        self.assertEqual([item['product_id'] for item in result.data['rows']], [self.product.pk])
+        from .iprice_regional_edits import resolve
+        scope = {'mode': 'products', 'zone': 'in_market', 'problems_only': False}
+        self.assertEqual(list(resolve(self.snapshot, {'sale_region': ['M']}, list_scope=scope)
+                              .values_list('snapshot_product_id', flat=True)), [self.product.pk])
+        unfiltered = self.get(mode='products')
+        item = next(item for item in unfiltered.data['rows'] if item['product_id'] == self.product.pk)
+        self.assertEqual(item['summary']['current_retail_median'], 200)
+
+    def test_selected_region_product_median_uses_manual_price_and_ignores_missing(self):
+        import json
+        from .iprice_domain_models import IPriceSnapshotApproval
+        row = self.row(120, 'M')
+        self.row(None, 'K')
+        IPriceSnapshotApproval.objects.create(snapshot_region=row, revision=1, approved_rrp=100, is_current=True)
+        result = self.get(mode='products', filters=json.dumps({'sale_region': ['M', 'K']}), zone='in_market')
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data['count'], 1)
+        summary = result.data['rows'][0]['summary']
+        self.assertEqual(summary['current_retail_median'], 120)
+        self.assertEqual(summary['effective_approved_rrp_median'], 100)
+        self.assertEqual(summary['zone'], 'in_market')
+
     def test_filtering_and_grouping_precede_pagination(self):
         for i in range(52):
             self.row(100, str(i), calculation_status='success')

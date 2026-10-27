@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { Button, Drawer } from "./ui/primitives";
 import Icon from "./ui/Icon";
+import { Term } from "./ui/Term";
+
+const regionHint = "Отбирает товары выбранных регионов. В режиме «По товарам» цены показаны как медианы по выбранным регионам, в режиме «По регионам» — отдельно для каждого региона. Если регион не выбран, учитываются все регионы.";
 
 const labels = { sale_region: "Регион продажи", pricing_method: "Способ расчёта", calculation_status: "Статус товара", group_2: "Группа 1", group_3: "Группа 2", group_4: "Группа 3",
   is_classified: "Наличие классификации", category: "Тип", subcategory: "Категория",
@@ -46,7 +49,7 @@ export function SelectMarketFilters({ snapshotId, comparisonId, search, filters,
   return <><div className="ip-filters">{Object.keys(labels).filter(key => ["group_2", "group_3", "group_4", "category", "subcategory", "subcategory_type", "is_classified"].includes(key) || filters[key]?.length).map(key => <FilterChip key={key} name={key} values={values(key)} selected={filters[key] || []} onChange={value => set(key, value)} />)}
     <Button size="s" icon="filter" onClick={() => setMore(true)}>Ещё фильтры</Button>{Object.values(filters).some(v => v.length) && <Button size="s" variant="ghost" onClick={() => onChange({})}>Сбросить все</Button>}
   </div>{error && <p role="alert">{error}</p>}<Drawer open={more} onClose={() => setMore(false)} title="Фильтры" sub="Списки подстраиваются под уже выбранные фильтры: остаются только подходящие значения.">
-    {Object.entries(labels).map(([key, label]) => <details key={key} open={filters[key]?.length > 0} className="ip-panel sm-filter-section"><summary>{label}{filters[key]?.length > 0 && <span className="ip-badge">{filters[key].length}</span>}</summary>
+    {Object.entries(labels).map(([key, label]) => <details key={key} open={filters[key]?.length > 0} className="ip-panel sm-filter-section"><summary>{label}{key === "sale_region" && <Term icon title={label} text={regionHint} />}{filters[key]?.length > 0 && <span className="ip-badge">{filters[key].length}</span>}</summary>
       <div className="ip-pop sm-filter-options"><Options name={key} values={values(key)} selected={filters[key] || []} toggle={v => set(key, filters[key]?.includes(v) ? filters[key].filter(x => x !== v) : [...(filters[key] || []), v])} /></div></details>)}
     <div className="ip-row" style={{ justifyContent: "flex-end" }}><Button variant="ghost" onClick={() => onChange({})}>Сбросить все</Button><Button variant="primary" onClick={() => setMore(false)}>Показать товары</Button></div>
   </Drawer></>;

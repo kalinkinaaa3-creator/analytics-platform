@@ -24,8 +24,9 @@ def resolve(snapshot, filters, search='', list_scope=None):
             rows = rows.filter(**{path + '__in': filters[key]})
     rows = filter_products(rows, {key: value for key, value in filters.items() if key in PRODUCT_FILTERS}, search, prefix='snapshot_product__')
     if list_scope is not None:
-        from .iprice_row_controls import filter_rows
-        rows = filter_rows(rows, list_scope)
+        from .iprice_row_controls import filter_rows, regional_product_summaries
+        summaries = regional_product_summaries(rows) if list_scope['mode'] == 'products' and filters.get('sale_region') else None
+        rows = filter_rows(rows, list_scope, summaries=summaries)
     return rows
 
 
