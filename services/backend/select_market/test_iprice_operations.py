@@ -266,13 +266,14 @@ class OperationsTests(TestCase):
         self.assertEqual(approval.approved_small, Decimal('135'))
         self.assertEqual(approval.approved_at, original.approved_at)
         self.assertEqual(approval.revision, original.revision)
-        self.assertIn('REAPPROVAL_REQUIRED', row.warning_codes)
-        with self.assertRaises(builder.IPriceSnapshotBuildError):
-            builder.activate_iprice_snapshot(snapshot=self.snapshot)
+        self.assertNotIn('REAPPROVAL_REQUIRED', row.warning_codes)
+        # A pending flag saved by an older parameter edit is cleared on recalculation.
+        row.warning_codes.append('REAPPROVAL_REQUIRED')
+        row.save(update_fields=['warning_codes'])
         self.snapshot.refresh_from_db()
         self.parameters(expected_revision=self.snapshot.parameters['edit_revision'])
         row.refresh_from_db()
-        self.assertIn('REAPPROVAL_REQUIRED', row.warning_codes)
+        self.assertNotIn('REAPPROVAL_REQUIRED', row.warning_codes)
         renewed = self.approve(expected_revision=1)
         self.assertEqual(renewed.revision, 2)
         self.assertEqual(renewed.approved_small, Decimal('128'))

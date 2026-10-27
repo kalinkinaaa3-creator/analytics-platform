@@ -14,7 +14,7 @@ def missing_analog_prices(price_rows, calculation_date):
     from .iprice_regional_calculation import competitor_matches_region
     from datasets.services.iprice_workspace import IPriceWorkspace
     from datasets.services.iprice_market_assortment import build_market_group_key_map
-    from datasets.services.iprice_source_selector import get_competitor_price_data, get_competitor_regions
+    from datasets.services.iprice_source_selector import get_competitor_regions
     workspace = IPriceWorkspace('select-market')
     classified = set(ParserProductClassification.objects.filter(status='active').values_list('product_key', flat=True))
     own = dict(ParserProductUrl.objects.filter(source='base', own_code__in=[row['code'] for row in price_rows]).values_list('own_code', 'pk'))
@@ -29,17 +29,27 @@ def missing_analog_prices(price_rows, calculation_date):
     for base, competitor in pairs:
         if competitor in urls:
             analogs[base][groups.get(competitor, (urls[competitor].source, competitor))].append(competitor)
-    price_data, regions = {}, {}
+    from .iprice_domain_models import TaraProductPrice, PsProductPrice, TtProductPrice, ParserPrefix
+    positive_keys = set()
+    # Preserve the selector's fallback to historical positive prices.
+    for source, model in [('tara', TaraProductPrice), ('ps', PsProductPrice), ('tt', TtProductPrice)]:
+        source_keys = [key for key, url in urls.items() if url.source.strip().casefold() == source]
+        if source_keys:
+            positive_keys.update(model.objects.filter(product_key__in=source_keys,
+                date_add__date__lte=calculation_date, final_price__gt=0).values_list('product_key', flat=True).distinct())
+    prefixes = defaultdict(list)
+    for prefix in ParserPrefix.objects.values('source', 'prefix', 'shipp_region'):
+        prefixes[prefix['source'].casefold()].append(prefix)
+    regions = {}
     for key, url in urls.items():
-        price_data[key] = get_competitor_price_data(product_key=key, calculation_date=calculation_date, workspace=workspace)
-        info = get_competitor_regions(source=url.source, prefix=url.prefix, workspace=workspace)
+        info = get_competitor_regions(source=url.source, prefix=url.prefix, workspace=workspace,
+            source_rows=prefixes[url.source.strip().casefold()])
         regions[key] = SimpleNamespace(is_all_regions=info['is_all_regions'], applicable_regions=info['regions'])
     labels = {'tara': 'Тара', 'tt': 'Топаз', 'ps': 'Пластик Систем'}
     entries = []
     for row in price_rows:
         for group_keys in analogs.get(own.get(row['code']), {}).values():
-            if any(competitor_matches_region(regions[key], row['shipp_region']) and price_data[key]
-                   and price_data[key]['calculation_price'] is not None and price_data[key]['calculation_price'] > 0 for key in group_keys):
+            if any(competitor_matches_region(regions[key], row['shipp_region']) and key in positive_keys for key in group_keys):
                 continue
             key = group_keys[0]
             entries.append({'id': f"source-competitor-price-{row['pk']}-{key}", 'severity': 'warning',

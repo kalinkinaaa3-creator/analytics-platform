@@ -13,16 +13,23 @@ export function SelectMarketHealth() {
   const [code, setCode] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const requestKey = JSON.stringify({ revision, level, section, code, search, page });
+  const requestKey = JSON.stringify({ revision });
   const ready = data?.requestKey === requestKey;
   const toggle = (value, key) => { const list = value ? value.split(",") : []; return (list.includes(key) ? list.filter(v => v !== key) : [...list, key]).join(","); };
   useEffect(() => {
     const controller = new AbortController();
-    const timer = setTimeout(() => api.get('/v1/select-market/iprice/health/', { params: { level, section, code, search, page }, signal: controller.signal }).then(r => { setData({ ...r.data, requestKey }); setError(""); })
+    const timer = setTimeout(() => api.get('/v1/select-market/iprice/health/', { params: { all_results: true }, signal: controller.signal }).then(r => { setData({ ...r.data, requestKey }); setError(""); })
       .catch(err => { if (err.code !== "ERR_CANCELED") setError("Не удалось проверить данные."); }), 250);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [revision, level, section, code, search, page, requestKey]);
-  return <div className="ip-stack">
+  }, [revision, requestKey]);
+  const query = search.trim().toLocaleLowerCase();
+  const selected = (data?.results || []).filter(item =>
+    (!level || item.severity === level) && (!section || section.split(",").includes(item.section)) &&
+    (!code || code.split(",").includes(item.code)) &&
+    (!query || Object.values(item).map(value => String(value ?? "")).join(" ").toLocaleLowerCase().includes(query)));
+  const pages = Math.max(1, Math.ceil(selected.length / 50));
+  const currentPage = Math.min(page, pages);
+  return <div className="ip-stack sm-health">
     <div className="ip-grid k4">{[
       ["Мешает расчёту", data?.summary?.errors ?? "—", "эти товары требуют исправления", "error"],
       ["Проверьте", data?.summary?.warnings ?? "—", "точность расчёта под вопросом", "warning"],
@@ -36,8 +43,8 @@ export function SelectMarketHealth() {
       {data && <p className="small muted">{data.price_date ? `Прайс за ${data.price_date}.` : "Полный прайс пока не загружен."} {data.snapshot ? `Расчёт №${data.snapshot.version} за ${data.snapshot.date}.` : "Успешного расчёта пока нет. Исходные данные проверяются по последнему прайсу."}</p>}
       {error && <p role="alert">{error}</p>}{!ready && !error && <p role="status" className="sm-iprice-loading">Проверяем данные…</p>}
     </div>
-    <div className="sm-iprice-table"><table className="ip-table"><thead><tr><th>Важность</th><th>Замечание</th><th>Раздел и товар</th><th>Исправление</th></tr></thead><tbody>{(ready ? data?.results : [])?.map(item => <tr key={item.id}><td><span className={`ip-tag ${item.severity === "error" ? "red" : "amber"}`}>{item.severity === "error" ? "Мешает расчёту" : "Проверьте"}</span></td><td>{issues[item.code] || item.message || item.code}</td><td>{item.nom}<span className="sub">{item.code_1c} · {item.region}</span><span className="sub">{item.section === "sources" ? "Исходные данные" : "Последний расчёт"}</span></td><td>{item.fix}</td></tr>)}</tbody></table></div>
-    {ready && data?.count === 0 && <p className="ip-empty">Замечаний по выбранным условиям нет.</p>}
-    <Pager page={data?.page || page} totalPages={data?.pages || 1} count={data?.count} pageSize={50} onPage={setPage} disabled={!ready} /></Panel>
+    <div className="sm-iprice-table"><table className="ip-table"><thead><tr><th>Важность</th><th>Замечание</th><th>Раздел и товар</th><th>Исправление</th></tr></thead><tbody>{(ready ? selected.slice((currentPage - 1) * 50, currentPage * 50) : [])?.map(item => <tr key={item.id}><td><span className={`ip-tag ${item.severity === "error" ? "red" : "amber"}`}>{item.severity === "error" ? "Мешает расчёту" : "Проверьте"}</span></td><td>{issues[item.code] || item.message || item.code}</td><td>{item.nom}<span className="sub">{item.code_1c} · {item.region}</span><span className="sub">{item.section === "sources" ? "Исходные данные" : "Последний расчёт"}</span></td><td>{item.fix}</td></tr>)}</tbody></table></div>
+    {ready && selected.length === 0 && <p className="ip-empty">Замечаний по выбранным условиям нет.</p>}
+    <Pager page={currentPage} totalPages={pages} count={selected.length} pageSize={50} onPage={setPage} disabled={!ready} /></Panel>
   </div>;
 }

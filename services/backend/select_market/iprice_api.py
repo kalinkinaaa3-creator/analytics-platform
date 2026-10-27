@@ -104,7 +104,8 @@ class HealthView(PriceFileView):
         section = serializers.CharField(allow_blank=True, max_length=100).run_validation(request.query_params.get('section', ''))
         if set(section.split(',')) - {'', 'sources', 'snapshot'}:
             raise ValidationError('Неизвестный раздел проверки.')
-        return Response(health_report(page=page, level=level, section=section,
+        all_results = serializers.BooleanField().run_validation(request.query_params.get("all_results", False))
+        return Response(health_report(page=page, level=level, section=section, page_size=None if all_results else 50,
             search=request.query_params.get('search', '')[:200], code=request.query_params.get('code', '')[:200]))
 
 

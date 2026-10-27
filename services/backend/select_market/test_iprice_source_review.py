@@ -78,3 +78,24 @@ class SourceReviewTests(TestCase):
         models.IPriceCompetitorSelectionOverride.objects.create(product_key_base=base.pk, product_key_competitor=competitor.pk, selection_mode='exclude')
         models.TaraProductPrice.objects.all().delete()
         self.assertEqual(health_report(code='competitor_price')['count'], 0)
+
+    def test_analog_price_queries_do_not_grow_per_product(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        from .iprice_health import missing_analog_prices
+        base = models.ParserProductUrl.objects.create(source='base', own_code='A')
+        rows = [{'pk': 1, 'code': 'A', 'nom': 'Own', 'shipp_region': '-'}]
+
+        def add_analog(number):
+            url = models.ParserProductUrl.objects.create(source='tara', url=f'https://example.test/{number}')
+            models.ParserProductClassification.objects.create(product_key=url.pk)
+            models.ParserProductMatch.objects.create(product_key_base=base.pk, product_key_competitor=url.pk, status='active')
+
+        add_analog(0)
+        with CaptureQueriesContext(connection) as single:
+            self.assertEqual(len(missing_analog_prices(rows, timezone.localdate())), 1)
+        for number in range(1, 25):
+            add_analog(number)
+        with CaptureQueriesContext(connection) as multiple:
+            self.assertEqual(len(missing_analog_prices(rows, timezone.localdate())), 25)
+        self.assertEqual(len(multiple), len(single))

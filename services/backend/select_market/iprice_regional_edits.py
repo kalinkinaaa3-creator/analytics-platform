@@ -136,8 +136,10 @@ def apply(*, snapshot, filters, search='', list_scope=None, expected_scope=None,
         overrides[pair] = SimpleNamespace(pk=source.pk, **values)
     # Keep the old monetary decision intact; a new decision gets a new revision.
     for row in rows:
-        if row.approvals.filter(is_current=True).update(is_current=False):
-            row.warning_codes = list(dict.fromkeys([*row.warning_codes, 'REAPPROVAL_REQUIRED']))
+        row.approvals.filter(is_current=True).update(is_current=False)
+        # Explicit recalculation replaces the manual decision and pending review.
+        if 'REAPPROVAL_REQUIRED' in row.warning_codes:
+            row.warning_codes = [code for code in row.warning_codes if code != 'REAPPROVAL_REQUIRED']
             row.save(update_fields=['warning_codes'])
     build_regions(snapshot=snapshot, snapshot_product_ids={row.snapshot_product_id for row in rows}, input_overrides=overrides)
     snapshot.parameters = {**snapshot.parameters, 'edit_revision': snapshot.parameters.get('edit_revision', 0) + 1}

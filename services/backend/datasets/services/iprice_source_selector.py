@@ -751,6 +751,7 @@ def get_competitor_regions(
     source: str,
     prefix: str | None,
     workspace=None,
+    source_rows=None,
 ) -> dict[str, Any]:
     """
     Определяет региональную применимость конкурента.
@@ -775,16 +776,17 @@ def get_competitor_regions(
             "region_groups": [],
         }
 
-    source_rows = list(
-        _source_model(ParserPrefix, workspace).objects
-        .filter(
-            source__iexact=normalized_source,
+    if source_rows is None:
+        source_rows = list(
+            _source_model(ParserPrefix, workspace).objects
+            .filter(
+                source__iexact=normalized_source,
+            )
+            .values(
+                "prefix",
+                "shipp_region",
+            )
         )
-        .values(
-            "prefix",
-            "shipp_region",
-        )
-    )
 
     source_regions = []
 

@@ -204,3 +204,14 @@
 .sm-iprice .sm-iprice-editor label.sm-manual-check { display: flex; align-items: flex-start; gap: 8px; }
 .sm-iprice .sm-iprice-editor .sm-manual-check input[type="checkbox"] { flex: 0 0 auto; width: 16px; height: 16px; min-height: 0; padding: 0; margin: 2px 0 0; }
 .sm-iprice .sm-manual-check > span { min-width: 0; overflow-wrap: anywhere; }
+
+.sm-iprice .sm-health .ip-chip {
+  max-width: 100%;
+  height: auto;
+  min-height: 30px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+  line-height: 1.4;
+  padding: 5px 10px;
+}
