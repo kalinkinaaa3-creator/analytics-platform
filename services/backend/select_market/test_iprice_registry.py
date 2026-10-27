@@ -167,7 +167,7 @@ class RegistryTests(TestCase):
         self.price()
         book = load_workbook(export_template('product_classification'))
         headers = [cell.value for cell in book.active[1]]
-        for field, value in {'category': 'Boxes', 'subcategory': 'Plastic', 'subcategory_type': 'Small',
+        for field, value in {'type': 'Boxes', 'category': 'Plastic', 'subcategory': 'Small',
                              'article_number_analogs': '001', 'color': '-', 'item_type': 'product'}.items():
             book.active.cell(2, headers.index(field) + 1, value)
         output = BytesIO()

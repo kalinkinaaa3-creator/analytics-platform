@@ -17,6 +17,7 @@ from datasets.services.parsers.prefix_loader import load_parser_prefixes_from_ex
 from .iprice_models import IPriceSourceImport
 from .iprice_purchase_import import HEADERS as PURCHASE_HEADERS, parse_purchase, load_purchase
 from .iprice_regional_import import HEADERS as PARAMETER_HEADERS, parse_parameters, load_parameters
+from .iprice_classification_columns import HEADERS as CLASSIFICATION_HEADERS, FILE_TO_MODEL, MODEL_TO_FILE
 
 from datasets.services.parsers.product_classification_match_loader import load_product_classification_matches
 
@@ -45,8 +46,13 @@ def validate_source(content, kind, workspace):
             raise ValueError("В файле должен быть один лист.")
         rows = book.active.iter_rows(values_only=True)
         expected = PURCHASE_HEADERS if kind == 'product_cost' else PARAMETER_HEADERS if kind == 'calculation_config' else UPLOAD_TEMPLATE_HEADERS[kind]
+        if kind == 'product_classification':
+            expected = CLASSIFICATION_HEADERS
         header = tuple(str(v).strip() if v is not None else "" for v in next(rows, ()))
         accepted = (tuple(expected), (*expected, 'code_1c', 'name', 'on_website')) if kind == 'product_classification' else (tuple(expected),)
+        if kind == 'product_classification':
+            legacy = tuple(UPLOAD_TEMPLATE_HEADERS[kind])
+            accepted += (legacy, (*legacy, 'code_1c', 'name', 'on_website'))
         if header not in accepted:
             raise ValueError("Ожидаются столбцы в порядке шаблона: " + ", ".join(expected))
         if kind == 'product_cost':
@@ -61,6 +67,9 @@ def validate_source(content, kind, workspace):
             if not any(value is not None and str(value).strip() for value in values):
                 continue
             row = dict(zip(header, values))
+            new_classification = kind == 'product_classification' and 'type' in header
+            if new_classification:
+                row = {FILE_TO_MODEL.get(key, key): value for key, value in row.items()}
             if any(isinstance(v, str) and v.startswith("=") for v in values):
                 raise ValueError(f"Строка {number}: формулы не допускаются, вставьте значения.")
             if kind == "product_classification":
@@ -75,7 +84,8 @@ def validate_source(content, kind, workspace):
                 try:
                     workspace.model(text_model)._meta.get_field(field).clean(value, None)
                 except ValidationError as exc:
-                    raise ValueError(f"Строка {number}, {field}: {'; '.join(exc.messages)}") from exc
+                    label = MODEL_TO_FILE.get(field, field) if new_classification else field
+                    raise ValueError(f"Строка {number}, {label}: {'; '.join(exc.messages)}") from exc
     finally:
         book.close()
 
@@ -88,6 +98,19 @@ def import_source(content, *, kind, filename, user, organization):
         raise ValueError("Выберите файл XLSX.")
     validate_source(content, kind, workspace)
     stream = BytesIO(content)
+    if kind == 'product_classification':
+        # Normalize only the loader input. Keep the uploaded file unchanged in history.
+        book = load_workbook(BytesIO(content))
+        try:
+            if any(str(cell.value).strip() == 'type' for cell in book.active[1]):
+                for cell in book.active[1]:
+                    key = str(cell.value).strip() if cell.value is not None else ''
+                    cell.value = FILE_TO_MODEL.get(key, key)
+                stream = BytesIO()
+                book.save(stream)
+                stream.seek(0)
+        finally:
+            book.close()
     stream.name = filename
     with transaction.atomic():
         Organization.objects.select_for_update().get(pk=organization.pk)

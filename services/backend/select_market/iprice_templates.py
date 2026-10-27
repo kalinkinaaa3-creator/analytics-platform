@@ -10,6 +10,7 @@ from datasets.services.iprice_upload_template_export import UPLOAD_TEMPLATE_HEAD
 from .iprice_prices import COLUMNS
 from .iprice_purchase_import import HEADERS as PURCHASE_HEADERS
 from .iprice_regional_import import HEADERS as PARAMETER_HEADERS
+from .iprice_classification_columns import HEADERS as CLASSIFICATION_HEADERS, FILE_TO_MODEL
 
 
 def export_template(kind):
@@ -20,7 +21,7 @@ def export_template(kind):
             raise ValueError('Неизвестный тип источника.')
         headers = UPLOAD_TEMPLATE_HEADERS[kind]
     if kind == 'product_classification':
-        headers = (*headers, 'code_1c', 'name', 'on_website')
+        headers = (*CLASSIFICATION_HEADERS, 'code_1c', 'name', 'on_website')
     book = Workbook()
     sheet = book.active
     sheet.title = 'Шаблон загрузки'
@@ -50,10 +51,13 @@ def export_template(kind):
         'on_website': 'Справочно: есть ли товар в последней принятой выгрузке сайта. Это поле не меняет наличие товара.',
         'article_number_analogs': 'Обязательный текстовый идентификатор группы аналогов; одинаковый для сопоставляемых позиций. Ведущие нули сохраняются.',
         'item_type': 'Обязательно: product — товар, component — комплектующая.',
+        'type': 'Тип товара в классификации iPrice (ранее столбец category).',
+        'category': 'Категория в классификации iPrice (ранее столбец subcategory).',
+        'subcategory': 'Подкатегория в классификации iPrice (ранее столбец subcategory_type).',
         'color': 'Цвет; «-» означает любой цвет при сопоставлении аналогов.',
     }
     texts = {'Статус ассортиментной матрицы', 'Код', 'Регион', 'Номенклатура', 'Группа', 'code', 'code_1c', 'on_website', 'name', 'region',
-             'source', 'prefix', 'shipp_region', 'category', 'subcategory', 'subcategory_type',
+             'source', 'prefix', 'shipp_region', 'type', 'category', 'subcategory', 'subcategory_type',
              'color', 'material', 'modification', 'article_number_analogs', 'item_type'}
     for index, header in enumerate(headers, 1):
         cell = sheet.cell(1, index)
@@ -92,7 +96,7 @@ def export_template(kind):
             classification = classes.get(url.pk)
             if url.source != 'base' and classification is None:
                 continue
-            values = [url.pk] + [getattr(classification, key, None) if classification else ('product' if key == 'item_type' else None) for key in headers[1:-3]]
+            values = [url.pk] + [getattr(classification, FILE_TO_MODEL.get(key, key), None) if classification else ('product' if key == 'item_type' else None) for key in headers[1:-3]]
             name = names.get(url.own_code) if url.source == 'base' and url.own_code in names else source_names.get(url.pk)
             values += [url.own_code, name, ('Да' if url.on_website else 'Нет') if url.source == 'base' else None]
             for column, value in enumerate(values, 1):

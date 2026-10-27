@@ -28,6 +28,33 @@ def excel(kind, *rows):
 
 
 class SourceTests(TestCase):
+    def test_new_classification_headers_round_trip_without_shifting_values(self):
+        from openpyxl import load_workbook
+        from .iprice_templates import export_template
+        product = ParserProductUrl.objects.create(source='base', own_code='001', status='active')
+        ParserProductClassification.objects.create(product_key=product.pk, category='Type value', subcategory='Category value',
+            subcategory_type='Subcategory value', color='Green', material='PP', article_number_analogs='GROUP', item_type='product')
+        book = load_workbook(export_template('product_classification'))
+        headers = [cell.value for cell in book.active[1]]
+        self.assertEqual(headers[1:4], ['type', 'category', 'subcategory'])
+        self.assertNotIn('subcategory_type', headers)
+        self.assertEqual([book.active.cell(2, column).value for column in (2, 3, 4)],
+                         ['Type value', 'Category value', 'Subcategory value'])
+        book.active.cell(2, 2, 'Updated type')
+        book.active.cell(2, 3, 'Updated category')
+        book.active.cell(2, 4, 'Updated subcategory')
+        content = BytesIO()
+        book.save(content)
+        book.close()
+        import_source(content.getvalue(), kind='product_classification', filename='classification.xlsx',
+                      user=self.user, organization=self.organization)
+        saved = ParserProductClassification.objects.get(product_key=product.pk)
+        self.assertEqual((saved.category, saved.subcategory, saved.subcategory_type),
+                         ('Updated type', 'Updated category', 'Updated subcategory'))
+        original = load_workbook(BytesIO(bytes(IPriceSourceImport.objects.latest('id').content)))
+        self.assertEqual(original.active.cell(1, 2).value, 'type')
+        original.close()
+
     def test_retired_uploads_rejected_without_writes(self):
         for kind in ('nomenclature', 'transport_cost'):
             with self.subTest(kind=kind), self.assertRaises(ValueError):
