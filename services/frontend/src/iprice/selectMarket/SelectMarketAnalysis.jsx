@@ -269,7 +269,7 @@ function OwnAssortment({ refreshRevision, snapshotId, productId, onOpenProduct, 
       .catch(err => { if (err.code !== "ERR_CANCELED") setError("Не удалось загрузить собственную линейку."); });
     return () => controller.abort();
   }, [snapshotId, productId, refreshRevision]);
-  return <Panel title="Наша линейка" sub="Проверьте порядок цен внутри линейки: ведро на 20 л должно стоить дороже ведра на 10 л."><div className="sm-own-assortment">
+  return <Panel title="Наша линейка" sub="Товары нашей линейки, их характеристики и цены."><div className="sm-own-assortment">
     {error && <p role="alert">{error}</p>}{!data && !error && <p className="sm-iprice-loading" role="status">Загружаем линейку…</p>}
 
     {data && !data.results.length && <div className="ip-empty"><b>Других товаров этой классификации нет</b></div>}
