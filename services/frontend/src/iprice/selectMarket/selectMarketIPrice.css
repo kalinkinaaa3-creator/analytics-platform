@@ -215,11 +215,17 @@
   line-height: 1.4;
   padding: 5px 10px;
 }
-.sm-catalog-search { flex: 1; min-width: 220px; }
+.sm-catalog-search { width: 320px; max-width: 100%; min-width: 0; }
 .sm-unclassified-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 14px; }
 .sm-iprice .sm-unclassified-card { display: grid; grid-template-rows: subgrid; grid-row: span 4; gap: 12px; min-width: 0; }
 .sm-unclassified-card .ip-card-top > div:last-child { min-width: 0; }
-.sm-catalog-url, .sm-classification-history { overflow-wrap: anywhere; }
+.sm-unclassified-card .ip-card-title, .sm-catalog-keys, .sm-classification-heading, .sm-classification-history { overflow-wrap: anywhere; }
+.sm-catalog-keys { display: block; margin-top: 4px; }
+.sm-classification-editor, .sm-classification-editor > *, .sm-classification-fields > * { min-width: 0; max-width: 100%; }
+.sm-classification-heading h3 { margin: 0 0 6px; }
+.sm-classification-heading a { display: block; font-size: 13px; line-height: 20px; }
+.sm-classification-actions { justify-content: flex-end; padding-top: 12px; border-top: 1px solid var(--border); }
+.sm-classification-actions .ip-btn { white-space: normal; }
 .sm-catalog-regions { max-width: 100%; overflow-x: auto; }
 .sm-classification-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .sm-classification-fields input, .sm-classification-fields select { width: 100%; min-width: 0; }

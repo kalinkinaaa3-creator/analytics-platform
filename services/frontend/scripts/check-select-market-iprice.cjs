@@ -38,7 +38,7 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
           await route.fulfill({json:{message:'Классификация сохранена. Изменения будут учтены в следующем расчёте.'}}); return;
         }
         await route.fulfill({json:{page:1,pages:1,count:classificationSaved?0:1,defaults:classificationDefaults,choices:{},history:[],results:classificationSaved?[]:[{
-          product_keys:[91,92],revision:'test-revision',source:'tara',name:'Неклассифицированное ведро',image:row.snapshot_product__image,price:150,dates:['2026-10-20','2026-10-28'],
+          product_keys:[91,92],revision:'test-revision',source:'tara',name:'Неклассифицированное ведро',url:'https://moskva.tara.test/catalog/'+'long_product_name_'.repeat(30)+'?oid=330553',image:row.snapshot_product__image,price:150,dates:['2026-10-20','2026-10-28'],
           regional_entries:[{region:'Москва',offers:[{product_key:91,price:100,date:'2026-10-20',url:'https://example.test/moscow'}]},{region:'Казань',offers:[{product_key:92,price:200,date:'2026-10-28',url:'https://example.test/kazan'}]}]
         }]}}); return;
       }
@@ -661,16 +661,26 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     await page.getByRole('dialog').getByRole('button',{name:'Закрыть',exact:true}).click();
     await page.getByRole('tab',{name:'Неклассифицированные товары',exact:true}).click();
     await page.getByRole('heading',{name:'Неклассифицированное ведро'}).waitFor();
+    await page.getByPlaceholder('Поиск по названию или URL').waitFor();
+    await page.getByRole('button',{name:'Конкурент: все',exact:true}).waitFor();
+    assert.equal(await page.locator('.sm-unclassified-card').getByText(/https:\/\//).count(),0);
     await page.getByText('Даты цен — по регионам',{exact:true}).waitFor();
     await page.locator('.sm-unclassified-card summary').click();
     await page.locator('.sm-unclassified-card').getByText('20.10.2026',{exact:true}).waitFor();
     assert.equal(await page.locator('.sm-unclassified-card a').count(),2);
+    assert.equal(await page.locator('.sm-unclassified-card').getByRole('link',{name:'На сайте конкурента'}).count(),2);
+    assert.equal(await page.locator('.sm-unclassified-card a').first().innerText(),'');
     await page.getByRole('button',{name:'Классифицировать',exact:true}).click();
     await page.getByRole('button',{name:'Заполнить по текущему товару'}).click();
     await page.getByLabel('Комментарий к изменению',{exact:true}).fill('Проверено по сайту');
     await page.setViewportSize({width:390,height:844});
     const classificationDialog = page.getByRole('dialog',{name:'Классификация товара'});
     assert.ok(await classificationDialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+    const classificationDrawer = classificationDialog.locator('.ip-drawer');
+    assert.ok(await classificationDrawer.evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+    assert.ok(await classificationDrawer.locator('.sm-classification-heading').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+    const box = await classificationDrawer.boundingBox();
+    assert.ok(Math.abs(box.x+box.width-390)<2);
     await page.getByRole('button',{name:'Сохранить классификацию',exact:true}).click();
     await page.getByText('Неклассифицированных товаров нет',{exact:true}).waitFor();
     assert.ok(classificationSaved);
