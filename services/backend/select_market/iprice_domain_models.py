@@ -217,6 +217,7 @@ class BaseProductPrice(models.Model):
         return f'{self.product_key}: {self.name}'
 
 class ParserProductClassification(models.Model):
+    manual_edit = models.BooleanField(default=False)
     STATUS_ACTIVE = 'active'
     STATUS_INACTIVE = 'inactive'
     STATUS_CHOICES = ((STATUS_ACTIVE, 'Активен'), (STATUS_INACTIVE, 'Неактивен'))
@@ -248,6 +249,18 @@ class ParserProductClassification(models.Model):
 
 
 
+
+
+class ClassificationChange(models.Model):
+    product_keys = models.JSONField(default=list)
+    before = models.JSONField(default=dict)
+    after = models.JSONField(default=dict)
+    reason = models.TextField()
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = '"select_market"."classification_change"'
 
 
 class ParserMasterPipelineRun(models.Model):

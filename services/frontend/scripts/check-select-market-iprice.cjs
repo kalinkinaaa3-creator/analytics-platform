@@ -16,6 +16,8 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     let drillProducts = false;
     let manyImports = false, manyCards = false, emptyCards = false;
     let zoneSaves = 0;
+    let classificationSaved = false;
+    const classificationDefaults = {category:'Ёмкости',subcategory:'Вёдра',subcategory_type:'Пищевые',material:'PP',color:'синий',modification:'',article_number_analogs:'BUCKET',item_type:'product'};
     let priceZones = { below_market_threshold: "-0.03", above_market_threshold: "0.03", critical_threshold: "0.1" };
     const version = { id: 1, version_number: 1, calculation_date: '2026-10-14', status: 'success', is_current: true, is_active: false, was_active: false };
     const row = { id: 1, product_id: 1, snapshot_product__code_1c: '00-А', snapshot_product__nom: 'Тестовый ящик', snapshot_product__image: 'https://images.example.test/product.svg',
@@ -26,6 +28,20 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     await page.route('**/v1/select-market/iprice/**' , async route => {
       const request = route.request(), path = new URL(request.url()).pathname;
       let body;
+      if (path.endsWith('/unclassified/')) {
+        if (request.method() === 'POST') {
+          const payload = request.postDataJSON();
+          assert.deepEqual(payload.values, classificationDefaults);
+          assert.deepEqual(payload.product_keys, [91,92]);
+          assert.equal(payload.reason, 'Проверено по сайту');
+          classificationSaved = true;
+          await route.fulfill({json:{message:'Классификация сохранена. Изменения будут учтены в следующем расчёте.'}}); return;
+        }
+        await route.fulfill({json:{page:1,pages:1,count:classificationSaved?0:1,defaults:classificationDefaults,choices:{},history:[],results:classificationSaved?[]:[{
+          product_keys:[91,92],revision:'test-revision',source:'tara',name:'Неклассифицированное ведро',image:row.snapshot_product__image,price:150,dates:['2026-10-20','2026-10-28'],
+          regional_entries:[{region:'Москва',offers:[{product_key:91,price:100,date:'2026-10-20',url:'https://example.test/moscow'}]},{region:'Казань',offers:[{product_key:92,price:200,date:'2026-10-28',url:'https://example.test/kazan'}]}]
+        }]}}); return;
+      }
       if (path.endsWith('/status/')) body = { can_edit: canEdit, imports: manyImports ? Array.from({length:20}, (_,i)=>({id:i+1,kind:"product_cost",filename:"cost-"+i+".xlsx",created_at:new Date(2026,9,23,12,i).toISOString()})) : [], price_imports: [], parsers_enabled: false, run: null, queue: [] };
       else if (path.endsWith('/health/')) body = { price_date: null, source_checks: [], snapshot: null, issues: [], filter_codes: ['REAPPROVAL_REQUIRED'], results: [{ id: 'review', code: 'REAPPROVAL_REQUIRED', severity: 'warning', section: 'snapshot', nom: 'Review product', code_1c: 'review-code' }] };
       else if (path.endsWith('/own/')) body = { counts: { cards: 1 }, results: [{ snapshot_product_id: 3, code_1c: 'OWN', name: 'Другой товар линейки', price: 123, final_price: 123, regional_prices: [{ region: 'СПБ', price: 123, final_price: 123 }] }] };
@@ -643,6 +659,22 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     await page.setViewportSize(originalViewport);
     await capture('current-parameter-history');
     await page.getByRole('dialog').getByRole('button',{name:'Закрыть',exact:true}).click();
+    await page.getByRole('tab',{name:'Неклассифицированные товары',exact:true}).click();
+    await page.getByRole('heading',{name:'Неклассифицированное ведро'}).waitFor();
+    await page.getByText('Даты цен — по регионам',{exact:true}).waitFor();
+    await page.locator('.sm-unclassified-card summary').click();
+    await page.locator('.sm-unclassified-card').getByText('20.10.2026',{exact:true}).waitFor();
+    assert.equal(await page.locator('.sm-unclassified-card a').count(),2);
+    await page.getByRole('button',{name:'Классифицировать',exact:true}).click();
+    await page.getByRole('button',{name:'Заполнить по текущему товару'}).click();
+    await page.getByLabel('Комментарий к изменению',{exact:true}).fill('Проверено по сайту');
+    await page.setViewportSize({width:390,height:844});
+    const classificationDialog = page.getByRole('dialog',{name:'Классификация товара'});
+    assert.ok(await classificationDialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+    await page.getByRole('button',{name:'Сохранить классификацию',exact:true}).click();
+    await page.getByText('Неклассифицированных товаров нет',{exact:true}).waitFor();
+    assert.ok(classificationSaved);
+    await page.setViewportSize(originalViewport);
     emptyCards=true;
     await page.reload();
     await page.getByRole('tab',{name:/^Рынок категории/}).click();

@@ -280,6 +280,7 @@ from .iprice_domain_models import (  # noqa: E402, F401
     IPriceCompetitorSelectionChange,
     BaseProductPrice,
     ParserProductClassification,
+    ClassificationChange,
     ParserMasterPipelineRun,
     IPriceSnapshot,
     IPriceSnapshotProduct,

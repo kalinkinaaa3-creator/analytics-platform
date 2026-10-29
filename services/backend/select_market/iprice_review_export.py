@@ -104,9 +104,10 @@ def review_workbook(kind):
         from .iprice_models import IPriceRegionalInput, IPriceSourceImport
         from openpyxl import load_workbook
         sheet('Действующая классификация',
-              ['Ключ товара', 'Тип', 'Категория', 'Подкатегория', 'Материал', 'Цвет', 'Модификация', 'Группа аналогов', 'Тип товара', 'Ссылка', 'Код 1С', 'Источник'],
+              ['Ключ товара', 'Тип', 'Категория', 'Подкатегория', 'Материал', 'Цвет', 'Модификация', 'Группа аналогов', 'Тип товара', 'Ссылка', 'Источник классификации', 'Код 1С', 'Источник'],
               ([r.product_key, r.category, r.subcategory, r.subcategory_type, r.material, r.color, r.modification,
-                r.article_number_analogs, r.get_item_type_display(), r.url, own_codes.get(r.product_key), sources.get(r.product_key, 'Источник не найден')]
+                r.article_number_analogs, r.get_item_type_display(), r.url,
+                'Интерфейс' if r.manual_edit else 'Загрузка Excel', own_codes.get(r.product_key), sources.get(r.product_key, 'Источник не найден')]
                for r in models.ParserProductClassification.objects.filter(status='active').order_by('product_key').iterator()))
         sheet('Действующие аналоги', ['Ключ нашего товара', 'Ключ конкурента', 'Способ добавления', 'Код 1С', 'Источник'],
               ([r.product_key_base, r.product_key_competitor, r.get_match_type_display(), own_codes.get(r.product_key_base), sources.get(r.product_key_competitor, 'Источник не найден')]

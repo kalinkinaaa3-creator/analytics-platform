@@ -12,6 +12,54 @@ from .test_iprice_tt import InlineExecutor
 
 @override_settings(PARSER_SHARED_QUEUE_ENABLED=True, TARA_PARSER_WORKERS=1, TARA_WORKER_WAIT_HOURS=4)
 class MasterPipelineTests(TestCase):
+    @override_settings(INTERNAL_API_KEY='test-internal')
+    def test_internal_full_run_requires_key_and_is_idempotent(self):
+        from rest_framework.test import APIRequestFactory
+        from .iprice_parser_api import FullCompetitorRunView
+        factory = APIRequestFactory()
+        endpoint = FullCompetitorRunView.as_view()
+        self.assertEqual(endpoint(factory.post('/', {'request_key': 'scheduled-1'}, format='json')).status_code, 403)
+        with patch('select_market.iprice_parser_api.kick'):
+            def call(key):
+                return endpoint(factory.post('/', {'request_key': key}, format='json', HTTP_X_INTERNAL_API_KEY='test-internal'))
+            first = call('scheduled-1')
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(call('scheduled-1').data['id'], first.data['id'])
+            self.assertEqual(call('scheduled-2').status_code, 409)
+            from .iprice_domain_models import ParserMasterPipelineRun
+            ParserMasterPipelineRun.objects.filter(pk=first.data['id']).update(status='success')
+            self.assertEqual(call('scheduled-1').data['status'], 'success')
+            self.assertEqual(ParserMasterPipelineRun.objects.count(), 1)
+
+    def test_full_run_idempotent_waits_and_collects_unclassified_in_order(self):
+        from select_market.iprice_domain_models import ParserProductUrl
+        occupied = global_queue.enqueue(organization=self.iplast, kind='master', run_id=self.legacy.pk)
+        owner = global_queue.claim_next(executor='iplast')
+        run = create_master(request_key='full:test', full_competitors=True)
+        self.assertEqual(create_master(request_key='full:test', full_competitors=True).pk, run.pk)
+        self.assertIsNone(create_master(request_key='full:other', full_competitors=True))
+        with patch('select_market.iprice_pipeline.tt_product_parser.parse_tt_products') as parser:
+            result = master_pipeline.run_parser_master_pipeline(run_id=run.pk, workspace=self.workspace)
+            self.assertTrue(result['waiting_for_capacity'])
+            parser.assert_not_called()
+        global_queue.finish(occupied.pk, owner.token, success=True)
+        url = ParserProductUrl.objects.create(source='tara', url='https://tara.test/new', status='active')
+        events = []
+        with patch('select_market.iprice_pipeline.base_parser.load_base_products') as base, patch('datasets.services.parsers.tt_links.sync_tt_product_urls', side_effect=lambda **kw: events.append('tt-links')), patch('datasets.services.parsers.ps_links.sync_ps_product_urls', side_effect=lambda **kw: events.append('ps-links')), patch('select_market.iprice_pipeline.tt_product_parser.parse_tt_products', side_effect=lambda **kw: events.append(('tt', kw['product_keys'])) or {'failed': 0}), patch('select_market.iprice_pipeline.ps_product_parser.parse_ps_products', side_effect=lambda **kw: events.append(('ps', kw['product_keys'])) or {'failed': 0}), patch.object(tara_jobs, 'kick'):
+            result = master_pipeline.run_parser_master_pipeline(run_id=run.pk, workspace=self.workspace)
+        self.assertEqual(events, ['tt-links', ('tt', None), 'ps-links', ('ps', None)])
+        base.assert_not_called()
+        self.assertEqual(result['status'], 'waiting_tara')
+        child = TaraRun.objects.get(master=run)
+        self.assertTrue(child.options['sitemap'])
+        self.assertFalse(child.options['classified_only'])
+        # Sitemap tasks populate their item list after link synchronization.
+        tara_jobs.populate(child)
+        self.assertTrue(child.items.filter(product_id=url.pk).exists())
+        self.assertEqual(create_master(request_key='full:test', full_competitors=True).pk, run.pk)
+        self.legacy.refresh_from_db()
+        self.assertEqual(self.legacy.status, 'queued')
+
     def setUp(self):
         self.sm = Organization.objects.create(code='select-market', name='SM', postgres_schema='select_market')
         self.iplast = Organization.objects.create(code='iplast', name='Iplast', postgres_schema='public')

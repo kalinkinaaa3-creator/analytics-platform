@@ -220,7 +220,7 @@ class ListControlsTests(TestCase):
         IPriceRegionalInput.objects.create(code='C', region='other', month=batch.date, purchase_cost=10)
         response = self.request(HealthView, 'get')
         self.assertEqual({r['key']: r['count'] for r in response.data['source_checks']},
-                         {'purchase': 1, 'delivery': 1, 'retail': 0, 'classification': 3, 'parameters': 3, 'competitor_price': 0})
+                         {'purchase': 1, 'delivery': 1, 'retail': 0, 'classification': 3, 'parameters': 3, 'competitor_download': 0})
 
     def test_health_checks_classification_and_parameters_before_calculation(self):
         from .iprice_health import health_report

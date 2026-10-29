@@ -7,7 +7,7 @@ from .iprice_models import IPricePriceImport, NomenclaturePrice, IPriceRegionalI
 from .iprice_domain_models import IPriceSnapshot, IPriceSnapshotRegion, ParserProductUrl, ParserProductClassification
 
 
-def missing_analog_prices(price_rows, calculation_date):
+def analog_download_errors(price_rows):
     from collections import defaultdict
     from types import SimpleNamespace
     from .iprice_domain_models import ParserProductMatch, IPriceCompetitorSelectionOverride
@@ -29,14 +29,7 @@ def missing_analog_prices(price_rows, calculation_date):
     for base, competitor in pairs:
         if competitor in urls:
             analogs[base][groups.get(competitor, (urls[competitor].source, competitor))].append(competitor)
-    from .iprice_domain_models import TaraProductPrice, PsProductPrice, TtProductPrice, ParserPrefix
-    positive_keys = set()
-    # Preserve the selector's fallback to historical positive prices.
-    for source, model in [('tara', TaraProductPrice), ('ps', PsProductPrice), ('tt', TtProductPrice)]:
-        source_keys = [key for key, url in urls.items() if url.source.strip().casefold() == source]
-        if source_keys:
-            positive_keys.update(model.objects.filter(product_key__in=source_keys,
-                date_add__date__lte=calculation_date, final_price__gt=0).values_list('product_key', flat=True).distinct())
+    from .iprice_domain_models import ParserPrefix
     prefixes = defaultdict(list)
     for prefix in ParserPrefix.objects.values('source', 'prefix', 'shipp_region'):
         prefixes[prefix['source'].casefold()].append(prefix)
@@ -49,13 +42,18 @@ def missing_analog_prices(price_rows, calculation_date):
     entries = []
     for row in price_rows:
         for group_keys in analogs.get(own.get(row['code']), {}).values():
-            if any(competitor_matches_region(regions[key], row['shipp_region']) and key in positive_keys for key in group_keys):
+            # Missing prices and pending/unavailable pages are not parser errors.
+            # Successful loading clears last_error; an older price cannot hide a new failure.
+            group_keys = [key for key in group_keys
+                          if competitor_matches_region(regions[key], row['shipp_region'])
+                          and (urls[key].last_error or '').strip()]
+            if not group_keys:
                 continue
             key = group_keys[0]
-            entries.append({'id': f"source-competitor-price-{row['pk']}-{key}", 'severity': 'warning',
-                'section': 'sources', 'code': 'competitor_price', 'code_1c': row['code'], 'nom': row['nom'], 'region': row['shipp_region'],
-                'message': f"Нет цены актуального аналога в регионе: {labels.get(urls[key].source, urls[key].source)} · {'ключ' if len(group_keys) == 1 else 'ключи'} {', '.join(map(str, group_keys))}",
-                'fix': 'Проверьте загрузку положительных цен, регионы конкурента и актуальность связи с аналогом.'})
+            entries.append({'id': f"source-competitor-download-{row['pk']}-{key}", 'severity': 'warning',
+                'section': 'sources', 'code': 'competitor_download', 'code_1c': row['code'], 'nom': row['nom'], 'region': row['shipp_region'],
+                'message': f"Ошибка загрузки аналога: {labels.get(urls[key].source, urls[key].source)} · {'ключ' if len(group_keys) == 1 else 'ключи'} {', '.join(map(str, group_keys))}",
+                'fix': 'Проверьте ошибку загрузки в данных парсера и повторите сбор. Отсутствие цены само по себе не требует исправления.'})
     return entries
 
 
@@ -94,8 +92,8 @@ def health_report(*, page=1, search='', level='', section='', code='', page_size
             for item in prices.filter(condition).values('pk', 'code', 'nom', 'shipp_region').iterator(chunk_size=1000):
                 entries.append({'id': f"source-{key}-{item['pk']}", 'severity': 'warning' if key == 'classification' else 'error', 'section': 'sources', 'code': key,
                                 'message': label, 'code_1c': item['code'], 'nom': item['nom'], 'region': item['shipp_region'], 'fix': fix})
-        competitor_issues = missing_analog_prices(list(prices.values('pk', 'code', 'nom', 'shipp_region')), latest.date)
-        source_checks.append({'key': 'competitor_price', 'label': 'Нет цены актуального аналога в регионе', 'count': len(competitor_issues)})
+        competitor_issues = analog_download_errors(list(prices.values('pk', 'code', 'nom', 'shipp_region')))
+        source_checks.append({'key': 'competitor_download', 'label': 'Ошибка загрузки аналога', 'count': len(competitor_issues)})
         entries.extend(competitor_issues)
     snapshot = IPriceSnapshot.objects.filter(status='success').order_by('-version_number', '-id').first()
     errors, warnings = Counter(), Counter()

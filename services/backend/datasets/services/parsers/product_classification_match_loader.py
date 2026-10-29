@@ -254,6 +254,8 @@ def load_product_classification_matches(file_obj, *, filename="", workspace=None
                 setattr(obj, field, value or None)
             obj.url = url_by_key.get(product_key) or None
             obj.status = ParserProductClassification.STATUS_ACTIVE
+            if workspace and workspace.code == 'select-market':
+                obj.manual_edit = False
             obj.date_update = now
         if create_rows:
             ParserProductClassification.objects.bulk_create(create_rows, batch_size=500)
@@ -264,7 +266,7 @@ def load_product_classification_matches(file_obj, *, filename="", workspace=None
                     "category", "subcategory", "subcategory_type", "color",
                     "material", "modification", "article_number_analogs",
                     "item_type", "url", "status", "date_update",
-                ),
+                ) + (("manual_edit",) if workspace and workspace.code == 'select-market' else ()),
                 batch_size=500,
             )
 

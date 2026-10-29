@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from dashboards.models import Dashboard
 from dashboards.services.access import user_can_edit_dashboard, user_can_view_dashboard
 from .iprice_prices import PriceImportError, import_price_file
+from .iprice_parser_api import FullCompetitorRunView
 
 
 class PriceFileView(APIView):
@@ -424,8 +425,11 @@ class ParserStartView(PriceFileView):
 
 
 from .iprice_operations_api import RowApprovalView, ParameterChangeView, SnapshotHistoryView, SnapshotAnalysisView, ProductDetailsView, ZoneConfigView, CompetitorSelectionView, OwnAssortmentView
+from .iprice_classification_api import UnclassifiedView
 
 urlpatterns = [
+    path('snapshots/<int:snapshot_id>/products/<int:product_id>/unclassified/', UnclassifiedView.as_view()),
+    path('parsers/full/internal/run/', FullCompetitorRunView.as_view()),
     path('review/<str:kind>/', ReviewExportView.as_view()),
     path('health/', HealthView.as_view()),
     path('snapshots/<int:snapshot_id>/products/<int:product_id>/own/', OwnAssortmentView.as_view()),

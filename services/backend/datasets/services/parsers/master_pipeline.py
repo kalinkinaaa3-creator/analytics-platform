@@ -399,6 +399,8 @@ def run_parser_master_pipeline(
         # =====================================================
 
         finished_at = timezone.now()
+        if _workspace(run) and run.result.get('full_competitors'):
+            completed_steps = [step for step in completed_steps if not step.startswith('base_')]
         duration = (
             finished_at
             - started_at

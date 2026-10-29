@@ -51,51 +51,62 @@ class SourceReviewTests(TestCase):
         self.assertFalse(own['На сайте'])
         book.close()
 
-    def test_health_ignores_null_zero_and_wrong_regions_and_uses_older_positive(self):
+    def test_health_reports_only_download_errors_of_active_regional_analogs(self):
         from .iprice_models import IPricePriceImport, NomenclaturePrice
         from .iprice_health import health_report
         day = timezone.localdate()
         batch = IPricePriceImport.objects.create(date=day, rows=1)
         NomenclaturePrice.objects.create(batch=batch, date=day, code='A', shipp_region='Москва', retail=100)
         base = models.ParserProductUrl.objects.create(source='base', own_code='A')
-        competitor = models.ParserProductUrl.objects.create(source='tara', prefix='moskva', url='https://example.test/item')
+        competitor = models.ParserProductUrl.objects.create(source='tara', prefix='moskva', url='https://example.test/item', is_loaded=True)
         models.ParserProductClassification.objects.create(product_key=competitor.pk)
         models.ParserProductMatch.objects.create(product_key_base=base.pk, product_key_competitor=competitor.pk, status='active')
         prefix = models.ParserPrefix.objects.create(source='tara', prefix='moskva', shipp_region='Москва')
         for value in (None, 0):
             models.TaraProductPrice.objects.create(product_key=competitor.pk, final_price=value)
-        self.assertEqual(health_report(code='competitor_price')['count'], 1)
-        self.assertIn(f' · ключ {competitor.pk}', health_report(code='competitor_price')['results'][0]['message'])
+        self.assertEqual(health_report(code='competitor_download')['count'], 0)
+        for error in (None, '', '   '):
+            models.ParserProductUrl.objects.filter(pk=competitor.pk).update(last_error=error, is_loaded=False)
+            self.assertEqual(health_report(code='competitor_download')['count'], 0)
+        models.ParserProductUrl.objects.filter(pk=competitor.pk).update(last_error='network timeout', is_loaded=False)
+        self.assertEqual(health_report(code='competitor_download')['count'], 1)
+        self.assertIn(f' · ключ {competitor.pk}', health_report(code='competitor_download')['results'][0]['message'])
         good = models.TaraProductPrice.objects.create(product_key=competitor.pk, final_price=100)
         models.TaraProductPrice.objects.filter(pk=good.pk).update(date_add=timezone.now() - timedelta(days=1))
-        self.assertEqual(health_report(code='competitor_price')['count'], 0)
+        # A historical positive price does not suppress an actual new download failure.
+        self.assertEqual(health_report(code='competitor_download')['count'], 1)
         prefix.shipp_region = 'Казань'
         prefix.save()
-        self.assertEqual(health_report(code='competitor_price')['count'], 1)
+        self.assertEqual(health_report(code='competitor_download')['count'], 0)
         prefix.shipp_region = '—'
         prefix.save()
-        self.assertEqual(health_report(code='competitor_price')['count'], 0)
+        self.assertEqual(health_report(code='competitor_download')['count'], 1)
+        models.ParserProductUrl.objects.filter(pk=competitor.pk).update(status='inactive')
+        self.assertEqual(health_report(code='competitor_download')['count'], 0)
+        models.ParserProductUrl.objects.filter(pk=competitor.pk).update(status='active', is_loaded=True, last_error=None)
+        self.assertEqual(health_report(code='competitor_download')['count'], 0)
+        models.ParserProductUrl.objects.filter(pk=competitor.pk).update(is_loaded=False, last_error='network timeout')
         models.IPriceCompetitorSelectionOverride.objects.create(product_key_base=base.pk, product_key_competitor=competitor.pk, selection_mode='exclude')
         models.TaraProductPrice.objects.all().delete()
-        self.assertEqual(health_report(code='competitor_price')['count'], 0)
+        self.assertEqual(health_report(code='competitor_download')['count'], 0)
 
-    def test_analog_price_queries_do_not_grow_per_product(self):
+    def test_analog_download_queries_do_not_grow_per_product(self):
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
-        from .iprice_health import missing_analog_prices
+        from .iprice_health import analog_download_errors
         base = models.ParserProductUrl.objects.create(source='base', own_code='A')
         rows = [{'pk': 1, 'code': 'A', 'nom': 'Own', 'shipp_region': '-'}]
 
         def add_analog(number):
-            url = models.ParserProductUrl.objects.create(source='tara', url=f'https://example.test/{number}')
+            url = models.ParserProductUrl.objects.create(source='tara', url=f'https://example.test/{number}', is_loaded=False, last_error='network')
             models.ParserProductClassification.objects.create(product_key=url.pk)
             models.ParserProductMatch.objects.create(product_key_base=base.pk, product_key_competitor=url.pk, status='active')
 
         add_analog(0)
         with CaptureQueriesContext(connection) as single:
-            self.assertEqual(len(missing_analog_prices(rows, timezone.localdate())), 1)
+            self.assertEqual(len(analog_download_errors(rows)), 1)
         for number in range(1, 25):
             add_analog(number)
         with CaptureQueriesContext(connection) as multiple:
-            self.assertEqual(len(missing_analog_prices(rows, timezone.localdate())), 25)
+            self.assertEqual(len(analog_download_errors(rows)), 25)
         self.assertEqual(len(multiple), len(single))
