@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { Panel, Button, Drawer } from "./ui/primitives";
 import Icon from "./ui/Icon";
@@ -75,14 +75,44 @@ function ClassificationEditor({ card, endpoint, defaults, choices, onClose, onSa
   }
   return <Drawer open title="Классификация товара" onClose={() => { if (!busy) onClose(); }}>
     <div className="ip-stack sm-classification-editor">
-    <div className="sm-classification-heading"><h3>{card.name || "Название ещё не загружено"}</h3>{safeUrl(card.url) && <a href={card.url} target="_blank" rel="noopener noreferrer">{card.url}</a>}</div>
+    <div className="sm-classification-heading"><h3>{card.name || "Название ещё не загружено"}</h3></div>
     <p className="small muted">Классификация сохраняется для всех регионов этой карточки. Автоматические аналоги определяются по общей классификации.</p>
     <p className="small muted">Существующие расчёты и ручные цены не меняются. Классификация учитывается в следующем расчёте. Цены конкурента обновятся при следующем сборе; сохранение классификации не запускает сбор автоматически.</p>
     <Button disabled={busy} onClick={() => { setValues({ ...defaults, item_type: defaults.item_type || "product" }); setError(""); }}>Заполнить по текущему товару</Button>
-    <div className="sm-classification-fields">{fields.map(([key, label]) => <label className="ip-field" key={key}>{label}{key === "item_type" ? <select className="ip-select" value={values[key]} disabled={busy} onChange={event => setValues({ ...values, [key]: event.target.value })}><option value="product">Товар</option><option value="component">Комплектующее</option></select> : <><input className="ip-input" maxLength={255} disabled={busy} value={values[key]} list={`classification-${key}`} onChange={event => { setError(""); setValues({ ...values, [key]: event.target.value }); }} /><datalist id={`classification-${key}`}>{choices[key]?.map(value => <option key={value} value={value} />)}</datalist></>}</label>)}</div>
+    <ClassificationFields values={values} choices={choices} disabled={busy} onChange={(key, value) => { setError(""); setValues(current => ({ ...current, [key]: value })); }} />
     <label className="ip-field">Комментарий к изменению<textarea className="ip-textarea" maxLength={2000} disabled={busy} value={reason} onChange={event => setReason(event.target.value)} /></label>
     {error && <p role="alert">{error}</p>}
     <div className="ip-row sm-classification-actions"><Button disabled={busy} onClick={onClose}>Отмена</Button><Button variant="accent" disabled={busy || !reason.trim()} onClick={save}>{busy ? "Сохраняем…" : "Сохранить классификацию"}</Button></div>
     </div>
   </Drawer>;
+}
+
+function ClassificationFields({ values, choices, disabled, onChange }) {
+  const [active, setActive] = useState(null);
+  const [query, setQuery] = useState("");
+  const root = useRef(null);
+  const input = useRef(null);
+  useEffect(() => {
+    if (!active) return;
+    input.current?.focus();
+    const close = event => { if (!root.current?.contains(event.target)) setActive(null); };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [active]);
+  const label = fields.find(([key]) => key === active)?.[1];
+  const display = (key, value) => key === "item_type" ? ({ product: "Товар", component: "Комплектующее" })[value] || value : value;
+  const options = active === "item_type" ? ["product", "component"] : [...new Set([values[active], ...(choices[active] || [])].filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru"));
+  const visible = options.filter(value => display(active, value).toLocaleLowerCase("ru").includes(query.trim().toLocaleLowerCase("ru")));
+  function choose(value) { onChange(active, value); setActive(null); }
+  return <div ref={root} className="sm-classification-fields" onKeyDown={event => { if (active && event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setActive(null); } }}>
+    {fields.map(([key, title]) => <button type="button" className={`ip-chip sm-classification-chip ${values[key] ? "on" : ""}`} key={key} disabled={disabled} aria-expanded={active === key} aria-haspopup="listbox" aria-label={`${title}: ${display(key, values[key]) || "Не заполнено"}`} title={`${title}: ${display(key, values[key]) || "Не заполнено"}`} onClick={() => { setQuery(""); setActive(active === key ? null : key); }}>
+      <span className="sm-classification-chip-text"><span>{title}</span><b>{display(key, values[key]) || "Не заполнено"}</b></span><Icon name="chevDown" size={12} />
+    </button>)}
+    {active && <div className="ip-pop sm-classification-pop">
+      <div className="ip-row between"><b>{label}</b><Button variant="ghost" size="s" icon="x" aria-label="Закрыть список" onClick={() => setActive(null)} /></div>
+      <div className="ip-affix"><span className="pre"><Icon name="search" size={14} /></span><input ref={input} className="ip-input" value={query} maxLength={255} disabled={disabled} aria-label={`Найти значение: ${label}`} placeholder={active === "item_type" ? "Найти значение" : "Найти или ввести значение"} onChange={event => setQuery(event.target.value)} /></div>
+      <div className="list" role="listbox" aria-label={label}>{visible.map(value => <button type="button" role="option" aria-selected={values[active] === value} className="opt" key={value} disabled={disabled} onClick={() => choose(value)}><span className="lbl">{display(active, value)}</span>{values[active] === value && <span aria-hidden="true">✓</span>}</button>)}{!visible.length && <p className="small muted">Нет значений</p>}</div>
+      <div className="foot">{active !== "item_type" && <><Button size="s" variant="ghost" disabled={disabled} onClick={() => choose("")}>Очистить</Button>{query.trim() && !options.includes(query.trim()) && <Button size="s" disabled={disabled} onClick={() => choose(query.trim())}>Использовать введённое значение</Button>}</>}</div>
+    </div>}
+  </div>;
 }
