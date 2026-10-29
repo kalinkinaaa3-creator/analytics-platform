@@ -227,11 +227,12 @@
 .sm-classification-actions .ip-btn { white-space: normal; }
 .sm-catalog-regions { max-width: 100%; overflow-x: auto; }
 .sm-classification-fields { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
-.sm-iprice .sm-classification-chip { width: 100%; height: auto; min-height: 52px; padding: 6px 8px; text-align: left; justify-content: space-between; }
-.sm-classification-chip-text { min-width: 0; display: grid; gap: 2px; }
+.sm-iprice .sm-classification-chip { display: flex; align-items: center; width: 100%; min-height: 40px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface, #fff); color: inherit; font: inherit; text-align: left; justify-content: space-between; gap: 8px; cursor: pointer; }
+.sm-classification-chip-text { min-width: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
 .sm-classification-chip-text > * { overflow-wrap: anywhere; white-space: normal; }
-.sm-classification-chip-text > span { font-size: 11px; }
-.sm-classification-chip-text > b { font-size: 12px; font-weight: 500; }
+.sm-classification-chip-text > span { font-weight: 500; }
+.sm-classification-chip-text > b { font-weight: 400; color: var(--muted); }
+.sm-classification-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .sm-iprice .sm-classification-pop { position: relative; margin: 0; top: auto; left: 0; right: 0; width: auto; min-width: 0; max-width: 100%; z-index: 5; }
 .sm-classification-pop .list { max-height: 200px; overflow-y: auto; }
 .sm-iprice .sm-classification-pop .opt { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
@@ -239,3 +240,5 @@
 .sm-classification-pop .opt[aria-selected="true"] { background: var(--primary-soft, #edf4fc); }
 .sm-classification-pop .foot { flex-wrap: wrap; }
 .sm-classification-history article { padding: 12px 0; border-bottom: 1px solid var(--border); }
+
+.sm-iprice .sm-competitor-status { max-width: 100%; min-width: 0; height: auto; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }

@@ -69,7 +69,7 @@ function ClassificationEditor({ card, endpoint, defaults, combinations, onClose,
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const valid = combinations.some(row => fields.every(([key]) => (row[key] || "") === values[key]));
+  const valid = combinations.some(row => fields.every(([key]) => key === "color" || (row[key] || "") === values[key])) && combinations.some(row => (row.color || "") === values.color);
   async function save() {
     setBusy(true); setError("");
     try {
@@ -84,7 +84,7 @@ function ClassificationEditor({ card, endpoint, defaults, combinations, onClose,
     <p className="small muted">Классификация сохраняется для всех регионов этой карточки. При совпадении классификации аналог определяется автоматически и сразу появляется во вкладке «Конкуренты». В цену он будет включён при следующем расчёте.</p>
     <p className="small muted"><strong>Существующие расчёты и ручные цены не меняются. Классификация учитывается в следующем расчёте. Цены конкурента обновятся при следующем сборе; сохранение классификации не запускает сбор автоматически.</strong></p>
     <Button disabled={busy || !combinations.some(row => fields.every(([key]) => (row[key] || "") === (defaults[key] || "")))} onClick={() => { setValues({ ...defaults, item_type: defaults.item_type || "product" }); setError(""); }}>Заполнить по текущему товару</Button>
-    <p className="small muted">Выберите значения из действующей классификации, загруженной из файла. Доступные варианты зависят от заполненных полей.</p>
+    <p className="small muted">Выберите значения из действующей классификации, загруженной из файла. Доступные варианты зависят от заполненных полей. Цвет выбирается независимо.</p>
     <ClassificationFields values={values} combinations={combinations} disabled={busy} onChange={(key, value) => { setError(""); setValues(current => ({ ...current, [key]: value })); }} />
     <label className="ip-field">Комментарий к изменению<textarea className="ip-textarea" maxLength={2000} disabled={busy} value={reason} onChange={event => setReason(event.target.value)} /></label>
     {error && <p role="alert">{error}</p>}
@@ -107,13 +107,13 @@ function ClassificationFields({ values, combinations, disabled, onChange }) {
   }, [active]);
   const label = fields.find(([key]) => key === active)?.[1];
   const display = (key, value) => key === "item_type" ? ({ product: "Товар", component: "Комплектующее" })[value] || value : value;
-  const compatible = combinations.filter(row => fields.every(([key]) => key === active || !values[key] || (row[key] || "") === values[key]));
+  const compatible = combinations.filter(row => fields.every(([key]) => active === "color" || key === "color" || key === active || !values[key] || (row[key] || "") === values[key]));
   const options = [...new Set(compatible.map(row => row[active] || ""))].sort((a, b) => a.localeCompare(b, "ru"));
   const visible = options.filter(value => (display(active, value) || "Не заполнено").toLocaleLowerCase("ru").includes(query.trim().toLocaleLowerCase("ru")));
   function choose(value) { onChange(active, value); setActive(null); }
   return <div ref={root} className="sm-classification-fields" onKeyDown={event => { if (active && event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setActive(null); } }}>
-    {fields.map(([key, title]) => <button type="button" className={`ip-chip sm-classification-chip ${values[key] ? "on" : ""}`} key={key} disabled={disabled} aria-expanded={active === key} aria-haspopup="listbox" aria-label={`${title}: ${display(key, values[key]) || "Не заполнено"}`} title={`${title}: ${display(key, values[key]) || "Не заполнено"}`} onClick={() => { setQuery(""); setActive(active === key ? null : key); }}>
-      <span className="sm-classification-chip-text"><span>{title}</span><b>{display(key, values[key]) || "Не заполнено"}</b></span><Icon name="chevDown" size={12} />
+    {fields.map(([key, title]) => <button type="button" className="ip-panel sm-filter-section sm-classification-chip" key={key} disabled={disabled} aria-expanded={active === key} aria-haspopup="listbox" aria-label={`${title}: ${display(key, values[key]) || "Не заполнено"}`} title={`${title}: ${display(key, values[key]) || "Не заполнено"}`} onClick={() => { setQuery(""); setActive(active === key ? null : key); }}>
+      <span className="sm-classification-chip-text"><span>{title}</span>{values[key] && <b>{display(key, values[key])}</b>}</span><Icon name="chevDown" size={12} />
     </button>)}
     {active && <div className="ip-pop sm-classification-pop" style={{ gridRow: fields.findIndex(([key]) => key === active) + 2 }}>
       <div className="ip-row between"><b>{label}</b><Button variant="ghost" size="s" icon="x" aria-label="Закрыть список" onClick={() => setActive(null)} /></div>

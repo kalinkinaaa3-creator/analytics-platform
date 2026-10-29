@@ -115,7 +115,10 @@ def classify(*, keys, revision, values, reason, user, organization):
     rows = next((rows for rows in groups().values() if rows[0].pk in keys), None)
     if not rows or sorted(keys) != sorted(row.pk for row in rows) or revision != token(rows):
         raise ValueError('Состав или классификация товара изменились. Обновите список и повторите действие.')
-    if values not in classification_combinations():
+    combinations = classification_combinations()
+    valid_fields = any(all(values[key] == row[key] for key in FIELDS if key != 'color') for row in combinations)
+    valid_color = values['color'] in {row['color'] for row in combinations}
+    if not valid_fields or not valid_color:
         raise ValueError('Выберите сочетание значений из действующей классификации, загруженной из файла.')
     before = {str(row.product_key): {field: getattr(row, field) for field in FIELDS}
               for row in m.ParserProductClassification.objects.filter(product_key__in=keys)}

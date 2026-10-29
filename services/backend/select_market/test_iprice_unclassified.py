@@ -130,3 +130,17 @@ class UnclassifiedTests(TestCase):
         self.assertEqual(self.product.competitors.count(), 0)
         market = self.request(OwnAssortmentView, 'get', snapshot_id=self.snapshot.pk, product_id=self.product.pk, kind='market')
         self.assertEqual(market.data['counts']['cards'], 1)
+
+    def test_color_is_independent_but_must_exist_in_uploaded_classification(self):
+        other = m.ParserProductUrl.objects.create(source='base', own_code='COLOR')
+        m.ParserProductClassification.objects.create(product_key=other.pk,
+            **dict(self.values, category='Other', material='Metal', color='red'))
+        payload = dict(self.payload(), values=dict(self.values, color='unknown'))
+        response = self.request(UnclassifiedView, 'post', snapshot_id=self.snapshot.pk,
+            product_id=self.product.pk, edit_allowed=True, data=payload)
+        self.assertEqual(response.status_code, 400)
+        payload['values']['color'] = 'red'
+        response = self.request(UnclassifiedView, 'post', snapshot_id=self.snapshot.pk,
+            product_id=self.product.pk, edit_allowed=True, data=payload)
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(m.ParserProductClassification.objects.get(product_key=self.urls[0].pk).color, 'red')

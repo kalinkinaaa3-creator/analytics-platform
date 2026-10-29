@@ -37,7 +37,7 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
           classificationSaved = true;
           await route.fulfill({json:{message:'Классификация сохранена. Изменения будут учтены в следующем расчёте.'}}); return;
         }
-        await route.fulfill({json:{page:1,pages:1,count:classificationSaved?0:1,defaults:classificationDefaults,combinations:[classificationDefaults, {...classificationDefaults,category:'Аксессуары',material:'Металл',article_number_analogs:'ACCESSORY'}],choices:{},history:[],results:classificationSaved?[]:[{
+        await route.fulfill({json:{page:1,pages:1,count:classificationSaved?0:1,defaults:classificationDefaults,combinations:[classificationDefaults, {...classificationDefaults,category:'Аксессуары',color:'красный',material:'Металл',article_number_analogs:'ACCESSORY'}],choices:{},history:[],results:classificationSaved?[]:[{
           product_keys:[91,92],revision:'test-revision',source:'tara',name:'Неклассифицированное ведро',url:'https://moskva.tara.test/catalog/'+'long_product_name_'.repeat(30)+'?oid=330553',image:row.snapshot_product__image,price:150,dates:['2026-10-20','2026-10-28'],
           regional_entries:[{region:'Москва',offers:[{product_key:91,price:100,date:'2026-10-20',url:'https://example.test/moscow'}]},{region:'Казань',offers:[{product_key:92,price:200,date:'2026-10-28',url:'https://example.test/kazan'}]}]
         }]}}); return;
@@ -129,10 +129,10 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
         await import('/src/iprice/selectMarket/selectMarketIPrice.css');
         const { ProductDetails } = await import('/src/iprice/selectMarket/SelectMarketAnalysis.jsx');
         function Harness() {
-          const [revision,setRevision]=React.useState(0);
+          const revision=0;
           return React.createElement('div',{className:'sm-iprice'},React.createElement(ProductDetails,{
             snapshotId:1,productId:1,region:{id:1,product_id:1,effective:{rrp:110}},
-            canEdit:true,refreshRevision:revision,onSaved:()=>setRevision(v=>v+1)
+            canEdit:true,refreshRevision:revision,onSaved:()=>{ throw new Error('Classification must not change calculation revision'); }
           }));
         }
         ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Harness));
@@ -179,6 +179,14 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
       assert.equal(await dialog.getByRole('button',{name:'Использовать введённое значение',exact:true}).count(),0);
       await dialog.getByRole('button',{name:'Закрыть список',exact:true}).click();
       await dialog.getByRole('button',{name:'Заполнить по текущему товару'}).click();
+      await dialog.getByRole('button',{name:'Цвет: синий',exact:true}).click();
+      await dialog.getByRole('option',{name:'красный',exact:true}).click();
+      await dialog.getByRole('button',{name:'Материал: PP',exact:true}).click();
+      await dialog.getByRole('option',{name:'PP',exact:true}).waitFor();
+      assert.equal(await dialog.getByRole('option',{name:'Металл',exact:true}).count(),0);
+      await dialog.getByRole('button',{name:'Закрыть список',exact:true}).click();
+      await dialog.getByRole('button',{name:'Цвет: красный',exact:true}).click();
+      await dialog.getByRole('option',{name:'синий',exact:true}).click();
       await dialog.getByLabel('Комментарий к изменению',{exact:true}).fill('Проверено по сайту');
       for(const width of [1440,390]) {
         await page.setViewportSize({width,height:900});
@@ -191,7 +199,11 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
       await page.getByRole('heading',{name:'Новый аналог',exact:true}).waitFor();
       await page.getByRole('tab',{name:/^Конкуренты/}).click();
       await page.getByRole('heading',{name:'Новый аналог',exact:true}).waitFor();
-      await page.locator('.sm-competitor-card:visible').getByText('Аналог · для следующего расчёта',{exact:true}).waitFor();
+      await page.locator('.sm-competitor-card:visible').getByText('Для следующего расчета',{exact:true}).waitFor();
+      assert.ok(await page.locator('.sm-competitor-card:visible .sm-competitor-status').evaluate(el => {
+        const card=el.closest('article').getBoundingClientRect(), badge=el.getBoundingClientRect();
+        return badge.right <= card.right && el.scrollWidth <= el.clientWidth + 1;
+      }));
       assert.deepEqual(errors,[]);
       console.log('Classification: dependent choices, photo preview, history drawer, pagination, mobile layout and live market/competitors refresh passed.');
       return;

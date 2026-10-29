@@ -173,7 +173,9 @@ export function ProductDetails(props) {
   </>;
 }
 
-function ProductDetailsBody({ refreshRevision = 0, snapshotId, productId, region: initialRegion, canEdit, canEditPrice, onSaved, onOpenProduct, onBack, backLabel = "Цены" }) {
+function ProductDetailsBody({ refreshRevision: calculationRevision = 0, snapshotId, productId, region: initialRegion, canEdit, canEditPrice, onSaved, onOpenProduct, onBack, backLabel = "Цены" }) {
+  const [catalogueRevision, setCatalogueRevision] = useState(0);
+  const refreshRevision = calculationRevision + ":" + catalogueRevision;
   const [competitorTarget, setCompetitorTarget] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [counts, setCounts] = useState({ own: null, market: null });
@@ -225,7 +227,7 @@ function ProductDetailsBody({ refreshRevision = 0, snapshotId, productId, region
       <p className="foot">Показаны медианы цен по регионам без НДС. Ниже — расчёт выбранного региона. Ручные цены: {(regions || []).filter(r => r.effective.approval_source === "manual").length} регионов.</p>
     </div>
     <Tabs value={tab} onChange={setTab} items={[["regions", "Цены по регионам"], ["competitors", `Конкуренты · ${data.competitor_cards?.length || 0}`], ["market", `Рынок категории · ${counts.market ?? "…"}`], ["own", `Наша линейка · ${counts.own ?? "…"}`], ["unclassified", "Неклассифицированные товары"]]} />
-    {tab === "unclassified" && <UnclassifiedProducts snapshotId={snapshotId} productId={productId} canEdit={canEdit} onSaved={onSaved} />}
+    {tab === "unclassified" && <UnclassifiedProducts snapshotId={snapshotId} productId={productId} canEdit={canEdit} onSaved={() => setCatalogueRevision(value => value + 1)} />}
     {tab === "regions" && <>
       <Panel title="Цены по регионам" sub="Строка региона показывает ниже коридор и расчёт цены."><div className="sm-iprice-table"><table className="ip-table"><thead><tr><th>Регион продажи</th><th className="num">У конкурентов</th><th className="num">Сейчас</th><th className="num">Новая цена</th><th className="num">Маржа</th><th>К рынку</th><th /></tr></thead><tbody>{(regions?.length ? regions : [initialRegion]).map(row => <tr key={row.id} tabIndex={0} className={`is-clickable ${row.id === region.id ? "is-sel" : ""}`} onClick={event => { if (!event.target.closest("button, a, input, label")) setRegion(row); }} onKeyDown={event => { if (event.key === "Enter" && event.target === event.currentTarget) setRegion(row); }}><td><Button variant="ghost" size="s" onClick={() => setRegion(row)}>{row.sale_region}</Button></td><td className="num">{fmtMoney(row.regional_competitor_rrp_median)}</td><td className="num">{fmtMoney(row.current_retail)}</td><td className="num"><b>{fmtMoney(row.effective.rrp)}</b><span className="sub">{fmtMoney(row.effective_gross?.rrp)} с НДС</span><span className="ip-tag blue" title={row.effective.approval_comment || ""}>{row.effective.approval_source === "manual" ? "Цена сотрудника" : "Расчёт iPrice"}</span></td><td className="num">{Number(row.effective.rrp) > 0 && row.cost_with_logistics != null ? fmtPct(1 - Number(row.cost_with_logistics) / Number(row.effective.rrp), { digits: 0 }) : "—"}</td><td><ZoneTag zone={row.zone} percent={Number(row.regional_competitor_rrp_median) > 0 && row.effective.rrp != null ? (Number(row.effective.rrp) / Number(row.regional_competitor_rrp_median) - 1) * 100 : null} /></td><td>{canEditPrice && row.calculation_status !== "error" && <Button size="s" onClick={() => { setRegion(row); setEditing(true); }}>Изменить</Button>}</td></tr>)}</tbody></table></div></Panel>
       {!![...(region.error_codes || []), ...(region.warning_codes || [])].length && <p role="status">{[...new Set([...(region.error_codes || []), ...(region.warning_codes || [])])].map(c => issues[c] || c).join(". ")}</p>}
