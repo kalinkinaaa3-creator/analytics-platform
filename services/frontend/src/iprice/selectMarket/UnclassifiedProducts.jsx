@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { Panel, Button, Drawer } from "./ui/primitives";
 import Icon from "./ui/Icon";
@@ -94,32 +94,25 @@ function ClassificationEditor({ card, endpoint, defaults, combinations, onClose,
 }
 
 function ClassificationFields({ values, combinations, disabled, onChange }) {
-  const [active, setActive] = useState(null);
+  return <div className="sm-classification-fields">{fields.map(([key, title]) =>
+    <ClassificationField key={key} field={key} title={title} values={values} combinations={combinations} disabled={disabled} onChange={value => onChange(key, value)} />
+  )}</div>;
+}
+
+function ClassificationField({ field, title, values, combinations, disabled, onChange }) {
   const [query, setQuery] = useState("");
-  const root = useRef(null);
-  const input = useRef(null);
-  useEffect(() => {
-    if (!active) return;
-    input.current?.focus();
-    const close = event => { if (!root.current?.contains(event.target)) setActive(null); };
-    document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
-  }, [active]);
-  const label = fields.find(([key]) => key === active)?.[1];
-  const display = (key, value) => key === "item_type" ? ({ product: "Товар", component: "Комплектующее" })[value] || value : value;
-  const compatible = combinations.filter(row => fields.every(([key]) => active === "color" || key === "color" || key === active || !values[key] || (row[key] || "") === values[key]));
-  const options = [...new Set(compatible.map(row => row[active] || ""))].sort((a, b) => a.localeCompare(b, "ru"));
-  const visible = options.filter(value => (display(active, value) || "Не заполнено").toLocaleLowerCase("ru").includes(query.trim().toLocaleLowerCase("ru")));
-  function choose(value) { onChange(active, value); setActive(null); }
-  return <div ref={root} className="sm-classification-fields" onKeyDown={event => { if (active && event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setActive(null); } }}>
-    {fields.map(([key, title]) => <button type="button" className="ip-panel sm-filter-section sm-classification-chip" key={key} disabled={disabled} aria-expanded={active === key} aria-haspopup="listbox" aria-label={`${title}: ${display(key, values[key]) || "Не заполнено"}`} title={`${title}: ${display(key, values[key]) || "Не заполнено"}`} onClick={() => { setQuery(""); setActive(active === key ? null : key); }}>
-      <span className="sm-classification-chip-text"><span>{title}</span>{values[key] && <b>{display(key, values[key])}</b>}</span><Icon name="chevDown" size={12} />
-    </button>)}
-    {active && <div className="ip-pop sm-classification-pop" style={{ gridRow: fields.findIndex(([key]) => key === active) + 2 }}>
-      <div className="ip-row between"><b>{label}</b><Button variant="ghost" size="s" icon="x" aria-label="Закрыть список" onClick={() => setActive(null)} /></div>
-      <div className="ip-affix"><span className="pre"><Icon name="search" size={14} /></span><input ref={input} className="ip-input" value={query} maxLength={255} disabled={disabled} aria-label={`Найти значение: ${label}`} placeholder="Найти значение" onChange={event => setQuery(event.target.value)} /></div>
-      <div className="list" role="listbox" aria-label={label}>{visible.map(value => <button type="button" role="option" aria-selected={values[active] === value} className="opt" key={value} disabled={disabled} onClick={() => choose(value)}><span className="lbl">{display(active, value) || "Не заполнено"}</span>{values[active] === value && <span aria-hidden="true">✓</span>}</button>)}{!visible.length && <p className="small muted">Нет значений</p>}</div>
-      <div className="foot"><Button size="s" variant="ghost" disabled={disabled} onClick={() => choose("")}>Очистить</Button></div>
-    </div>}
-  </div>;
+  const display = value => field === "item_type" ? ({ product: "Товар", component: "Комплектующее" })[value] || value : value;
+  const compatible = combinations.filter(row => fields.every(([key]) => field === "color" || key === "color" || key === field || !values[key] || (row[key] || "") === values[key]));
+  const options = [...new Set(compatible.map(row => row[field] || ""))].sort((a, b) => a.localeCompare(b, "ru"));
+  const visible = options.filter(value => (display(value) || "Не заполнено").toLocaleLowerCase("ru").includes(query.trim().toLocaleLowerCase("ru")));
+  return <details className="ip-panel sm-filter-section sm-classification-section">
+    <summary className="sm-classification-chip" aria-label={`${title}: ${display(values[field]) || "Не заполнено"}`}>
+      <span className="sm-classification-chip-text"><span>{title}</span>{values[field] && <b>{display(values[field])}</b>}</span>
+    </summary>
+    <div className="ip-pop sm-filter-options">
+      {options.length > 8 && <div className="ip-affix"><span className="pre"><Icon name="search" size={14} /></span><input className="ip-input" value={query} maxLength={255} disabled={disabled} aria-label={`Найти значение: ${title}`} placeholder="Найти значение" onChange={event => setQuery(event.target.value)} /></div>}
+      <div className="list" role="radiogroup" aria-label={title}>{visible.map(value => <label className="opt" key={value}><input type="radio" name={`classification-${field}`} checked={values[field] === value} disabled={disabled} onChange={() => onChange(value)} /><span className="lbl">{display(value) || "Не заполнено"}</span></label>)}{!visible.length && <p className="small muted">Нет значений</p>}</div>
+      {!!values[field] && <Button size="s" variant="ghost" disabled={disabled} onClick={() => onChange("")}>Очистить</Button>}
+    </div>
+  </details>;
 }
