@@ -215,5 +215,7 @@ def calculation_explanations(row):
         discount = max(discounts)
         minimum_rrp = floor / (1 - discount)
         raw = max(preliminary, minimum_rrp)
-        hints['calculated_rrp'] = f'{number(raw)} ₽ → {number(row.calculated_rrp)} ₽'
+        hints['calculated_rrp'] = (
+            f'макс({number(preliminary)}; {number(floor)} / (1 − {pct(discount)}))'
+            f' = {number(raw)} ₽ → {number(row.calculated_rrp)} ₽')
     return hints

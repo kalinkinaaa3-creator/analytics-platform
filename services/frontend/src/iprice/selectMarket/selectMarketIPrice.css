@@ -236,3 +236,5 @@
 .sm-classification-history article { padding: 12px 0; border-bottom: 1px solid var(--border); }
 
 .sm-iprice .sm-competitor-status { max-width: 100%; min-width: 0; height: auto; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
+
+.sm-iprice .sm-classification-section .sm-filter-options > .ip-btn { justify-self: start; align-self: start; width: auto; justify-content: flex-start; margin-left: 0; margin-right: auto; }

@@ -60,9 +60,8 @@ class ExplanationTests(TestCase):
         self.assertIn('100,00 + 10,00 = 110,00', hints['cost_with_logistics'])
         self.assertIn('200,00 × 1,10 = 220,00', hints['preliminary_rrp'])
         self.assertIn('137,50', hints['minimum_price'])
-        self.assertEqual(hints['calculated_rrp'], '220,00 ₽ → 220,00 ₽')
+        self.assertEqual(hints['calculated_rrp'], 'макс(220,00; 137,50 / (1 − 30,00 %)) = 220,00 ₽ → 220,00 ₽')
         self.assertNotIn('вверх до', hints['minimum_price'])
-        self.assertNotIn('макс', hints['calculated_rrp'])
         self.assertNotIn('защита маржи', hints['calculated_rrp'])
         values['regional_competitor_rrp_median'] = None
         self.assertIn('110,00 / (1 − 25,00 %)', calculation_explanations(SimpleNamespace(**values))['preliminary_rrp'])
