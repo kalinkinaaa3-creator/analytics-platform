@@ -45,3 +45,21 @@ class RegionalCalculationTests(TestCase):
                 self.assertFalse(result['error_codes'])
                 for price in result['prices_net'].values():
                     self.assertGreaterEqual(price * Decimal('.9'), Decimal(cost))
+
+
+class ExplanationTests(TestCase):
+    def test_saved_inputs_explain_market_and_cost_methods(self):
+        from types import SimpleNamespace
+        from .iprice_regional_calculation import calculation_explanations
+        values = dict(product_cost=Decimal('100'), logistics_unit=Decimal('10'), cost_with_logistics=Decimal('110'),
+                      regional_competitor_rrp_median=Decimal('200'), base_analog=Decimal('1.1'),
+                      base_exclusive=Decimal('.25'), minimum_margin=Decimal('.2'), minimum_price=Decimal('138'),
+                      discount_small=Decimal('.1'), discount_medium=Decimal('.2'), discount_large=Decimal('.3'),
+                      calculated_rrp=Decimal('220'))
+        hints = calculation_explanations(SimpleNamespace(**values))
+        self.assertIn('100,00 + 10,00 = 110,00', hints['cost_with_logistics'])
+        self.assertIn('200,00 × 1,10 = 220,00', hints['preliminary_rrp'])
+        self.assertIn('137,50', hints['minimum_price'])
+        self.assertIn('30,00 %', hints['calculated_rrp'])
+        values['regional_competitor_rrp_median'] = None
+        self.assertIn('110,00 / (1 − 25,00 %)', calculation_explanations(SimpleNamespace(**values))['preliminary_rrp'])

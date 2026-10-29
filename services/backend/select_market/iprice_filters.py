@@ -3,7 +3,7 @@ from django.db.models import Q
 
 PRODUCT_FILTERS = {key: key for key in (
     'group_1', 'group_2', 'group_3', 'group_4', 'category', 'subcategory',
-    'subcategory_type', 'color', 'material', 'modification', 'item_type', 'is_classified',
+    'subcategory_type', 'color', 'material', 'modification', 'article_number_analogs', 'item_type', 'is_classified',
     'pricing_method', 'calculation_status', 'sale_region', 'has_manual_price',
 )}
 EMPTY = '__empty__'
@@ -50,7 +50,7 @@ def filter_products(queryset, filters, search='', *, skip=None, prefix=''):
                 matching = IPriceSnapshotRegion.objects.filter(sale_region__in=values)
                 queryset = queryset.filter(pk__in=matching.values('snapshot_product_id'))
             continue
-        field = prefix + key
+        field = prefix + PRODUCT_FILTERS[key]
         if key == 'is_classified':
             if set(values) - {'true', 'false'}:
                 raise ValueError('Некорректный фильтр классификации')
@@ -77,7 +77,7 @@ def filter_options(queryset, filters, search=''):
             from .iprice_domain_models import IPriceSnapshotRegion
             values = IPriceSnapshotRegion.objects.filter(snapshot_product_id__in=scoped.values('pk')).order_by().values_list(field, flat=True).distinct()
         else:
-            values = scoped.order_by().values_list(field, flat=True).distinct()
+            values = scoped.order_by().values_list(PRODUCT_FILTERS[field], flat=True).distinct()
         result[field] = sorted({('true' if value else 'false') if field == 'is_classified'
                                 else value or EMPTY for value in values})
     return result

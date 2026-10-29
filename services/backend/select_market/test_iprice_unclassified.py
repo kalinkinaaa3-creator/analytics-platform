@@ -95,3 +95,38 @@ class UnclassifiedTests(TestCase):
         self.urls[0].save()
         with self.assertRaises(ValueError):
             classify(keys=payload['product_keys'], revision=payload['revision'], values=self.values, reason='Reviewed', user=self.user, organization=self.org)
+
+    def test_only_uploaded_combinations_are_allowed_and_page_size_validated(self):
+        extra = dict(self.values, material='Metal')
+        other = m.ParserProductUrl.objects.create(source='base', own_code='002')
+        m.ParserProductClassification.objects.create(product_key=other.pk, manual_edit=True, **extra)
+        response = self.request(UnclassifiedView, 'get', snapshot_id=self.snapshot.pk, product_id=self.product.pk)
+        self.assertEqual(response.data['combinations'], [self.values])
+        for values in (extra, dict(self.values, category='Unknown')):
+            payload = dict(self.payload(), values=values)
+            response = self.request(UnclassifiedView, 'post', snapshot_id=self.snapshot.pk, product_id=self.product.pk,
+                                    edit_allowed=True, data=payload)
+            self.assertEqual(response.status_code, 400, response.data)
+        for size in ('oops', 24, 101):
+            response = self.request(UnclassifiedView, 'get', snapshot_id=self.snapshot.pk, product_id=self.product.pk,
+                                    data={'page_size': size})
+            self.assertEqual(response.status_code, 400)
+        self.assertEqual(m.ClassificationChange.objects.count(), 0)
+
+    def test_classified_analog_is_visible_without_changing_saved_calculation(self):
+        from .iprice_operations_api import ProductDetailsView, OwnAssortmentView
+        for key, value in self.values.items():
+            setattr(self.product, key, value)
+        self.product.save()
+        payload = self.payload()
+        classify(keys=payload['product_keys'], revision=payload['revision'], values=self.values,
+                 reason='Reviewed', user=self.user, organization=self.org)
+        response = self.request(ProductDetailsView, 'get', snapshot_id=self.snapshot.pk, product_id=self.product.pk)
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(len(response.data['competitor_cards']), 1)
+        card = response.data['competitor_cards'][0]
+        self.assertTrue(card['is_current_analog'])
+        self.assertFalse(card['is_used_in_snapshot'])
+        self.assertEqual(self.product.competitors.count(), 0)
+        market = self.request(OwnAssortmentView, 'get', snapshot_id=self.snapshot.pk, product_id=self.product.pk, kind='market')
+        self.assertEqual(market.data['counts']['cards'], 1)

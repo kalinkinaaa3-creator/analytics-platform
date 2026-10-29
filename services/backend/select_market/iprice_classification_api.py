@@ -4,7 +4,7 @@ from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from .iprice_api import PriceFileView
 from . import iprice_domain_models as m
-from .iprice_unclassified import FIELDS, catalogue, classify
+from .iprice_unclassified import FIELDS, catalogue, classify, classification_combinations
 
 
 class ClassificationInput(serializers.Serializer):
@@ -32,11 +32,14 @@ class UnclassifiedView(PriceFileView):
         source = serializers.ChoiceField(choices=['', 'tara', 'tt', 'ps']).run_validation(request.query_params.get('source', ''))
         page = serializers.IntegerField(min_value=1).run_validation(request.query_params.get('page', 1))
         search = serializers.CharField(max_length=200, allow_blank=True).run_validation(request.query_params.get('search', ''))
-        data = catalogue(search=search, source=source, page=page)
+        page_size = serializers.IntegerField(min_value=25, max_value=100).run_validation(request.query_params.get('page_size', 50))
+        if page_size not in (25, 50, 100):
+            raise serializers.ValidationError('Выберите 25, 50 или 100 товаров на странице.')
+        data = catalogue(search=search, source=source, page=page, page_size=page_size)
         base = m.ParserProductClassification.objects.filter(product_key=product.base_product_key, status='active').first()
         data['defaults'] = {key: (getattr(base, key) or '') if base else '' for key in FIELDS}
-        data['choices'] = {key: list(m.ParserProductClassification.objects.filter(status='active').exclude(**{key: ''})
-            .exclude(**{key + '__isnull': True}).order_by(key).values_list(key, flat=True).distinct()) for key in FIELDS if key != 'item_type'}
+        data['combinations'] = classification_combinations()
+        data['choices'] = {key: sorted({row[key] for row in data['combinations'] if row[key]}) for key in FIELDS}
         data['history'] = list(m.ClassificationChange.objects.order_by('-pk').values(
             'id', 'product_keys', 'after', 'reason', 'created_at', 'changed_by__username')[:50])
         return Response(data)

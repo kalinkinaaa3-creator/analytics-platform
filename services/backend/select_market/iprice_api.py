@@ -388,6 +388,8 @@ class SnapshotRowsView(PriceFileView):
                 'discount_small', 'discount_medium', 'discount_large', 'current_small', 'current_medium', 'current_large',
                 'calculated_small', 'calculated_medium', 'calculated_large',
                 'calculation_status', 'warning_codes', 'error_codes')}
+            from .iprice_regional_calculation import calculation_explanations
+            values['calculation_explanations'] = calculation_explanations(row)
             values.update(snapshot_product__code_1c=row.snapshot_product.code_1c,
                 include_transport=row.calculation_details.get('include_transport', False),
                 entered_logistics_unit=row.calculation_details.get('entered_logistics_unit'),

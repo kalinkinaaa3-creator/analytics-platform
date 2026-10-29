@@ -117,7 +117,8 @@ def build_iprice_own_assortment(
             "material": candidate.material,
             "color": candidate.color,
             "modification": candidate.modification,
-            "article_number_analogs": articles_by_product.get(candidate.base_product_key),
+            "article_number_analogs": (candidate.article_number_analogs if workspace and workspace.code == 'select-market'
+                                      else articles_by_product.get(candidate.base_product_key)),
             "image": candidate.image,
             "url": candidate.url,
             "price": (

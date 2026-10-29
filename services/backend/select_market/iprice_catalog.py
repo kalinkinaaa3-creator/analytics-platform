@@ -61,7 +61,7 @@ def build_products(snapshot):
             is_classified=classification is not None, **groups,
             nom_hier_code=code, nom_hier=source.nom,
             item_type=classification.item_type if classification else 'product',
-            **{field: getattr(classification, field, None) for field in ('category', 'subcategory', 'subcategory_type', 'color', 'material', 'modification')},
+            **{field: getattr(classification, field, None) for field in ('category', 'subcategory', 'subcategory_type', 'color', 'material', 'modification', 'article_number_analogs')},
             url=base.url if base else None, image=base.image if base else None,
             pricing_method='exclusive', warning_codes=warnings,
             calculation_status='warning' if warnings else 'success',

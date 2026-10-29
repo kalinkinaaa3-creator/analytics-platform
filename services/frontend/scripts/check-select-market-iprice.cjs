@@ -37,7 +37,7 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
           classificationSaved = true;
           await route.fulfill({json:{message:'Классификация сохранена. Изменения будут учтены в следующем расчёте.'}}); return;
         }
-        await route.fulfill({json:{page:1,pages:1,count:classificationSaved?0:1,defaults:classificationDefaults,choices:{},history:[],results:classificationSaved?[]:[{
+        await route.fulfill({json:{page:1,pages:1,count:classificationSaved?0:1,defaults:classificationDefaults,combinations:[classificationDefaults, {...classificationDefaults,category:'Аксессуары',material:'Металл',article_number_analogs:'ACCESSORY'}],choices:{},history:[],results:classificationSaved?[]:[{
           product_keys:[91,92],revision:'test-revision',source:'tara',name:'Неклассифицированное ведро',url:'https://moskva.tara.test/catalog/'+'long_product_name_'.repeat(30)+'?oid=330553',image:row.snapshot_product__image,price:150,dates:['2026-10-20','2026-10-28'],
           regional_entries:[{region:'Москва',offers:[{product_key:91,price:100,date:'2026-10-20',url:'https://example.test/moscow'}]},{region:'Казань',offers:[{product_key:92,price:200,date:'2026-10-28',url:'https://example.test/kazan'}]}]
         }]}}); return;
@@ -100,6 +100,11 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
       if (path.endsWith('/analysis/') && !new URL(request.url()).searchParams.get('comparison_id')) {
         body.summary = { total_products: 2, market_coverage_percent: 100, median_deviation_percent: -4.76, median_final_rrp: 110, median_retail_price: 100, median_market_price: 105, calculation_errors: 0, zones: [{key:'below_market', count:2, percent:100}] };
       }
+      if (classificationSaved && path.endsWith('/market/')) {
+        body.results.push({group_key:['tara',91],competitor_product_keys:[91,92],source:'tara',name:'Новый аналог',is_matched_current:true,price:150});
+        body.counts.cards++;
+      }
+      if (classificationSaved && path.endsWith('/products/1/')) body.competitor_cards=[{group_key:['tara',91],competitor_product_keys:[91,92],source:'tara',name:'Новый аналог',is_current_analog:true,price:150}];
       if (path.endsWith('/market/') && competitorChanges) body.results = body.results.map(card => ({...card, selection_mode:'exclude', is_used_in_snapshot:false}));
       if (manyCards && (path.endsWith('/market/') || path.endsWith('/own/'))) {
         body.results = Array.from({length:61}, (_,i)=>({...body.results[0], group_key:['test',i], snapshot_product_id:i+3, name:'Товар '+i, color:i%2?'красный':'синий', material:'PE/PP', modification:i%2?'С крышкой':'Без крышки'}));
@@ -111,17 +116,33 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
     await page.route(`${base}/iprice-check*`, route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><style>body{margin:0}</style></head><body><div class="app-shell sm-workspace"><div id="root"></div></div><script type="module">
       import '/src/index.css';
       import '/src/organizations/select-market.css';
-      import React from '/node_modules/.vite/deps/react.js';
-      import ReactDOM from '/node_modules/.vite/deps/react-dom_client.js';
+      const entry = await (await fetch('/src/main.jsx')).text();
+      const imports = [...entry.matchAll(/from ["']([^"']+)["']/g)].map(match => match[1]);
+      const React = (await import(imports.find(path => path.includes('/react.js?')))).default;
+      const ReactDOM = (await import(imports.find(path => path.includes('/react-dom_client.js?')))).default;
       import RefreshRuntime from '/@react-refresh';
       RefreshRuntime.injectIntoGlobalHook(window);
       window.$RefreshReg$ = () => {}; window.$RefreshSig$ = () => type => type;
       window.__vite_plugin_react_preamble_installed__ = true;
+      if (${JSON.stringify(Boolean(process.env.IPRICE_CLASSIFICATION_ONLY))}) {
+        await import('/src/iprice/selectMarket/demo.css');
+        await import('/src/iprice/selectMarket/selectMarketIPrice.css');
+        const { ProductDetails } = await import('/src/iprice/selectMarket/SelectMarketAnalysis.jsx');
+        function Harness() {
+          const [revision,setRevision]=React.useState(0);
+          return React.createElement('div',{className:'sm-iprice'},React.createElement(ProductDetails,{
+            snapshotId:1,productId:1,region:{id:1,product_id:1,effective:{rrp:110}},
+            canEdit:true,refreshRevision:revision,onSaved:()=>setRevision(v=>v+1)
+          }));
+        }
+        ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Harness));
+      } else {
       const { SelectMarketIPrice } = await import('/src/iprice/selectMarket/SelectMarketIPrice.jsx');
       const componentSource = await (await fetch('/src/iprice/selectMarket/SelectMarketIPrice.jsx')).text();
       const routerModule = componentSource.match(/from ["']([^"']*react-router-dom[^"']*)["']/)[1];
       const { BrowserRouter } = await import(routerModule);
       ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(BrowserRouter, null, React.createElement(SelectMarketIPrice, { dashboard: {name: 'iPrice'} })));
+      }
     </script></body></html>` }));
     const capture = async name => {
       if (process.env.IPRICE_SCREENSHOT_DIR) {
@@ -129,6 +150,52 @@ const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
         await page.screenshot({ path: require('node:path').join(process.env.IPRICE_SCREENSHOT_DIR, name + '.png'), fullPage: true });
       }
     };
+
+    if (process.env.IPRICE_CLASSIFICATION_ONLY) {
+      await page.goto(base+'/iprice-check');
+      await page.getByRole('tab',{name:/^Рынок категории/}).click();
+      await page.getByRole('heading',{name:'Карточка рынка',exact:true}).waitFor();
+      await page.getByRole('tab',{name:'Неклассифицированные товары',exact:true}).click();
+      await page.locator('.sm-unclassified-card').waitFor();
+      await page.locator('.sm-unclassified-card .iprice-product-image-trigger').hover();
+      await page.locator('.iprice-product-image-preview').waitFor();
+      await page.getByRole('button',{name:'История классификации',exact:true}).click();
+      const history=page.getByRole('dialog',{name:'История классификации'});
+      await history.getByText('Изменений пока нет.').waitFor();
+      await history.getByRole('button',{name:'Закрыть',exact:true}).click();
+      const sizeRequest=page.waitForRequest(r=>r.url().includes('/unclassified/') && new URL(r.url()).searchParams.get('page_size')==='25');
+      await page.locator('.sm-product-page .ip-pager:visible select').selectOption('25');
+      await sizeRequest;
+      await page.getByRole('button',{name:'Классифицировать',exact:true}).click();
+      const dialog=page.getByRole('dialog',{name:'Классификация товара'});
+      assert.equal(await dialog.locator('.sm-classification-chip').count(),8);
+      assert.equal(await dialog.locator('.sm-classification-chip').evaluateAll(els=>new Set(els.map(el=>Math.round(el.getBoundingClientRect().top))).size),8);
+      await dialog.getByRole('button',{name:'Тип: Не заполнено',exact:true}).click();
+      await dialog.getByRole('option',{name:'Ёмкости',exact:true}).click();
+      await dialog.getByRole('button',{name:'Материал: Не заполнено',exact:true}).click();
+      assert.equal(await dialog.getByRole('option',{name:'Металл',exact:true}).count(),0);
+      await dialog.getByLabel('Найти значение: Материал',{exact:true}).fill('произвольное');
+      assert.equal(await dialog.getByRole('option').count(),0);
+      assert.equal(await dialog.getByRole('button',{name:'Использовать введённое значение',exact:true}).count(),0);
+      await dialog.getByRole('button',{name:'Закрыть список',exact:true}).click();
+      await dialog.getByRole('button',{name:'Заполнить по текущему товару'}).click();
+      await dialog.getByLabel('Комментарий к изменению',{exact:true}).fill('Проверено по сайту');
+      for(const width of [1440,390]) {
+        await page.setViewportSize({width,height:900});
+        assert.ok(await dialog.locator('.ip-drawer').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+      }
+      await capture('classification-single-column');
+      await dialog.getByRole('button',{name:'Сохранить классификацию',exact:true}).click();
+      await page.getByText('Неклассифицированных товаров нет',{exact:true}).waitFor();
+      await page.getByRole('tab',{name:/^Рынок категории/}).click();
+      await page.getByRole('heading',{name:'Новый аналог',exact:true}).waitFor();
+      await page.getByRole('tab',{name:/^Конкуренты/}).click();
+      await page.getByRole('heading',{name:'Новый аналог',exact:true}).waitFor();
+      await page.locator('.sm-competitor-card:visible').getByText('Аналог · для следующего расчёта',{exact:true}).waitFor();
+      assert.deepEqual(errors,[]);
+      console.log('Classification: dependent choices, photo preview, history drawer, pagination, mobile layout and live market/competitors refresh passed.');
+      return;
+    }
     await page.goto(`${base}/iprice-check?context=keep#suc=data&data=health`);
     await page.locator('.ip-nav a.active[href*="suc=data"]').waitFor();
     await page.locator('.ip-nav a[href*="suc=market"]').click();

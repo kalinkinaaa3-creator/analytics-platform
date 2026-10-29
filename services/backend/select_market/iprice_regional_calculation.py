@@ -187,3 +187,40 @@ def build_regions(*, snapshot, snapshot_product_ids=None, input_overrides=None):
         for product in products.values():
             refresh_iprice_product_approval_summary(product.pk, workspace=IPriceWorkspace('select-market'))
     return {'regions_created': count, 'snapshot_id': snapshot.pk}
+
+
+def calculation_explanations(row):
+    """Explain the saved regional inputs, without changing prices or using live settings."""
+    from decimal import ROUND_CEILING
+    def number(value):
+        return format(value, ',.2f').replace(',', ' ').replace('.', ',')
+    def pct(value):
+        return number(value * 100) + ' %'
+    hints = {}
+    cost = row.cost_with_logistics
+    if row.product_cost is not None and row.logistics_unit is not None and cost is not None:
+        hints['cost_with_logistics'] = f'{number(row.product_cost)} + {number(row.logistics_unit)} = {number(cost)} ₽'
+    preliminary = None
+    if row.regional_competitor_rrp_median is not None and row.base_analog is not None:
+        preliminary = row.regional_competitor_rrp_median * row.base_analog
+        hints['preliminary_rrp'] = f'{number(row.regional_competitor_rrp_median)} × {number(row.base_analog)} = {number(preliminary)} ₽'
+    elif cost is not None and row.base_exclusive is not None and row.base_exclusive < 1:
+        preliminary = cost / (1 - row.base_exclusive)
+        hints['preliminary_rrp'] = f'{number(cost)} / (1 − {pct(row.base_exclusive)}) = {number(preliminary)} ₽'
+    floor = None
+    if cost is not None and row.minimum_margin is not None and row.minimum_margin < 1:
+        floor = cost / (1 - row.minimum_margin)
+        hints['minimum_price'] = f'{number(cost)} / (1 − {pct(row.minimum_margin)}) = {number(floor)} ₽; вверх до {number(row.minimum_price)} ₽' if row.minimum_price is not None else ''
+    discounts = (row.discount_small, row.discount_medium, row.discount_large)
+    if preliminary is not None and floor is not None and all(value is not None and 0 <= value < 1 for value in discounts) and row.calculated_rrp is not None:
+        discount = max(discounts)
+        minimum_rrp = floor / (1 - discount)
+        floor_integer = floor.to_integral_value(rounding=ROUND_CEILING)
+        required = ((floor_integer - Decimal('.5')) / (1 - discount)).to_integral_value(rounding=ROUND_CEILING)
+        raw = max(preliminary, minimum_rrp)
+        rounded = whole_rubles(raw)
+        hints['calculated_rrp'] = (f'макс({number(preliminary)}; {number(floor)} / (1 − {pct(discount)}))'
+            f' = {number(raw)} ₽ → {number(rounded)} ₽;'
+            f' защита маржи после округления оптовых цен: макс({number(rounded)}; {number(floor_integer)}; {number(required)})'
+            f' = {number(row.calculated_rrp)} ₽')
+    return hints

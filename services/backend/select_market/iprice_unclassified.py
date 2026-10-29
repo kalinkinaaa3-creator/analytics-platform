@@ -40,12 +40,12 @@ def token(rows):
     return sha256(json.dumps([keys, records], sort_keys=True).encode()).hexdigest()
 
 
-def catalogue(*, search='', source='', page=1):
+def catalogue(*, search='', source='', page=1, page_size=50):
     grouped = [rows for key, rows in groups().items() if (not source or key[0] == source) and (
         not search or any(search.casefold() in (row.product_name or '').casefold() or search.casefold() in (row.url or '').casefold() for row in rows))]
     grouped.sort(key=lambda rows: ((rows[0].product_name or rows[0].url or '').casefold(), rows[0].pk))
     from django.core.paginator import Paginator
-    paginator = Paginator(grouped, 24)
+    paginator = Paginator(grouped, page_size)
     selected = paginator.get_page(page)
     keys = [row.pk for rows in selected for row in rows]
     prices = defaultdict(list)
@@ -103,12 +103,20 @@ def refresh_manual_matches(keys):
                     defaults={'match_type': 'auto', 'status': 'active'})
 
 
+def classification_combinations():
+    return [{key: row[key] or '' for key in FIELDS} for row in
+            m.ParserProductClassification.objects.filter(status='active', manual_edit=False)
+            .order_by().values(*FIELDS).distinct()]
+
+
 @transaction.atomic
 def classify(*, keys, revision, values, reason, user, organization):
     Organization.objects.select_for_update().get(pk=organization.pk, code='select-market')
     rows = next((rows for rows in groups().values() if rows[0].pk in keys), None)
     if not rows or sorted(keys) != sorted(row.pk for row in rows) or revision != token(rows):
         raise ValueError('Состав или классификация товара изменились. Обновите список и повторите действие.')
+    if values not in classification_combinations():
+        raise ValueError('Выберите сочетание значений из действующей классификации, загруженной из файла.')
     before = {str(row.product_key): {field: getattr(row, field) for field in FIELDS}
               for row in m.ParserProductClassification.objects.filter(product_key__in=keys)}
     for row in rows:

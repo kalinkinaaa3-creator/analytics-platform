@@ -252,7 +252,7 @@ class ProductDetailsView(PriceFileView):
         from datasets.services.iprice_price_analytics import classify_price_zone, _deviation, get_active_price_zone_config
         from datasets.services.iprice_workspace import IPriceWorkspace
         summary = {field: getattr(product, field) for field in (
-            'image', 'url', 'category', 'subcategory', 'subcategory_type', 'material', 'color', 'modification',
+            'image', 'url', 'category', 'subcategory', 'subcategory_type', 'material', 'color', 'modification', 'article_number_analogs',
             'assortment_matrix_status', 'calculation_status', 'warning_codes', 'error_codes', 'competitor_count',
             'competitor_rrp_min', 'competitor_rrp_max', 'competitor_rrp_median', 'current_retail_median', 'effective_approved_rrp_median')}
         summary['zone'] = classify_price_zone(_deviation(product.effective_approved_rrp_median, product.competitor_rrp_median),
@@ -261,6 +261,12 @@ class ProductDetailsView(PriceFileView):
         from .iprice_domain_models import IPriceCompetitorSelectionOverride
         competitors = list(product.competitors.order_by('source', 'pk').values())
         cards = group_snapshot_competitor_cards(competitors, workspace=IPriceWorkspace('select-market'))
+        from .iprice_domain_models import ParserProductClassification
+        articles = dict(ParserProductClassification.objects.filter(
+            product_key__in=[key for card in cards for key in card['competitor_product_keys']]
+        ).values_list('product_key', 'article_number_analogs'))
+        for card in cards:
+            card['article_number_analogs'] = articles.get(card.get('competitor_product_key'))
         used = get_used_competitor_keys(snapshot_product=product)
         modes = dict(IPriceCompetitorSelectionOverride.objects.filter(product_key_base=product.base_product_key).values_list('product_key_competitor', 'selection_mode'))
         for card in cards:
@@ -273,6 +279,23 @@ class ProductDetailsView(PriceFileView):
                 selection_mode=next(iter(chosen)) if len(chosen) == 1 else 'mixed')
         from .iprice_card_prices import regional_card_prices
         cards = [regional_card_prices(card) for card in cards]
+        # Live AUTO links are visible immediately, without rewriting the saved calculation.
+        from datasets.services.iprice_market_assortment import build_iprice_market_assortment
+        from .iprice_domain_models import ParserProductMatch
+        live_keys = set(ParserProductMatch.objects.filter(product_key_base=product.base_product_key,
+            status='active').values_list('product_key_competitor', flat=True))
+        shown = {key for card in cards for key in card['competitor_product_keys']}
+        if live_keys - shown:
+            market = build_iprice_market_assortment(snapshot_product=product, workspace=IPriceWorkspace('select-market'))
+            for card in market['results']:
+                keys = set(card['competitor_product_keys'])
+                if keys.intersection(live_keys) and not keys.intersection(shown):
+                    selections = {modes.get(key, 'auto') for key in keys}
+                    card.update(selection_mode=next(iter(selections)) if len(selections) == 1 else 'mixed',
+                                is_current_analog=True, is_used_in_snapshot=False)
+                    cards.append(regional_card_prices(card))
+        for card in cards:
+            card['is_current_analog'] = bool(live_keys.intersection(card['competitor_product_keys']))
         return Response({**summary, 'competitor_cards': cards, 'edit_revision': product.snapshot.parameters.get('edit_revision', 0),
             'code': product.code_1c, 'nom': product.nom, 'method': product.pricing_method,
             'details': product.calculation_details, 'competitors': list(product.competitors.order_by('source', 'id').values(

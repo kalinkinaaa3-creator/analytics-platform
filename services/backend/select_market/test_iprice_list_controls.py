@@ -10,6 +10,48 @@ from .iprice_domain_models import IPriceSnapshot, IPriceSnapshotProduct, IPriceS
 
 
 class ListControlsTests(TestCase):
+    def test_modification_filter_uses_analog_article_in_every_tab(self):
+        import json
+        from .iprice_operations_api import ProductDetailsView
+        self.product.modification = 'Old label'
+        self.product.article_number_analogs = 'New label'
+        self.product.save()
+        self.row(100, 'M')
+        base = IPriceSnapshot.objects.create(calculation_date=date(2026, 9, 30), version_number=2, revision_for_date=1, status='success')
+        for key in ('article_number_analogs', 'modification'):
+            for value, count in [('New label', int(key == 'article_number_analogs')), ('Old label', int(key == 'modification')), ('__empty__', 0)]:
+                filters = json.dumps({key: [value]})
+                for mode in ('products', 'regions'):
+                    self.assertEqual(self.get(mode=mode, filters=filters).data['count'], count)
+                market = self.get(SnapshotAnalysisView, view='groups', filters=filters)
+                self.assertEqual(market.status_code, 200, market.data)
+                self.assertEqual(market.data['summary']['total_products'], count)
+                comparison = self.get(SnapshotAnalysisView, comparison_id=base.pk, mode='products', filters=filters)
+                self.assertEqual(comparison.status_code, 200, comparison.data)
+                self.assertEqual(comparison.data['filtered_count'], count)
+        self.assertEqual(self.get(SnapshotFiltersView).data['article_number_analogs'], ['New label'])
+        details = self.request(ProductDetailsView, 'get', snapshot_id=self.snapshot.pk, product_id=self.product.pk)
+        self.assertEqual(details.data['article_number_analogs'], 'New label')
+
+    def test_article_backfill_preserves_old_modification_and_stays_frozen(self):
+        from importlib import import_module
+        from types import SimpleNamespace
+        from django.apps import apps
+        from django.db import connection
+        from .iprice_domain_models import ParserProductUrl, ParserProductClassification
+        url = ParserProductUrl.objects.create(source='base', own_code='00-A')
+        classification = ParserProductClassification.objects.create(product_key=url.pk, article_number_analogs='Group')
+        self.product.base_product_key = url.pk
+        self.product.modification = 'Old'
+        self.product.save()
+        migration = import_module('select_market.migrations.0018_snapshot_analog_modification')
+        migration.populate(apps, SimpleNamespace(connection=connection))
+        classification.article_number_analogs = 'Changed'
+        classification.save()
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.article_number_analogs, 'Group')
+        self.assertEqual(self.product.modification, 'Old')
+
     request = ui_api_tests.UIAPITests.request
 
     def setUp(self):
@@ -20,8 +62,8 @@ class ListControlsTests(TestCase):
     def row(self, price, region, **kwargs):
         return IPriceSnapshotRegion.objects.create(snapshot_product=self.product, sale_region=region, current_retail=price, default_approved_rrp=price, regional_competitor_rrp_median=100, **kwargs)
 
-    def get(self, view=SnapshotRowsView, **params):
-        return self.request(view, 'get', data=params, snapshot_id=self.snapshot.pk)
+    def get(self, api_view=SnapshotRowsView, **params):
+        return self.request(api_view, 'get', data=params, snapshot_id=self.snapshot.pk)
 
     def test_zone_boundaries_and_no_market(self):
         for value in (96, 97, 103, 104, 110, 111):

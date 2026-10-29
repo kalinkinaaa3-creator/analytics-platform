@@ -354,6 +354,7 @@ class IPriceSnapshotProduct(models.Model):
     color = models.CharField(max_length=255, null=True, blank=True, verbose_name='Цвет')
     material = models.CharField(max_length=255, null=True, blank=True, verbose_name='Материал')
     modification = models.CharField(max_length=255, null=True, blank=True, verbose_name='Модификация')
+    article_number_analogs = models.CharField(max_length=255, null=True, blank=True, verbose_name='Модификация (группа аналогов)')
     image = models.TextField(null=True, blank=True, verbose_name='Изображение')
     url = models.TextField(null=True, blank=True, verbose_name='URL')
     item_type = models.CharField(max_length=20, db_index=True, verbose_name='Тип позиции')

@@ -8,7 +8,7 @@ const regionHint = "Отбирает товары выбранных регио�
 
 const labels = { sale_region: "Регион продажи", pricing_method: "Способ расчёта", calculation_status: "Статус товара", group_2: "Группа 1", group_3: "Группа 2", group_4: "Группа 3",
   is_classified: "Наличие классификации", category: "Тип", subcategory: "Категория",
-  subcategory_type: "Подкатегория", color: "Цвет", material: "Материал", modification: "Модификация", has_manual_price: "Товары с ручным утверждением цен" };
+  subcategory_type: "Подкатегория", color: "Цвет", material: "Материал", modification: "Модификация", article_number_analogs: "Группа аналогов", has_manual_price: "Товары с ручным утверждением цен" };
 const display = (key, value) => key === "has_manual_price" ? (value === "true" ? "Да" : "Нет") : key === "pricing_method" ? ({ analog: "По рынку", exclusive: "По себестоимости" })[value] || value : key === "calculation_status" ? ({success: "Готово", warning: "Есть замечание", error: "Нет цены"})[value] || value : value === "__empty__" ? "Не заполнено" : key === "is_classified" ? (value === "true" ? "Классифицирован" : "Без классификации") : value;
 
 function Options({ name, values, selected, toggle, displayValue = value => display(name, value) }) {
