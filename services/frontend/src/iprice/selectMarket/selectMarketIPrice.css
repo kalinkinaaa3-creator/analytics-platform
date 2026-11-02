@@ -238,3 +238,5 @@
 .sm-iprice .sm-competitor-status { max-width: 100%; min-width: 0; height: auto; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
 
 .sm-iprice .sm-classification-section .sm-filter-options > .ip-btn { justify-self: start; align-self: start; width: auto; justify-content: flex-start; margin-left: 0; margin-right: auto; }
+
+.sm-iprice .sm-competitor-heading-tags { display: grid; grid-template-rows: minmax(22px, auto) minmax(34px, auto); gap: 4px; justify-items: start; align-items: start; min-width: 0; }

@@ -303,6 +303,11 @@ class LeadDashboardQuery:
         ) = self.DIMENSIONS[dimension]
         where, params = self._where(filters)
         period = GROUP_EXPRESSIONS[filters.group_by]
+        target_condition = (
+            "dashboard_status IN ('target', 'apm')"
+            if dimension in {"source", "manager"}
+            else "dashboard_status = 'target'"
+        )
         return self._dict_rows(
             f"""
             WITH grouped AS (
@@ -312,7 +317,7 @@ class LeadDashboardQuery:
                     {name_expression} AS dimension_name,
                     count() AS value,
                     countIf(is_return_customer = 1) AS return_customer_value,
-                    countIf(dashboard_status = 'target') AS dimension_target,
+                    countIf({target_condition}) AS dimension_target,
                     countIf(dashboard_status = 'low_quality') AS dimension_low_quality
                 FROM default.bitrix_lead_analytics
                 WHERE {where} AND ({extra_condition})

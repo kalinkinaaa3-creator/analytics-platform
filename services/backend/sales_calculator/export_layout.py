@@ -194,7 +194,19 @@ def pdf(result, config, mode, labels, columns, images):
                 else:
                     values[i] = Paragraph('Изображение недоступно', style)
         cells.append(values)
-    table = Table(cells, colWidths=widths, repeatRows=1, splitByRow=1, splitInRow=1, hAlign='LEFT')
+    class ProductTable(Table):
+        def split(self, availWidth, availHeight):
+            self._calc(availWidth, availHeight)
+            # Keep ordinary product rows intact at page boundaries. Only a row
+            # taller than a whole page may split, with the same column widths
+            # and repeated header on every continuation.
+            self.splitInRow = int(
+                len(self._rowHeights) > 1
+                and sum(self._rowHeights[:2]) > doc.height - 12
+            )
+            return super().split(availWidth, availHeight)
+
+    table = ProductTable(cells, colWidths=widths, repeatRows=1, splitByRow=1, hAlign='LEFT')
     table.setStyle(TableStyle([('GRID',(0,0),(-1,-1),.4,colors.HexColor('#e5e8e1')), ('VALIGN',(0,0),(-1,-1),'MIDDLE'), ('TOPPADDING',(0,0),(-1,-1),8), ('BOTTOMPADDING',(0,0),(-1,-1),8)]))
     flow = [banner, Spacer(1, 12), table]
     if mode == 'full':

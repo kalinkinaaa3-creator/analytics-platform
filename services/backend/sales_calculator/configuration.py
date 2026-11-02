@@ -37,7 +37,7 @@ DEFAULTS = {
     "region": "", "vat": 22,
     "thresholds": [50000, 300000, 800000], "warning_threshold": 2200000,
     "characteristics": DEFAULT_CHARACTERISTICS, "logistics": DEFAULT_LOGISTICS,
-    "warehouses": WAREHOUSES, "full_columns": list(FULL_COLUMNS), "simple_columns": list(SIMPLE_COLUMNS),
+    "warehouses": WAREHOUSES, "full_columns": list(FULL_COLUMNS), "simple_columns": [key for key in SIMPLE_COLUMNS if key != "quantity"],
     "full_column_order": list(FULL_COLUMNS), "simple_column_order": list(SIMPLE_COLUMNS),
 }
 

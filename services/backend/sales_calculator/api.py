@@ -44,6 +44,7 @@ class SettingsView(AccessView):
         warehouses.update(WAREHOUSES)
         warehouses.update(config["warehouses"])
         return Response({"config": config, "characteristics": CHARACTERISTICS, "logistics": LOGISTICS,
+                         "can_use_calculator": request.user.is_superuser or request.user.get_username() == "Analyst",
                          "warehouses": sorted(warehouses), "full_columns": FULL_COLUMNS, "simple_columns": SIMPLE_COLUMNS})
 
     def put(self, request):

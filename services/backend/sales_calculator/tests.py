@@ -28,6 +28,38 @@ def product(**changes):
 
 
 class CalculationTests(UnitTestCase):
+    def test_quantity_default_only_changes_price_and_preserves_saved_choice(self):
+        self.assertNotIn("quantity", validate_config({})["simple_columns"])
+        self.assertIn("quantity", validate_config({})["full_columns"])
+        self.assertIn("quantity", validate_config({"simple_columns": ["quantity"]})["simple_columns"])
+
+    def test_pdf_reordered_columns_repeat_headers_and_keep_product_rows_together(self):
+        from reportlab.platypus import Table
+        original = Table.drawOn
+        for mode in ("simple", "full"):
+            price_key = "large_gross" if mode == "simple" else "unit_gross"
+            for columns in (["code", "name", "characteristics", price_key],
+                            [price_key, "characteristics", "name", "code"]):
+                with self.subTest(mode=mode, columns=columns):
+                    pages = []
+                    def record(table, canvas, *args, **kwargs):
+                        if table.repeatRows == 1:
+                            pages.append((canvas.getPageNumber(), list(table._colWidths),
+                                          [[cell[0].getPlainText() if isinstance(cell, (tuple, list)) and cell else str(cell)
+                                            for cell in row] for row in table._cellvalues]))
+                        return original(table, canvas, *args, **kwargs)
+                    config = validate_config({mode + "_columns": columns, mode + "_column_order": columns})
+                    products = {str(i): product(product_key=i, code=i, characteristics={"equipment": "Long characteristic " * 45}) for i in range(1, 31)}
+                    result = calculate(products, [{"product_key": i} for i in products], config)
+                    with patch.object(Table, "drawOn", record):
+                        document = export_document(result, config, mode, "pdf")
+                    self.assertEqual(document.read(4), b"%PDF")
+                    self.assertGreater(len(pages), 1)
+                    for _, widths, rows in pages:
+                        self.assertEqual(widths, pages[0][1])
+                        self.assertEqual(rows[0], pages[0][2][0])
+                    self.assertEqual([row[0] for _, _, rows in pages for row in rows[1:]], [str(i) for i in range(1, 31)])
+
     def test_column_visibility_does_not_change_default_or_custom_order(self):
         from openpyxl import load_workbook
         for mode in ("simple", "full"):
@@ -410,6 +442,14 @@ class AccessTests(TestCase):
         with patch("sales_calculator.api.request_refresh") as refresh:
             self.assertEqual(self.request("post", RefreshView, user=self.other).status_code, 403)
             refresh.assert_not_called()
+
+    def test_calculator_visibility_is_limited_to_exact_login_or_superuser(self):
+        for username, superuser, expected in (("viewer", False, False), ("analyst", False, False), ("Analyst", False, True), ("admin", True, True)):
+            with self.subTest(username=username):
+                self.user.username = username
+                self.user.is_superuser = superuser
+                self.user.save()
+                self.assertEqual(self.request("get", SettingsView).data["can_use_calculator"], expected)
 
     def test_viewer_sees_refresh_button_and_duplicate_refresh_is_rejected(self):
         with patch("sales_calculator.api.read_products", return_value=[]), patch("sales_calculator.api.state_payload", return_value={}):
