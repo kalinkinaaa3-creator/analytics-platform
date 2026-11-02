@@ -88,7 +88,7 @@ async function mount(page, module, component) {
     await page.route('**/v1/bitrix24/**', route => route.fulfill({ json: route.request().url().endsWith('/dashboard/') ? { cards: { total: 120, apm: 30, target: 20, low_quality: 50, in_progress: 20, conversion: 20 / 70 * 100 }, dynamics: { stages, sources: [], managers: [] }, summaries: { sources: summary, managers: summary } } : {} }));
     await mount(page, 'crmAnalytics/CrmAnalyticsDashboard.jsx', 'CrmAnalyticsDashboard');
     await page.locator('.crm-summary-total').first().waitFor();
-    assert.deepEqual(await page.locator('.crm-lead-kpis .crm-kpi-card__label > span:first-child').allTextContents(), ['Итого', 'Передано в Селект Маркет', 'Целевые', 'Целевые, включая Селект Маркет', 'Некачественные', 'Конверсия', 'Конверсия, включая Селект Маркет', 'В работе', 'Повторные']);
+    assert.deepEqual(await page.locator('.crm-lead-kpis .crm-kpi-card__label > span:first-child').allTextContents(), ["Итого", "Передано в СМ", "Целевые", "Целевые, включая СМ", "Некачественные", "Конверсия", "Конверсия, включая СМ", "В работе", "Повторные"]);
     assert.equal(await page.locator('.crm-lead-kpis article').nth(3).locator('strong').innerText(), '50');
     assert.equal(await page.locator('.crm-lead-kpis article').nth(6).locator('strong').innerText(), '50,0%');
     const sourceTotal = page.locator('.crm-panel').filter({ has: page.getByRole('heading', { name: 'Динамика по источникам', exact: true }) }).locator('.crm-summary-total');

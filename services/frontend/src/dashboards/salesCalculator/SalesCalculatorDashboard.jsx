@@ -144,8 +144,13 @@ function QuickSettings({ metadata, config, regions, region, mode, onSave, onErro
   }
   return <div className="sc-quick-settings" aria-busy={busy}>
     <label className="sc-quick-warehouse"><span>Склад отгрузки</span><select aria-label="Склад отгрузки — быстрый выбор" value={pending?.region ?? region} disabled={busy} onChange={event => save({ region: event.target.value })}><option value="">Выберите склад</option>{regions.map(value => <option key={value}>{value}</option>)}</select></label>
-    <details ref={root} className="sc-quick-prices"><summary>Ценовые столбцы <span>{mode === "simple" ? "Прайс" : "Калькулятор"}</span></summary><div className="sc-quick-popover"><strong>Столбцы таблицы и выгрузки</strong><p>Выберите цены с НДС или без НДС</p><fieldset disabled={busy}>{order.filter(key => /_(net|gross)$/.test(key) && choices[key]).map(key => <label key={key}><input type="checkbox" checked={displayed[field].includes(key)} onChange={event => save({ [field]: order.filter(value => value === key ? event.target.checked : config[field].includes(value)) })} /><span>{choices[key]}</span></label>)}</fieldset><small>{busy ? "Сохраняем…" : "Синхронизировано с основными настройками"}</small></div></details>
-    <span className="sc-quick-vat">НДС {config.vat}%</span>
+    <div className="sc-quick-column-field"><span className="sc-quick-caption">Ценовые столбцы</span>
+      <details ref={root} className="sc-quick-prices">
+        <summary aria-label={`Ценовые столбцы — ${mode === "simple" ? "Прайс" : "Калькулятор"}`}><span>{mode === "simple" ? "Прайс" : "Калькулятор"}</span><span className="sc-quick-count">{displayed[field].filter(key => /_(net|gross)$/.test(key)).length}</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></summary>
+        <div className="sc-quick-popover"><strong>Столбцы таблицы и выгрузки</strong><p>Выберите цены с НДС или без НДС</p><fieldset disabled={busy}>{order.filter(key => /_(net|gross)$/.test(key) && choices[key]).map(key => <label key={key}><input type="checkbox" checked={displayed[field].includes(key)} onChange={event => save({ [field]: order.filter(value => value === key ? event.target.checked : config[field].includes(value)) })} /><span>{choices[key]}</span></label>)}</fieldset><small>{busy ? "Сохраняем…" : "Синхронизировано с основными настройками"}</small></div>
+      </details>
+    </div>
+    <div className="sc-quick-tax"><span className="sc-quick-caption">НДС</span><span className="sc-quick-vat">{config.vat}%</span></div>
   </div>;
 }
 

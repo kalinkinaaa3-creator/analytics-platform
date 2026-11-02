@@ -183,12 +183,12 @@ function DashboardCards({ cards = {}, onOpenConversion }) {
   const total = Number(cards.total || 0); const totalExcludingApm = cards.total_excluding_apm === undefined ? Math.max(total - Number(cards.apm || 0), 0) : Number(cards.total_excluding_apm || 0); const share = (value, base = total) => base ? Number(value || 0) * 100 / base : null;
   const items = [
     { label: "Итого", value: cards.total },
-    { label: "Передано в Селект Маркет", value: cards.apm, share: share(cards.apm), shareHelp: "Доля = Передано в Селект Маркет / Общее количество лидов × 100%." },
+    { label: "Передано в СМ", value: cards.apm, share: share(cards.apm), shareHelp: "Доля = Передано в Селект Маркет / Общее количество лидов × 100%." },
     { label: "Целевые", value: cards.target, share: share(cards.target, totalExcludingApm), shareHelp: "Доля целевых = Целевые лиды / Итого, исключая Селект Маркет × 100%." },
-    { label: "Целевые, включая Селект Маркет", value: inclusiveTarget, share: share(inclusiveTarget), shareHelp: "Доля целевых, включая Селект Маркет = (Целевые + Передано в Селект Маркет) / Итого × 100%." },
+    { label: "Целевые, включая СМ", value: inclusiveTarget, share: share(inclusiveTarget), shareHelp: "Доля целевых, включая Селект Маркет = (Целевые + Передано в Селект Маркет) / Итого × 100%." },
     { label: "Некачественные", value: cards.low_quality, share: share(cards.low_quality, totalExcludingApm), shareHelp: "Доля некачественных = Некачественные лиды / Итого, исключая Селект Маркет × 100%." },
     { label: "Конверсия", value: cards.conversion, suffix: "%", help: "Конверсия = Целевые / (Целевые + Некачественные) × 100%. Лиды в работе и переданные в Селект Маркет не участвуют.", action: () => onOpenConversion(false) },
-    { label: "Конверсия, включая Селект Маркет", value: inclusiveBase ? inclusiveTarget * 100 / inclusiveBase : null, suffix: "%", help: "Конверсия = (Целевые + Передано в Селект Маркет) / (Целевые + Передано в Селект Маркет + Некачественные) × 100%. Лиды в работе не участвуют. Лиды, переданные в Селект Маркет, участвуют в качестве целевых.", action: () => onOpenConversion(true) },
+    { label: "Конверсия, включая СМ", value: inclusiveBase ? inclusiveTarget * 100 / inclusiveBase : null, suffix: "%", help: "Конверсия = (Целевые + Передано в Селект Маркет) / (Целевые + Передано в Селект Маркет + Некачественные) × 100%. Лиды в работе не участвуют. Лиды, переданные в Селект Маркет, участвуют в качестве целевых.", action: () => onOpenConversion(true) },
     { label: "В работе", value: cards.in_progress, share: share(cards.in_progress, totalExcludingApm), shareHelp: "Доля в работе = Лиды в работе / Итого, исключая Селект Маркет × 100%." },
     { label: "Повторные", value: cards.return_customers, share: share(cards.return_customers), help: "Доля повторных обращений рассчитывается от общего количества лидов" },
   ];
