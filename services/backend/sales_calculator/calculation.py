@@ -25,7 +25,7 @@ def calculate(products, items, config):
     for item in items:
         key = str(item["product_key"])
         if key in seen or key not in products:
-            raise ValueError("Товар повторяется или отсутствует в выбранном регионе")
+            raise ValueError("Товар отсутствует в выбранном регионе")
         seen.add(key)
         quantity = number(item.get("quantity", 1))
         if quantity <= 0 or quantity > 1000000000 or quantity != quantity.to_integral_value():
