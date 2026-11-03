@@ -12,6 +12,8 @@ from .models import Dashboard, DashboardDepartmentGroup, DashboardDepartmentExcl
 
 
 class DepartmentGroupForm(forms.ModelForm):
+    name = forms.CharField(label="Name", required=False, disabled=True,
+                          widget=forms.TextInput(attrs={"style": "width: min(600px, 100%)"}))
     departments = forms.MultipleChoiceField(
         label="Department name", widget=forms.SelectMultiple(attrs={"size": 8}),
         help_text="Выберите подразделения. Ctrl / Cmd — выбор нескольких. Доступ обновляется автоматически при смене подразделения пользователя.",
@@ -29,6 +31,11 @@ class DepartmentGroupForm(forms.ModelForm):
         if dashboard:
             departments.update(OrganizationMembership.objects.filter(organization_id=dashboard.organization_id).exclude(department="").values_list("department", flat=True))
         self.fields["departments"].choices = [(value, value) for value in sorted(departments)]
+
+    def clean(self):
+        cleaned = super().clean()
+        cleaned["name"] = "; ".join(cleaned.get("departments", []))
+        return cleaned
 
 
 @admin.register(DashboardDepartmentGroup)

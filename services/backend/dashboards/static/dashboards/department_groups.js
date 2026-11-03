@@ -16,6 +16,8 @@
       controller = new AbortController();
       const signal = controller.signal;
       const selected = clearSelection ? [] : [...departments.selectedOptions].map(option => option.value);
+      const name = document.getElementById("id_name");
+      if (name) name.value = selected.join("; ");
       const params = new URLSearchParams({ dashboard: dashboard.value });
       selected.forEach(value => params.append("departments", value));
       panel.replaceChildren(element("p", "Загружаем пользователей…"));

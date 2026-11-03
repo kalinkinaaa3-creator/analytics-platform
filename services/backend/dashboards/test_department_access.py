@@ -103,14 +103,57 @@ class DepartmentAccessTests(TestCase):
         self.assertEqual(self.client.get(reverse("admin:dashboards_dashboarddepartmentgroup_change", args=[self.group.pk])).status_code, 200)
         self.assertEqual(self.client.get(reverse("admin:auth_user_changelist")).status_code, 200)
         self.assertEqual(self.client.get(reverse("admin:organizations_organizationmembership_changelist")).status_code, 200)
-        self.assertNotIn(Group, admin.site._registry)
+        self.assertIn(Group, admin.site._registry)
         self.access().delete()
         response = self.client.get(reverse("admin:dashboards_department_group_preview"), {"dashboard": self.dashboard.pk, "departments": ["Sales"]})
         self.assertEqual(response.json()["users"], [{"username": "employee", "full_name": "Employee Full Name", "department": "Sales", "excluded": True}])
         form = DepartmentGroupForm(data={"name": "Another", "dashboard": self.dashboard.pk, "departments": ["Sales"], "can_view": True, "is_active": True})
         self.assertTrue(form.is_valid(), form.errors)
         form.save()
+        self.assertEqual(form.instance.name, "Sales")
         self.assertFalse(DashboardAccess.objects.filter(user=self.user).exists())
+
+    def test_group_names_follow_departments_without_manual_input(self):
+        OrganizationMembership.objects.create(user=get_user_model().objects.create_user(username="finance"), organization=self.org, department="Finance")
+        form = DepartmentGroupForm(data={"dashboard": self.dashboard.pk, "departments": ["Sales", "Finance"], "can_view": True, "is_active": True})
+        self.assertTrue(form.is_valid(), form.errors)
+        group = form.save()
+        self.assertEqual(group.name, "Sales; Finance")
+        group.departments = ["Finance"]
+        group.save(update_fields=["departments"])
+        group.refresh_from_db()
+        self.assertEqual(group.name, "Finance")
+        self.login_admin()
+        response = self.client.get(reverse("admin:dashboards_dashboarddepartmentgroup_change", args=[group.pk]))
+        for label in ("Can view", "Can edit", "Active", "Groups accesses"):
+            self.assertContains(response, label)
+
+    def test_auth_groups_show_live_department_members_and_search(self):
+        self.login_admin()
+        url = reverse("admin:auth_group_changelist")
+        response = self.client.get(url)
+        self.assertContains(response, "Sales")
+        self.assertContains(response, "Employee Full Name")
+        self.assertContains(response, reverse("admin:auth_user_change", args=[self.user.pk]))
+        self.assertContains(self.client.get(url, {"q": "Employee Full"}), "Sales")
+        self.assertNotContains(self.client.get(url, {"q": "No match"}), "Employee Full Name")
+        self.membership.department = "Finance"
+        self.membership.save()
+        response = self.client.get(url)
+        self.assertEqual([group["name"] for group in response.context["page"]], ["Finance"])
+        self.assertFalse(Group.objects.exists())
+
+    def test_auth_groups_require_view_permission(self):
+        from django.contrib.auth.models import Permission
+        self.user.is_staff = True
+        self.user.save()
+        self.client.force_login(self.user)
+        url = reverse("admin:auth_group_changelist")
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.user.user_permissions.add(Permission.objects.get(content_type__app_label="auth", codename="view_group"))
+        response = self.client.get(url)
+        self.assertContains(response, "Employee Full Name")
+        self.assertNotContains(response, reverse("admin:auth_user_change", args=[self.user.pk]))
 
     def test_admin_bulk_delete_preserves_exclusion(self):
         self.login_admin()

@@ -60,6 +60,8 @@ admin.site.unregister(User)
 if admin.site.is_registered(Group):
     admin.site.unregister(Group)
 
+from .department_groups_admin import DepartmentDirectoryAdmin  # noqa: E402,F401
+
 
 @admin.register(User)
 class WorkspaceUserAdmin(UserAdmin):

@@ -1,0 +1,32 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">{% translate 'Home' %}</a> &rsaquo; <a href="{% url 'admin:app_list' app_label='auth' %}">Authentication and Authorization</a> &rsaquo; Groups</div>
+{% endblock %}
+{% block content %}
+<p>Группы формируются по Department name в доступах к организациям. Права на дашборды настраиваются в Dashboards → Groups accesses.</p>
+<form method="get" role="search" style="margin-bottom: 16px">
+  <label for="group-search">Search:</label>
+  <input id="group-search" type="search" name="q" value="{{ query }}" placeholder="Подразделение, организация, пользователь" style="width: min(420px, 70%)">
+  <input type="submit" value="Search">
+</form>
+<div class="module" style="overflow-x: auto">
+<table style="width: 100%">
+  <thead><tr><th scope="col">Group / Department name</th><th scope="col">Organization</th><th scope="col">Users</th><th scope="col">Members</th></tr></thead>
+  <tbody>
+  {% for group in page %}
+    <tr><th scope="row">{{ group.name }}</th><td>{{ group.organization }}</td><td>{{ group.users|length }}</td><td>
+      <ul style="margin: 0; padding-left: 16px">
+      {% for user in group.users %}
+        <li>{% if user.url %}<a href="{{ user.url }}">{{ user.username }}</a>{% else %}{{ user.username }}{% endif %} — {{ user.full_name }}{% if not user.active %} <span style="color: var(--body-quiet-color)">(Inactive)</span>{% endif %}</li>
+      {% endfor %}
+      </ul>
+    </td></tr>
+  {% empty %}<tr><td colspan="4">Группы не найдены.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+<p>{{ page.paginator.count }} groups · {{ page.number }} / {{ page.paginator.num_pages }}
+{% if page.has_previous %}<a href="?q={{ query|urlencode }}&amp;p={{ page.previous_page_number }}">Previous</a>{% endif %}
+{% if page.has_next %}<a href="?q={{ query|urlencode }}&amp;p={{ page.next_page_number }}">Next</a>{% endif %}</p>
+{% endblock %}

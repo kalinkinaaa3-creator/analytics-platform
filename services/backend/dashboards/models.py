@@ -138,20 +138,26 @@ class DashboardAccess(models.Model):
 
 
 class DashboardDepartmentGroup(models.Model):
-    name = models.CharField("Название группы", max_length=255)
+    name = models.TextField("Name", blank=True)
     dashboard = models.ForeignKey(Dashboard, on_delete=models.CASCADE, verbose_name="Dashboard")
     departments = models.JSONField("Department name", default=list)
-    can_view = models.BooleanField("Право на просмотр", default=True)
-    can_edit = models.BooleanField("Право на редактирование", default=False)
-    is_active = models.BooleanField("Активна", default=True)
+    can_view = models.BooleanField("Can view", default=True)
+    can_edit = models.BooleanField("Can edit", default=False)
+    is_active = models.BooleanField("Active", default=True)
 
     class Meta:
-        verbose_name = "Group"
-        verbose_name_plural = "Groups"
+        verbose_name = "Group access"
+        verbose_name_plural = "Groups accesses"
         ordering = ("name", "pk")
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        self.name = "; ".join(dict.fromkeys(self.departments))
+        if kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"name"}
+        super().save(*args, **kwargs)
 
     def clean(self):
         super().clean()
@@ -160,6 +166,7 @@ class DashboardDepartmentGroup(models.Model):
         ):
             raise ValidationError({"departments": "Выберите хотя бы одно подразделение."})
         self.departments = list(dict.fromkeys(self.departments))
+        self.name = "; ".join(self.departments)
 
 
 class DashboardDepartmentExclusion(models.Model):
