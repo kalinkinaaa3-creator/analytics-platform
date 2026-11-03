@@ -63,7 +63,16 @@ def image_bytes(url):
         return None
 
 
+def comparison_column(row, key):
+    return bool(row.get("_warehouse_prices")) and key.endswith(("_net", "_gross"))
+
+
 def display(row, key, config):
+    if comparison_column(row, key):
+        return "\n".join(
+            f"{region}: {price_text(values[key]) if values.get(key) is not None else '—'}"
+            for region, values in row["_warehouse_prices"]
+        )
     if key == "name":
         return row.get("price_list_name") or row.get("name") or ""
     if key == "code":
@@ -93,6 +102,11 @@ def export_document(result, config, mode, kind):
     columns = ["row_number", *columns]
     labels["row_number"] = "№"
     result = {**result, "rows": [{**row, "row_number": index} for index, row in enumerate(result["rows"], 1)]}
+    if result.get("warehouses"):
+        warehouses = [(warehouse["region"], {str(row["product_key"]): row for row in warehouse["rows"]})
+                      for warehouse in result["warehouses"]]
+        for row in result["rows"]:
+            row["_warehouse_prices"] = [(region, products.get(str(row["product_key"]), {})) for region, products in warehouses]
     # Shared columns and data are used by both formats.
     from concurrent.futures import ThreadPoolExecutor
     urls = list(dict.fromkeys(r.get("image") for r in result["rows"] if r.get("image"))) if "image" in columns else []

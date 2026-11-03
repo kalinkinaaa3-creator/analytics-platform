@@ -100,32 +100,35 @@ class CalculationView(AccessView):
         return Response(serializable(result))
 
 
+def comparison_warehouses(items, config):
+    if not isinstance(items, list) or len(items) > 3000:
+        raise ValidationError("Допускается не более 3000 позиций")
+    products = read_products()
+    by_region = {}
+    for product in products:
+        if product["region"]:
+            by_region.setdefault(product["region"], {})[str(product["product_key"])] = product
+    try:
+        keys = [str(item["product_key"]) for item in items]
+        if len(set(keys)) != len(keys):
+            raise ValueError("Товар повторяется")
+        rows = []
+        for region, catalog in sorted(by_region.items()):
+            available = [item for item in items if str(item["product_key"]) in catalog]
+            result = calculate(catalog, available, config)
+            rows.append({"region": region, "rows": [
+                {key: value for key, value in row.items()
+                 if key == "product_key" or key.endswith(("_net", "_gross"))}
+                for row in result["rows"]
+            ]})
+    except (ValueError, TypeError, KeyError) as exc:
+        raise ValidationError(str(exc))
+    return rows
+
+
 class ComparisonView(AccessView):
     def post(self, request):
-        items = request.data.get("items", [])
-        if not isinstance(items, list) or len(items) > 3000:
-            raise ValidationError("Допускается не более 3000 позиций")
-        config = self.config()
-        products = read_products()
-        by_region = {}
-        for product in products:
-            if product["region"]:
-                by_region.setdefault(product["region"], {})[str(product["product_key"])] = product
-        try:
-            keys = [str(item["product_key"]) for item in items]
-            if len(set(keys)) != len(keys):
-                raise ValueError("Товар повторяется")
-            rows = []
-            for region, catalog in sorted(by_region.items()):
-                available = [item for item in items if str(item["product_key"]) in catalog]
-                result = calculate(catalog, available, config)
-                rows.append({"region": region, "rows": [
-                    {key: value for key, value in row.items()
-                     if key == "product_key" or key.endswith(("_net", "_gross"))}
-                    for row in result["rows"]
-                ]})
-        except (ValueError, TypeError, KeyError) as exc:
-            raise ValidationError(str(exc))
+        rows = comparison_warehouses(request.data.get("items", []), self.config())
         return Response(serializable({"warehouses": rows}))
 
 
@@ -147,6 +150,8 @@ class ExportView(CalculationView):
         if mode not in ("full", "simple") or kind not in ("xlsx", "pdf"):
             raise ValidationError("Некорректный формат выгрузки")
         result, config = self.result(request)
+        if request.data.get("comparing") is True:
+            result["warehouses"] = comparison_warehouses(request.data.get("items", []), config)
         if not config[mode + "_columns"]:
             raise ValidationError("Выберите столбцы таблицы и выгрузки")
         if not result["rows"]:

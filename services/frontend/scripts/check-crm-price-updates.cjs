@@ -28,6 +28,7 @@ async function mount(page, module, component) {
       const defaults = structuredClone(config);
       const product = { product_key: '1', code: 1, name: 'Товар 1', characteristics: {}, logistics: {}, stocks: {}, retail_net: 100, retail_gross: 122 };
       let failSave = false;
+      const exports = [];
       await page.route('**/v1/sales-calculator/**', async route => {
         const request = route.request(), path = new URL(request.url()).pathname;
         let data;
@@ -40,12 +41,18 @@ async function mount(page, module, component) {
         } else if (path.endsWith('/products/')) data = { products: [product], region: new URL(request.url()).searchParams.get('region') || config.region, regions: ['Москва', 'Санкт-Петербург', 'Казань'], state: {} };
         else if (path.endsWith('/calculate/')) data = { rows: request.postDataJSON().items.map(() => product), quantity: 1, logistics: {} };
         else if (path.endsWith('/compare/')) data = { warehouses: [{ region: 'Москва', rows: [product] }, { region: 'Санкт-Петербург', rows: [{ ...product, retail_net: 80, retail_gross: 97.6 }] }, { region: 'Казань', rows: [] }] };
-        else data = {};
+        else if (path.endsWith('/export/')) {
+          exports.push(request.postDataJSON());
+          await route.fulfill({ contentType: 'application/octet-stream', body: 'test document' });
+          return;
+        } else data = {};
         await route.fulfill({ json: data });
       });
       await mount(page, 'salesCalculator/SalesCalculatorDashboard.jsx', 'SalesCalculatorDashboard');
       const quick = page.locator('.sc-quick-settings');
       await quick.waitFor();
+      const resetHeight = (await page.locator('.sc-reset-settings').boundingBox()).height;
+      assert.equal(resetHeight, (await page.getByRole('button', { name: 'Настройки', exact: true }).boundingBox()).height);
       assert.equal(await page.getByRole('button', { name: 'Калькулятор', exact: true }).count(), allowed ? 1 : 0);
       await quick.getByLabel('Склад отгрузки — быстрый выбор').selectOption('Санкт-Петербург');
       await page.waitForFunction(() => !document.querySelector('.sc-quick-settings select').disabled);
@@ -79,6 +86,13 @@ async function mount(page, module, component) {
       await page.locator('.global-spinner-overlay').waitFor({ state: 'detached' });
       await quick.getByRole('button', { name: 'Сравнение цен', exact: true }).click();
       await page.locator('.sc-comparison-prices').first().waitFor();
+      for (const format of ['Excel', 'PDF']) {
+        const download = page.waitForEvent('download');
+        await page.getByRole('button', { name: format, exact: true }).click();
+        await download;
+        assert.equal(exports.at(-1).comparing, true);
+        assert.equal(exports.at(-1).format, format === 'Excel' ? 'xlsx' : 'pdf');
+      }
       assert.equal(await quick.getByLabel('Склад отгрузки — быстрый выбор').isDisabled(), true);
       assert.deepEqual(await page.locator('.sc-comparison-prices').first().locator('dd').allTextContents(), ['122', '97,6', '—']);
       assert.equal(await page.locator('.sc-comparison-prices .is-best').first().innerText(), '97,6');
@@ -100,6 +114,10 @@ async function mount(page, module, component) {
       assert.deepEqual(config.simple_columns, defaults.simple_columns);
       assert.equal(await quick.getByRole('button', { name: 'Сравнение цен', exact: true }).getAttribute('aria-pressed'), 'false');
       assert.equal(await page.locator('.sc-comparison-prices').count(), 0);
+      const download = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Excel', exact: true }).click();
+      await download;
+      assert.equal(exports.at(-1).comparing, false);
       if (allowed) {
         await page.getByRole('button', { name: 'Калькулятор', exact: true }).click();
         await quick.locator('summary').click();

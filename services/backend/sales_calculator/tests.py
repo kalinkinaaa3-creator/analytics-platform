@@ -28,6 +28,43 @@ def product(**changes):
 
 
 class CalculationTests(UnitTestCase):
+    def test_comparison_exports_preserve_warehouses_prices_and_missing_products(self):
+        from openpyxl import load_workbook
+        from reportlab.platypus import Table
+        for mode, keys in (("simple", ["retail_gross", "retail_net"]), ("full", ["sum_gross", "unit_net"])):
+            with self.subTest(mode=mode):
+                config = validate_config({mode + "_columns": [*keys, "code"], mode + "_column_order": [*keys, "code"]})
+                result = calculate({"1": product()}, [{"product_key": 1, "quantity": 2}], config)
+                other = calculate({"1": product(retail="200", region="Other")}, [{"product_key": 1, "quantity": 2}], config)
+                result["warehouses"] = [
+                    {"region": "Main", "rows": result["rows"]},
+                    {"region": "Other", "rows": other["rows"]},
+                    {"region": "Missing", "rows": []},
+                ]
+                from .export import price_text
+                ws = load_workbook(export_document(result, config, mode, "xlsx")).active
+                for index, key in enumerate(keys, 2):
+                    self.assertEqual(ws.cell(4, index).value,
+                                     f'Main: {price_text(result["rows"][0][key])}\nOther: {price_text(other["rows"][0][key])}\nMissing: —')
+                    self.assertTrue(ws.cell(4, index).alignment.wrap_text)
+                paragraphs = []
+                original = Table.drawOn
+                def record(table, canvas, *args, **kwargs):
+                    if table.repeatRows == 1:
+                        for row in table._cellvalues:
+                            for cell in row:
+                                if isinstance(cell, (tuple, list)) and cell:
+                                    paragraphs.append(cell[0].getPlainText())
+                    return original(table, canvas, *args, **kwargs)
+                with patch.object(Table, "drawOn", record):
+                    document = export_document(result, config, mode, "pdf")
+                self.assertEqual(document.read(4), b"%PDF")
+                text = "\n".join(paragraphs)
+                for key in keys:
+                    self.assertIn(f'Other: {price_text(other["rows"][0][key])}', text)
+                self.assertIn("Missing: —", text)
+                self.assertNotIn("_warehouse_prices", result["rows"][0])
+
     def test_quantity_default_only_changes_price_and_preserves_saved_choice(self):
         self.assertNotIn("quantity", validate_config({})["simple_columns"])
         self.assertIn("quantity", validate_config({})["full_columns"])
@@ -409,6 +446,24 @@ class PublicationTests(UnitTestCase):
 
 
 class AccessTests(TestCase):
+    def test_export_comparison_flag_uses_same_calculation_as_screen(self):
+        from .api import ExportView, ComparisonView
+        products = [product(region="Main"), product(region="Other", retail="200")]
+        def read(region=None):
+            return [p for p in products if region is None or p["region"] == region]
+        for comparing in (False, True):
+            with patch("sales_calculator.api.read_products", side_effect=read), patch("sales_calculator.export.export_document", return_value=io.BytesIO(b"document")) as export:
+                request = {"items": [{"product_key": 1}], "region": "Main", "mode": "simple", "format": "xlsx", "comparing": comparing}
+                response = self.request("post", ExportView, data=request)
+                self.assertEqual(response.status_code, 200)
+                result = export.call_args.args[0]
+                self.assertEqual("warehouses" in result, comparing)
+                if comparing:
+                    from .api import serializable
+                    screen = self.request("post", ComparisonView, data={"items": request["items"]})
+                    self.assertEqual(serializable(result["warehouses"]), screen.data["warehouses"])
+                response.close()
+
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="viewer")
         self.other = get_user_model().objects.create_user(username="other")

@@ -8,15 +8,22 @@ from urllib.parse import urlsplit
 
 from django.utils import timezone
 
-from .export import display, price_text, NUMERIC_COLUMNS
+from .export import display, price_text, NUMERIC_COLUMNS, comparison_column
 
 
 def heading(result, mode):
     title = "ПРАЙС-ЛИСТ" if mode == "simple" else "КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ"
+    if result.get("warehouses"):
+        return (f'ООО "Ай-Пласт" • {title} • {timezone.localdate():%d.%m.%Y} • СРАВНЕНИЕ ЦЕН ПО СКЛАДАМ'
+                f'\nВыбранный склад: {result["rows"][0]["region"]}. '
+                + ('Итоги рассчитаны по выбранному складу. ' if mode == "full" else '')
+                + '— товар отсутствует на складе.')
     return f'ООО "Ай-Пласт" • {title} • {timezone.localdate():%d.%m.%Y} • СКЛАД ОТГРУЗКИ: {result["rows"][0]["region"].upper()}'
 
 
-def width(key):
+def width(key, result=None):
+    if result and result.get("warehouses") and key.endswith(("_net", "_gross")):
+        return 34
     if key == "row_number":
         return 7
     return 40 if key in ("name", "name_1c", "characteristics", "logistics") else 18
@@ -36,14 +43,15 @@ def xlsx(result, config, mode, labels, columns, images):
     last = len(columns)
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last)
     ws.cell(1, 1, heading(result, mode))
-    header_lines = math.ceil(len(heading(result, mode)) / max(12, sum(width(key) for key in columns) * .8))
+    header_lines = sum(max(1, math.ceil(len(line) / max(12, sum(width(key, result) for key in columns) * .8)))
+                       for line in heading(result, mode).split('\n'))
     ws.row_dimensions[1].height = max(45, header_lines * 18 + 16)
     for cell in ws[1]:
         cell.fill = PatternFill("solid", fgColor="DC2F2F")
     ws["A1"].font = Font(name="Arial", size=12, bold=True, color="FFFFFF")
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     for index, key in enumerate(columns, 1):
-        ws.column_dimensions[get_column_letter(index)].width = width(key)
+        ws.column_dimensions[get_column_letter(index)].width = width(key, result)
     def add_image(data, row, column, max_width, max_height, center=True):
         image = Image(io.BytesIO(data))
         scale = min(max_width / image.width, max_height / image.height)
@@ -64,7 +72,7 @@ def xlsx(result, config, mode, labels, columns, images):
         ws.cell(3, columns.index("image") + 1).alignment = Alignment(horizontal="center", vertical="center", wrap_text=False)
     ws.row_dimensions[3].height = 65
     for index, row in enumerate(result["rows"], 4):
-        lines = max((sum(max(1, math.ceil(len(part) / max(8, width(key) - 3))) for part in str(display(row, key, config)).split("\n")) for key in columns if key != "image"), default=1)
+        lines = max((sum(max(1, math.ceil(len(part) / max(8, width(key, result) - 3))) for part in str(display(row, key, config)).split("\n")) for key in columns if key != "image"), default=1)
         height = min(409, max(80, lines * 15 + 12))
         ws.row_dimensions[index].height = height
         for column, key in enumerate(columns, 1):
@@ -72,11 +80,11 @@ def xlsx(result, config, mode, labels, columns, images):
             value = display(row, key, config)
             cell.font = Font(name="Arial", size=10, color="242722")
             cell.border = Border(left=line, right=line, bottom=line)
-            cell.alignment = Alignment(wrap_text=True, vertical="center", horizontal="right" if key in NUMERIC_COLUMNS else "left")
+            cell.alignment = Alignment(wrap_text=True, vertical="center", horizontal="right" if key in NUMERIC_COLUMNS and not comparison_column(row, key) else "left")
             if key == "image":
                 data = images.get(row.get("image"))
                 if data:
-                    add_image(data, index, column, width(key) * 7 - 12, height * 96 / 72 - 12)
+                    add_image(data, index, column, width(key, result) * 7 - 12, height * 96 / 72 - 12)
                 else:
                     cell.value = "Изображение недоступно"
                 continue
@@ -142,7 +150,7 @@ def pdf(result, config, mode, labels, columns, images):
     # SimpleDocTemplate's frame has 6 pt of padding on either side.
     # Use its actual content width and the same alignment for both tables.
     content_width = doc.width - 12
-    brand_cells = [Paragraph(escape(heading(result, mode)), brand)]
+    brand_cells = [Paragraph(escape(heading(result, mode)).replace('\n', '<br/>'), brand)]
     brand_widths = [content_width]
     banner = Table([brand_cells], colWidths=brand_widths, hAlign='LEFT')
     banner.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#dc2f2f')), ('VALIGN',(0,0),(-1,-1),'MIDDLE'), ('TOPPADDING',(0,0),(-1,-1),12), ('BOTTOMPADDING',(0,0),(-1,-1),12)]))
@@ -154,7 +162,7 @@ def pdf(result, config, mode, labels, columns, images):
         if key != 'image':
             for row in result['rows']:
                 value = display(row, key, config)
-                if key in NUMERIC_COLUMNS - {'code'} and value != '':
+                if key in NUMERIC_COLUMNS - {'code'} and value != '' and not comparison_column(row, key):
                     value = price_text(value)
                 words.extend(str(value).split())
         minimums.append(max((pdfmetrics.stringWidth(word, style.fontName, style.fontSize) for word in words), default=0) + 16)
@@ -165,7 +173,7 @@ def pdf(result, config, mode, labels, columns, images):
             paragraph_style.leading *= factor
         minimums = [(value - 16) * factor + 16 for value in minimums]
     remaining = max(0, content_width - sum(minimums))
-    widths = [minimum + remaining * width(key) / sum(width(k) for k in columns) for key, minimum in zip(columns, minimums)]
+    widths = [minimum + remaining * width(key, result) / sum(width(k, result) for k in columns) for key, minimum in zip(columns, minimums)]
     cells = [[Paragraph(escape(labels[key]).replace('\n', '<br/>'), header) for key in columns]]
     for row in result['rows']:
         values = []
@@ -175,12 +183,24 @@ def pdf(result, config, mode, labels, columns, images):
             if key == 'image':
                 values.append(None)
                 continue
-            if key in NUMERIC_COLUMNS - {'code'} and value != '':
+            if key in NUMERIC_COLUMNS - {'code'} and value != '' and not comparison_column(row, key):
                 value = price_text(value)
             text = escape(str(value)).replace('\n', '<br/>')
+            if comparison_column(row, key):
+                prices = [values[key] for _, values in row['_warehouse_prices'] if values.get(key) is not None]
+                minimum = min(prices) if prices else None
+                entries = []
+                for region, warehouse_row in row['_warehouse_prices']:
+                    amount = warehouse_row.get(key)
+                    color = '#385c36' if amount is not None and amount == minimum and len(set(prices)) > 1 else '#242722'
+                    entries.append(
+                        f'<font color="#656d60">{escape(region)}: </font><br/>'
+                        f'<font name="CommercialPriceBold" color="{color}">{price_text(amount) if amount is not None else "—"}</font>'
+                    )
+                text = '<br/>'.join(entries)
             if key == 'url' and urlsplit(row.get('url') or '').scheme in ('https', 'http'):
                 text = f'<link href="{escape(row["url"], {chr(34): "&quot;"})}">{text}</link>'
-            paragraph = Paragraph(text, numeric if key in NUMERIC_COLUMNS else style)
+            paragraph = Paragraph(text, numeric if key in NUMERIC_COLUMNS and not comparison_column(row, key) else style)
             row_height = max(row_height, paragraph.wrap(max(1, col_width - 12), 100000)[1])
             values.append(paragraph)
         for i, key in enumerate(columns):

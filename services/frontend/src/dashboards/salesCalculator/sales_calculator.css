@@ -3,6 +3,7 @@
 .sc-topbar { display:flex; min-height:48px; align-items:center; justify-content:space-between; gap:18px; margin-bottom:14px; flex-shrink:0; }
 .sc-topbar h1 { margin:0; font-size:24px; font-weight:700; letter-spacing:-.35px; }
 .sc-topbar nav { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:7px; }
+.sc-dashboard .sc-topbar nav button { height:44px; min-height:44px; display:inline-flex; align-items:center; justify-content:center; }
 :where(.sc-dashboard,.sc-modal) button:not(:where(.dashboard-filter button)) { min-height:44px; box-sizing:border-box; padding:8px 14px; background:linear-gradient(90deg,#6c6c5a,#4e4e43); border:1px solid #4d5747; border-radius:4px; color:#fff; font:700 12px Helvetica,sans-serif; cursor:pointer; transition:background .3s ease,color .3s ease; box-shadow:none; transform:none; }
 :where(.sc-dashboard,.sc-modal) button:not(:where(.dashboard-filter button)):hover:not(:disabled) { background:linear-gradient(90deg,#a0a699,#c8cec5); color:#111; box-shadow:none; transform:none; }
 :where(.sc-dashboard,.sc-modal) button:not(:where(.dashboard-filter button)):active:not(:disabled) { box-shadow:none; transform:none; }
