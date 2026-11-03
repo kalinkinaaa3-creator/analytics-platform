@@ -25,6 +25,8 @@ async function mount(page, module, component) {
       let config = { region: 'Москва', vat: 22, thresholds: [50000, 300000, 800000], warning_threshold: 2200000,
         characteristics: [], logistics: [], warehouses: [], simple_columns: ['code', 'name', 'retail_net'], full_columns: ['code', 'name', 'retail_net', 'quantity'],
         simple_column_order: Object.keys(columns), full_column_order: Object.keys(columns) };
+      const defaults = structuredClone(config);
+      const product = { product_key: '1', code: 1, name: 'Товар 1', characteristics: {}, logistics: {}, stocks: {}, retail_net: 100, retail_gross: 122 };
       let failSave = false;
       await page.route('**/v1/sales-calculator/**', async route => {
         const request = route.request(), path = new URL(request.url()).pathname;
@@ -33,9 +35,11 @@ async function mount(page, module, component) {
           if (request.method() === 'PUT') {
             if (failSave) { await route.fulfill({ status: 400, json: { detail: 'Не удалось сохранить настройки' } }); return; }
             config = request.postDataJSON(); data = config;
-          } else data = { config, can_use_calculator: allowed, characteristics: {}, logistics: {}, warehouses: [], simple_columns: columns, full_columns: columns };
-        } else if (path.endsWith('/products/')) data = { products: [], region: new URL(request.url()).searchParams.get('region') || config.region, regions: ['Москва', 'Санкт-Петербург'], state: {} };
-        else if (path.endsWith('/calculate/')) data = { rows: [], quantity: 0, logistics: {} };
+          } else if (request.method() === 'POST') { config = { ...structuredClone(defaults), region: request.postDataJSON().region }; data = config; }
+          else data = { config, can_use_calculator: allowed, characteristics: {}, logistics: {}, warehouses: [], simple_columns: columns, full_columns: columns };
+        } else if (path.endsWith('/products/')) data = { products: [product], region: new URL(request.url()).searchParams.get('region') || config.region, regions: ['Москва', 'Санкт-Петербург', 'Казань'], state: {} };
+        else if (path.endsWith('/calculate/')) data = { rows: request.postDataJSON().items.map(() => product), quantity: 1, logistics: {} };
+        else if (path.endsWith('/compare/')) data = { warehouses: [{ region: 'Москва', rows: [product] }, { region: 'Санкт-Петербург', rows: [{ ...product, retail_net: 80, retail_gross: 97.6 }] }, { region: 'Казань', rows: [] }] };
         else data = {};
         await route.fulfill({ json: data });
       });
@@ -67,6 +71,35 @@ async function mount(page, module, component) {
       await page.getByText('Не удалось сохранить настройки', { exact: true }).waitFor();
       assert.equal(await quick.getByLabel('Розница без НДС', { exact: true }).isChecked(), false);
       failSave = false;
+      await quick.getByLabel('Склад отгрузки — быстрый выбор').selectOption('Санкт-Петербург');
+      await page.waitForFunction(() => !document.querySelector('.sc-quick-settings select').disabled);
+      await page.getByRole('button', { name: /Добавить товар/ }).click();
+      await page.getByLabel('Выбрать Товар 1', { exact: true }).check();
+      await page.getByRole('button', { name: 'Добавить выбранные', exact: true }).click();
+      await page.locator('.global-spinner-overlay').waitFor({ state: 'detached' });
+      await quick.getByRole('button', { name: 'Сравнение цен', exact: true }).click();
+      await page.locator('.sc-comparison-prices').first().waitFor();
+      assert.equal(await quick.getByLabel('Склад отгрузки — быстрый выбор').isDisabled(), true);
+      assert.deepEqual(await page.locator('.sc-comparison-prices').first().locator('dd').allTextContents(), ['122', '97,6', '—']);
+      assert.equal(await page.locator('.sc-comparison-prices .is-best').first().innerText(), '97,6');
+      await page.getByRole('button', { name: 'Настройки', exact: true }).click();
+      assert.equal(await page.getByRole('dialog').getByLabel('Склад отгрузки', { exact: true }).isDisabled(), true);
+      await page.getByRole('dialog').getByRole('button', { name: 'Отмена', exact: true }).click();
+      if (process.env.REVIEW_SCREENSHOTS) await page.screenshot({ path: `${process.env.REVIEW_SCREENSHOTS}/price-comparison-${allowed}.png`, fullPage: true });
+      await page.setViewportSize({ width: 390, height: 844 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false);
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await quick.getByRole('button', { name: 'Сравнение цен', exact: true }).click();
+      assert.equal(await quick.getByLabel('Склад отгрузки — быстрый выбор').isDisabled(), false);
+      assert.equal(await quick.getByLabel('Склад отгрузки — быстрый выбор').inputValue(), 'Санкт-Петербург');
+      await quick.getByRole('button', { name: 'Сравнение цен', exact: true }).click();
+      await page.locator('.sc-comparison-prices').first().waitFor();
+      await page.getByRole('button', { name: 'Вернуть настройки', exact: true }).click();
+      await page.waitForFunction(() => !document.querySelector('.sc-quick-settings select').disabled);
+      assert.equal(config.region, 'Санкт-Петербург');
+      assert.deepEqual(config.simple_columns, defaults.simple_columns);
+      assert.equal(await quick.getByRole('button', { name: 'Сравнение цен', exact: true }).getAttribute('aria-pressed'), 'false');
+      assert.equal(await page.locator('.sc-comparison-prices').count(), 0);
       if (allowed) {
         await page.getByRole('button', { name: 'Калькулятор', exact: true }).click();
         await quick.locator('summary').click();
@@ -107,6 +140,6 @@ async function mount(page, module, component) {
     assert.deepEqual(await page.locator('.crm-conversion-kpis article > strong').allTextContents(), ['50,0%', '50,0%', '0,0']);
     if (process.env.REVIEW_SCREENSHOTS) await page.screenshot({ path: `${process.env.REVIEW_SCREENSHOTS}/crm.png`, fullPage: true });
     await page.close();
-    console.log('PASS: CRM cards and conversion; calculator visibility; settings synchronization and failed saves.');
+    console.log('PASS: CRM; calculator visibility; synchronized settings, reset with retained warehouse, comparison prices and warehouse lock.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

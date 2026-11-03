@@ -443,13 +443,49 @@ class AccessTests(TestCase):
             self.assertEqual(self.request("post", RefreshView, user=self.other).status_code, 403)
             refresh.assert_not_called()
 
-    def test_calculator_visibility_is_limited_to_exact_login_or_superuser(self):
-        for username, superuser, expected in (("viewer", False, False), ("analyst", False, False), ("Analyst", False, True), ("admin", True, True)):
+    def test_calculator_visibility_is_limited_to_superusers(self):
+        for username, superuser, expected in (("viewer", False, False), ("analyst", False, False), ("Analyst", False, False), ("admin", True, True)):
             with self.subTest(username=username):
                 self.user.username = username
                 self.user.is_superuser = superuser
                 self.user.save()
                 self.assertEqual(self.request("get", SettingsView).data["can_use_calculator"], expected)
+
+    def test_reset_restores_all_defaults_but_keeps_shipping_region(self):
+        self.request("put", SettingsView, data={"region": "Москва", "vat": 0, "simple_columns": ["quantity"], "full_columns": [], "characteristics": [], "warehouses": []})
+        response = self.request("post", SettingsView)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, validate_config({"region": "Москва"}))
+        self.assertEqual(self.request("get", SettingsView).data["config"], response.data)
+        response = self.request("post", SettingsView, data={"region": "Санкт-Петербург"})
+        self.assertEqual(response.data, validate_config({"region": "Санкт-Петербург"}))
+        self.assertEqual(self.request("post", SettingsView, user=self.other).status_code, 403)
+
+    def test_comparison_uses_each_warehouse_prices_and_current_vat(self):
+        from .api import ComparisonView
+        products = [product(region="Москва", retail="100.5"), product(region="СПб", retail="80"), product(product_key=2, region="Казань")]
+        with patch("sales_calculator.api.read_products", return_value=products) as read:
+            response = self.request("post", ComparisonView, data={"items": [{"product_key": 1, "quantity": 2}]})
+        self.assertEqual(response.status_code, 200)
+        read.assert_called_once_with()
+        warehouses = {row["region"]: row["rows"] for row in response.data["warehouses"]}
+        self.assertEqual(warehouses["Москва"][0]["retail_net"], "101")
+        self.assertEqual(warehouses["Москва"][0]["retail_gross"], "123.22")
+        self.assertEqual(warehouses["СПб"][0]["retail_gross"], "97.60")
+        self.assertEqual(warehouses["Казань"], [])
+        self.request("put", SettingsView, data={"vat": 0})
+        with patch("sales_calculator.api.read_products", return_value=products):
+            response = self.request("post", ComparisonView, data={"items": [{"product_key": 1}]})
+        self.assertEqual(response.data["warehouses"][1]["rows"][0]["retail_gross"], "101.00")
+
+    def test_comparison_rejects_invalid_items_and_unauthorized_access(self):
+        from .api import ComparisonView
+        with patch("sales_calculator.api.read_products", return_value=[product()]):
+            for items in ("invalid", [{"product_key": 1}, {"product_key": 1}], [{}], [{"product_key": 1, "quantity": 0}]):
+                self.assertEqual(self.request("post", ComparisonView, data={"items": items}).status_code, 400)
+        with patch("sales_calculator.api.read_products") as read:
+            self.assertEqual(self.request("post", ComparisonView, user=self.other).status_code, 403)
+            read.assert_not_called()
 
     def test_viewer_sees_refresh_button_and_duplicate_refresh_is_rejected(self):
         with patch("sales_calculator.api.read_products", return_value=[]), patch("sales_calculator.api.state_payload", return_value={}):

@@ -44,12 +44,21 @@ class SettingsView(AccessView):
         warehouses.update(WAREHOUSES)
         warehouses.update(config["warehouses"])
         return Response({"config": config, "characteristics": CHARACTERISTICS, "logistics": LOGISTICS,
-                         "can_use_calculator": request.user.is_superuser or request.user.get_username() == "Analyst",
+                         "can_use_calculator": request.user.is_superuser,
                          "warehouses": sorted(warehouses), "full_columns": FULL_COLUMNS, "simple_columns": SIMPLE_COLUMNS})
 
     def put(self, request):
         try:
             config = validate_config(request.data)
+        except ValueError as exc:
+            raise ValidationError(str(exc))
+        SalesCalculatorPreference.objects.update_or_create(user=request.user, defaults={"config": config})
+        return Response(config)
+
+    def post(self, request):
+        # Reset every preference except the user's current shipping warehouse.
+        try:
+            config = validate_config({"region": request.data.get("region", self.config()["region"])})
         except ValueError as exc:
             raise ValidationError(str(exc))
         SalesCalculatorPreference.objects.update_or_create(user=request.user, defaults={"config": config})
@@ -89,6 +98,35 @@ class CalculationView(AccessView):
     def post(self, request):
         result, _ = self.result(request)
         return Response(serializable(result))
+
+
+class ComparisonView(AccessView):
+    def post(self, request):
+        items = request.data.get("items", [])
+        if not isinstance(items, list) or len(items) > 3000:
+            raise ValidationError("Допускается не более 3000 позиций")
+        config = self.config()
+        products = read_products()
+        by_region = {}
+        for product in products:
+            if product["region"]:
+                by_region.setdefault(product["region"], {})[str(product["product_key"])] = product
+        try:
+            keys = [str(item["product_key"]) for item in items]
+            if len(set(keys)) != len(keys):
+                raise ValueError("Товар повторяется")
+            rows = []
+            for region, catalog in sorted(by_region.items()):
+                available = [item for item in items if str(item["product_key"]) in catalog]
+                result = calculate(catalog, available, config)
+                rows.append({"region": region, "rows": [
+                    {key: value for key, value in row.items()
+                     if key == "product_key" or key.endswith(("_net", "_gross"))}
+                    for row in result["rows"]
+                ]})
+        except (ValueError, TypeError, KeyError) as exc:
+            raise ValidationError(str(exc))
+        return Response(serializable({"warehouses": rows}))
 
 
 class RefreshView(AccessView):

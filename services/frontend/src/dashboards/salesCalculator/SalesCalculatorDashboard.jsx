@@ -120,7 +120,7 @@ function ColumnSettings({ mode, choices, draft, setDraft }) {
   </details>;
 }
 
-function QuickSettings({ metadata, config, regions, region, mode, onSave, onError, onBusy }) {
+function QuickSettings({ metadata, config, regions, region, mode, onSave, onError, onBusy, disabled, comparing, onCompare }) {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(null);
   const displayed = { ...config, ...pending };
@@ -143,18 +143,32 @@ function QuickSettings({ metadata, config, regions, region, mode, onSave, onErro
     finally { saving.current = false; setBusy(false); onBusy(false); setPending(null); }
   }
   return <div className="sc-quick-settings" aria-busy={busy}>
-    <label className="sc-quick-warehouse"><span>Склад отгрузки</span><select aria-label="Склад отгрузки — быстрый выбор" value={pending?.region ?? region} disabled={busy} onChange={event => save({ region: event.target.value })}><option value="">Выберите склад</option>{regions.map(value => <option key={value}>{value}</option>)}</select></label>
+    <label className="sc-quick-warehouse"><span>Склад отгрузки</span><select aria-label="Склад отгрузки — быстрый выбор" title={comparing ? "Выключите сравнение цен, чтобы изменить склад" : undefined} value={pending?.region ?? region} disabled={busy || disabled || comparing} onChange={event => save({ region: event.target.value })}><option value="">Выберите склад</option>{regions.map(value => <option key={value}>{value}</option>)}</select></label>
     <div className="sc-quick-column-field"><span className="sc-quick-caption">Ценовые столбцы</span>
       <details ref={root} className="sc-quick-prices">
         <summary aria-label={`Ценовые столбцы — ${mode === "simple" ? "Прайс" : "Калькулятор"}`}><span>{mode === "simple" ? "Прайс" : "Калькулятор"}</span><span className="sc-quick-count">{displayed[field].filter(key => /_(net|gross)$/.test(key)).length}</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></summary>
-        <div className="sc-quick-popover"><strong>Столбцы таблицы и выгрузки</strong><p>Выберите цены с НДС или без НДС</p><fieldset disabled={busy}>{order.filter(key => /_(net|gross)$/.test(key) && choices[key]).map(key => <label key={key}><input type="checkbox" checked={displayed[field].includes(key)} onChange={event => save({ [field]: order.filter(value => value === key ? event.target.checked : config[field].includes(value)) })} /><span>{choices[key]}</span></label>)}</fieldset><small>{busy ? "Сохраняем…" : "Синхронизировано с основными настройками"}</small></div>
+        <div className="sc-quick-popover"><strong>Столбцы таблицы и выгрузки</strong><p>Выберите цены с НДС или без НДС</p><fieldset disabled={busy || disabled}>{order.filter(key => /_(net|gross)$/.test(key) && choices[key]).map(key => <label key={key}><input type="checkbox" checked={displayed[field].includes(key)} onChange={event => save({ [field]: order.filter(value => value === key ? event.target.checked : config[field].includes(value)) })} /><span>{choices[key]}</span></label>)}</fieldset><small>{busy ? "Сохраняем…" : "Синхронизировано с основными настройками"}</small></div>
       </details>
     </div>
     <div className="sc-quick-tax"><span className="sc-quick-caption">НДС</span><span className="sc-quick-vat">{config.vat}%</span></div>
+    <button type="button" className={`sc-compare-toggle${comparing ? " is-active" : ""}`} aria-pressed={comparing} disabled={busy || disabled} onClick={onCompare}><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 15V9m6 6V4m6 11V7M2 17h16" /></svg>Сравнение цен</button>
   </div>;
 }
 
-function Settings({ metadata, config, regions, onSave, onClose }) {
+function ComparisonPrice({ warehouses, productKey, column, selectedRegion, loading, error }) {
+  if (loading) return <span className="sc-muted">Загрузка цен…</span>;
+  if (error) return <span className="sc-muted">Цены недоступны</span>;
+  const values = warehouses.map(warehouse => ({ region: warehouse.region, value: warehouse.products.get(String(productKey))?.[column] }));
+  const prices = values.filter(item => item.value != null).map(item => Number(item.value));
+  const minimum = prices.length ? Math.min(...prices) : null;
+  return <dl className="sc-comparison-prices">{values.map(({ region, value }) => <div key={region} className={region === selectedRegion ? "is-selected" : ""}><dt title={region}>{region}{region === selectedRegion && <span className="sc-comparison-current" title="Выбранный склад">●</span>}</dt><dd className={value != null && Number(value) === minimum && new Set(prices).size > 1 ? "is-best" : ""} title={value == null ? "Товар отсутствует на складе" : undefined}>{value == null ? "—" : price(value)}</dd></div>)}</dl>;
+}
+
+function ResetSettingsButton({ onReset, disabled }) {
+  return <button type="button" className="sc-reset-settings" title="Вернуть настройки по умолчанию" onClick={onReset} disabled={disabled}><span aria-hidden="true">↺</span> Вернуть настройки</button>;
+}
+
+function Settings({ metadata, config, regions, onSave, onClose, comparing }) {
   const [draft, setDraft] = useState(config);
   const [tab, setTab] = useState("simple");
   const [error, setError] = useState("");
@@ -169,7 +183,7 @@ function Settings({ metadata, config, regions, onSave, onClose }) {
   return <Modal personal title="Настройки коммерческого прайса" onClose={onClose}><div className="sc-modal-body">
     {error && <div role="alert" className="sc-notice sc-error">{error}</div>}
     <section><h3>Основные настройки</h3><div className="sc-settings-grid">
-      <label>Склад отгрузки<select aria-label="Склад отгрузки" value={draft.region} onChange={e => field("region", e.target.value)}><option value="">Выберите склад отгрузки</option>{regions.map(r => <option key={r}>{r}</option>)}</select></label>
+      <label>Склад отгрузки<select aria-label="Склад отгрузки" disabled={comparing} title={comparing ? "Выключите сравнение цен, чтобы изменить склад" : undefined} value={draft.region} onChange={e => field("region", e.target.value)}><option value="">Выберите склад отгрузки</option>{regions.map(r => <option key={r}>{r}</option>)}</select></label>
       <label>НДС<select value={draft.vat} onChange={e => field("vat", Number(e.target.value))}><option value={22}>22%</option><option value={0}>0%</option></select></label>
     </div></section>
     <section><h3>Характеристики и логистика</h3><p className="sc-muted">Выбранный набор используется на экране и в Excel / PDF.</p><div className="sc-settings-grid"><PreferenceSelect label="Характеристики" field="characteristics" choices={metadata.characteristics} draft={draft} setDraft={setDraft} /><PreferenceSelect label="Логистика" field="logistics" choices={metadata.logistics} draft={draft} setDraft={setDraft} /></div></section>
@@ -221,6 +235,8 @@ export function SalesCalculatorDashboard() {
   const [state, setState] = useState({});
   const [items, setItems] = useState([]);
   const [mode, setMode] = useState("simple");
+  const [comparing, setComparing] = useState(false);
+  const [comparison, setComparison] = useState({ identity: null, warehouses: [], error: "" });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(24);
   const pages = Math.max(1, Math.ceil(items.length / pageSize));
@@ -303,6 +319,20 @@ export function SalesCalculatorDashboard() {
     }, 200);
     return () => { active = false; clearTimeout(timer); };
   }, [items, config, catalog, calculationIdentity]);
+  useEffect(() => {
+    if (!comparing || !config) return;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await api.post(ROOT + "compare/", { items }, { signal: controller.signal });
+        if (!controller.signal.aborted) setComparison({ identity: calculationIdentity, warehouses: data.warehouses, error: "" });
+      } catch (error) {
+        if (!controller.signal.aborted) setComparison({ identity: calculationIdentity, warehouses: [], error: errorText(error) });
+      }
+    }, 200);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [comparing, config, items, calculationIdentity]);
+  const comparisonWarehouses = useMemo(() => comparison.warehouses.map(warehouse => ({ region: warehouse.region, products: new Map(warehouse.rows.map(row => [String(row.product_key), row])) })), [comparison.warehouses]);
   const productsByKey = useMemo(() => new Map(catalog.products.map(p => [String(p.product_key), p])), [catalog.products]);
   const resultsByKey = useMemo(() => new Map((result?.rows || []).map(p => [String(p.product_key), p])), [result]);
   function updateItem(key, changes) { setItems(old => old.map(i => String(i.product_key) === String(key) ? { ...i, ...changes } : i)); }
@@ -314,6 +344,16 @@ export function SalesCalculatorDashboard() {
   async function applySettings(data) {
     setConfig(data);
     if (data.region !== catalog.region) await loadCatalog(data.region);
+  }
+  async function resetSettings() {
+    if (settingsBusy) return;
+    setSettingsBusy(true);
+    try {
+      const { data } = await api.post(ROOT + "settings/", { region: catalog.region || config.region });
+      setComparing(false);
+      await applySettings(data);
+    } catch (error) { setMessage(errorText(error), "error"); }
+    finally { setSettingsBusy(false); }
   }
   async function refresh() {
     try { const { data } = await api.post(ROOT + "refresh/"); wasRunning.current = true; setState(data); setMessage("Обновляем прайс 1С и остатки…"); }
@@ -335,6 +375,7 @@ export function SalesCalculatorDashboard() {
   const imageColumn = columns.indexOf("image");
   columns.splice(imageColumn < 0 ? 0 : imageColumn, 0, "row_number");
   function cell(key, item, row, calculated, rowNumber) {
+    if (comparing && /_(net|gross)$/.test(key)) return <ComparisonPrice warehouses={comparisonWarehouses} productKey={item.product_key} column={key} selectedRegion={catalog.region} loading={comparison.identity !== calculationIdentity} error={comparison.error} />;
     if (key === "row_number") return rowNumber;
     if (key === "name") return row.price_list_name || row.name || "—";
     if (key === "code") return article(row.code);
@@ -350,16 +391,18 @@ export function SalesCalculatorDashboard() {
   return <>
     {(initialLoading || adding) && <div className="global-spinner-overlay show" role="status" aria-live="polite"><div className="spinner-container"><div className="infinite-spinner" aria-hidden="true" /><div className="spinner-text">{adding ? "Добавляем товары в расчёт…" : "Загрузка данных..."}</div></div></div>}
     <div ref={dashboardRef} className="sc-dashboard" data-dashboard-type="commercial-price" aria-busy={initialLoading}>
-    <header className="sc-topbar"><div><h1>Коммерческий прайс</h1></div><nav><button onClick={() => setModal("settings")} disabled={!config || settingsBusy}>Настройки</button><RefreshInfoTooltip sections={[{ title: "Прайс 1С", content: date(state.price_updated_at) }, { title: "Остатки", content: date(state.stock_updated_at) }]}><button onClick={refresh} disabled={state.running || !catalog.can_refresh}>{state.running ? "Обновление…" : "Обновить"}</button></RefreshInfoTooltip></nav></header>
+    <header className="sc-topbar"><div><h1>Коммерческий прайс</h1></div><nav><ResetSettingsButton onReset={resetSettings} disabled={!config || settingsBusy} /><button onClick={() => setModal("settings")} disabled={!config || settingsBusy}>Настройки</button><RefreshInfoTooltip sections={[{ title: "Прайс 1С", content: date(state.price_updated_at) }, { title: "Остатки", content: date(state.stock_updated_at) }]}><button onClick={refresh} disabled={state.running || !catalog.can_refresh}>{state.running ? "Обновление…" : "Обновить"}</button></RefreshInfoTooltip></nav></header>
     {message && <div className="sc-toast-stack"><div className={`sc-toast sc-toast--${notice.kind}`} role={notice.kind === "error" ? "alert" : "status"}><span>{message}</span><button aria-label="Закрыть уведомление" onClick={() => setMessage("")}>×</button></div></div>}
     {catalog.stale && <div className="sc-notice">Показан последний доступный прайс. Данные за сегодня ещё не обновлены.</div>}
-    <div className="sc-toolbar"><div className="sc-tabs"><button className={mode === "simple" ? "is-active" : ""} onClick={() => setMode("simple")}>Прайс</button>{metadata?.can_use_calculator && <button className={mode === "full" ? "is-active" : ""} onClick={() => setMode("full")}>Калькулятор</button>}</div>{config && metadata && <QuickSettings metadata={metadata} config={config} regions={catalog.regions} region={catalog.region || config.region} mode={mode} onSave={applySettings} onError={setMessage} onBusy={setSettingsBusy} />}</div>
+    <div className="sc-toolbar"><div className="sc-tabs"><button className={mode === "simple" ? "is-active" : ""} onClick={() => setMode("simple")}>Прайс</button>{metadata?.can_use_calculator && <button className={mode === "full" ? "is-active" : ""} onClick={() => setMode("full")}>Калькулятор</button>}</div>{config && metadata && <QuickSettings metadata={metadata} config={config} regions={catalog.regions} region={catalog.region || config.region} mode={mode} onSave={applySettings} onError={setMessage} onBusy={setSettingsBusy} disabled={settingsBusy} comparing={comparing} onCompare={() => { setComparison({ identity: null, warehouses: [], error: "" }); setComparing(value => !value); }} />}</div>
     {!config ? <p>Загрузка настроек…</p> : <div className="sc-workspace"><section className="sc-panel sc-composition"><h2>Состав расчёта</h2><div className="sc-toolbar"><button className="sc-primary" onClick={() => setModal("products")} disabled={!catalog.products.length}>＋ Добавить товар</button><button onClick={() => { setItems([]); setSelected(new Set()); }} disabled={!items.length}>Очистить</button><div className="sc-toolbar-right">{mode === "full" && <button title="Изменить тип цен вручную для выбранных позиций" onClick={() => { setSelectionMode(!selectionMode); setSelected(new Set()); }}>{selectionMode ? "Завершить выбор" : "Выбрать позиции"}</button>}{mode === "full" && selectionMode && <><select aria-label="Тип цены для выбранных" value={bulkType} onChange={e => setBulkType(e.target.value)}>{Object.entries(TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><button disabled={!selected.size} onClick={() => setItems(old => old.map(i => selected.has(String(i.product_key)) ? { ...i, price_type: bulkType } : i))}>Применить к выбранным</button></>}</div></div>
       {calcError && <div className="sc-notice sc-error" role="alert">{calcError}</div>}
+      {comparing && <div className="sc-comparison-note"><span><strong>Сравнение цен по складам</strong><small>Зелёным отмечена минимальная цена. ● — выбранный склад. Итоги и выгрузки: {catalog.region}.{mode === "full" && " Цены каждого склада рассчитаны по доступным на нём позициям заказа."}</small></span><button type="button" onClick={() => setComparing(false)}>Завершить сравнение</button></div>}
+      {comparing && comparison.identity === calculationIdentity && comparison.error && <div className="sc-notice sc-error" role="alert">{comparison.error}</div>}
       {!items.length ? <div className="sc-empty"><h3>Добавьте товары в расчёт</h3><p>Выберите продукцию, чтобы посмотреть цены или рассчитать заказ.</p>{!catalog.products.length && <p>Витрина пока пуста. Обновите прайс или обратитесь к администратору.</p>}</div> : <div className="sc-table-scroll" aria-busy={calculating}><table className="sc-table"><thead><tr><th className="sc-remove-cell" aria-label="Удаление" />{mode === "full" && selectionMode && <th><input type="checkbox" aria-label="Выбрать все позиции" checked={!!items.length && items.every(i => selected.has(String(i.product_key)))} onChange={e => setSelected(e.target.checked ? new Set(items.map(i => String(i.product_key))) : new Set())} /></th>}{columns.map(k => <th key={k} className={k === "row_number" ? "sc-number-cell" : (k === "name" || k === "name_1c") ? "sc-name-cell" : undefined}>{k === "row_number" ? "№" : k === "code" ? "Артикул" : metadata[mode + "_columns"][k]}{mode === "simple" && priceBand(k, config) && <small className="sc-price-band">{priceBand(k, config)}</small>}</th>)}</tr></thead><tbody>{visibleItems.map((item, itemIndex) => { const key = String(item.product_key); const row = productsByKey.get(key); const calculated = resultsByKey.get(key); return <tr key={key}><td className="sc-remove-cell"><button aria-label="Удалить товар" onClick={() => setItems(old => old.filter(i => String(i.product_key) !== key))}>×</button></td>{mode === "full" && selectionMode && <td><input type="checkbox" aria-label={`Выбрать ${row?.name || key}`} checked={selected.has(key)} onChange={() => setSelected(old => { const next = new Set(old); if (next.has(key)) next.delete(key); else next.add(key); return next; })} /></td>}{row ? columns.map(k => <td key={k} className={k === "row_number" ? "sc-number-cell sc-numeric-cell" : numericColumn(k) ? "sc-numeric-cell" : (k === "name" || k === "name_1c") ? "sc-name-cell" : undefined}>{cell(k, item, row, calculated, (currentPage - 1) * pageSize + itemIndex + 1)}</td>) : <td colSpan={columns.length}>Товар {key} недоступен в этом регионе</td>}</tr>; })}</tbody></table></div>}
       {!!items.length && <Pagination page={currentPage} pages={pages} pageSize={pageSize} setPage={setPage} setPageSize={setPageSize} />}
     </section><aside className="sc-panel sc-summary"><h2>{mode === "full" ? "Итоги расчёта" : "Выбранные товары"}</h2><div className="sc-counts"><div>Позиций<strong>{items.length}</strong>товаров</div><div>Количество<strong>{result ? count(result.quantity) : "—"}</strong>шт.</div></div>{mode === "full" && result && <><dl><div><dt>Сумма без НДС</dt><dd>{money(result.net, 0)}</dd></div><div><dt>НДС ({config.vat}%)</dt><dd>{money(result.vat)}</dd></div><div className="sc-total"><dt>Итого с НДС</dt><dd>{money(result.gross)}</dd></div></dl><section><h3>Ценовой уровень</h3><strong>{result.manual ? "Ручной режим" : TYPES[result.automatic_type]}</strong>{result.manual && <p>Расчётный тип: {TYPES[result.automatic_type]}</p>}{result.next_type && <p className="sc-muted">До уровня «{TYPES[result.next_type]}»: {money(result.next_gap)}{Number(result.next_gap) === 0 ? " — переход при превышении порога" : ""}</p>}</section>{result.warning && <div className="sc-notice">Сумма превышает стандартный диапазон прайс-листа {money(config.warning_threshold)} руб.</div>}</>}{result && <section><h3 className="sc-logistics-title">Логистика справочно <LogisticsTooltip /></h3><dl><div><dt>Общий вес, кг</dt><dd>{money(result.logistics.weight, 0)}{result.logistics_missing?.weight > 0 && <small className="sc-partial">Без данных: {result.logistics_missing.weight} поз.</small>}</dd></div><div><dt>Паллето-мест</dt><dd>{count(result.logistics.pallets)}{result.logistics_missing?.pallets > 0 && <small className="sc-partial">Без данных: {result.logistics_missing.pallets} поз.</small>}</dd></div></dl></section>}<section><h3>Экспорт</h3><div className="sc-toolbar"><button className="sc-primary" disabled={exporting || calculating || !result?.rows.length || columns.length === 1} onClick={() => exportFile("xlsx")}>Excel</button><button disabled={exporting || calculating || !result?.rows.length || columns.length === 1} onClick={() => exportFile("pdf")}>PDF</button></div>{exporting && <p role="status">Готовим документ и изображения…</p>}</section></aside></div>}
-    {modal === "settings" && <Settings metadata={metadata} config={{ ...config, region: catalog.region || config.region }} regions={catalog.regions} onClose={() => setModal(null)} onSave={data => { setModal(null); applySettings(data).catch(e => setMessage(errorText(e), "error")); }} />}
+    {modal === "settings" && <Settings comparing={comparing} metadata={metadata} config={{ ...config, region: catalog.region || config.region }} regions={catalog.regions} onClose={() => setModal(null)} onSave={data => { setModal(null); applySettings(data).catch(e => setMessage(errorText(e), "error")); }} />}
     {modal === "products" && <ProductPicker metadata={metadata} products={catalog.products} items={items} config={config} onAdd={add} onClose={() => setModal(null)} />}
   </div></>;
 }
