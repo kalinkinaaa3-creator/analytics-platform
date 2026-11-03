@@ -1,4 +1,7 @@
 from django.contrib import admin
+from django.contrib.auth import get_user_model
+from django.db import router, transaction
+from organizations.admin_helpers import full_name, department_name
 
 from dashboards.models import (
     Dashboard,
@@ -34,10 +37,13 @@ class DashboardWidgetAdmin(admin.ModelAdmin):
 class DashboardAccessAdmin(admin.ModelAdmin):
     list_display = (
         "organization",
-        "user",
         "dashboard",
+        "user",
+        "display_full_name",
+        "display_department",
         "can_view",
         "can_edit",
+        "access_source",
         "created_at",
     )
 
@@ -51,14 +57,58 @@ class DashboardAccessAdmin(admin.ModelAdmin):
     search_fields = (
         "user__email",
         "user__username",
+        "user__organization_profile__full_name",
+        "user__organization_memberships__department",
         "dashboard__name",
     )
 
     readonly_fields = (
         "created_at",
+        "access_source",
     )
 
     ordering = ("dashboard", "user")
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("dashboard__organization", "user__organization_profile").prefetch_related("user__organization_memberships__organization")
+
+    @admin.display(description="ФИО")
+    def display_full_name(self, obj):
+        return full_name(obj.user)
+
+    @admin.display(description="Department name")
+    def display_department(self, obj):
+        return department_name(obj.user, obj.dashboard.organization_id)
+
+    @admin.display(description="Источник доступа")
+    def access_source(self, obj):
+        if obj.from_department_group:
+            return "Подразделение + вручную" if obj.manual_can_view is not None else "Подразделение"
+        return "Вручную"
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.from_department_group and obj.manual_can_view is None:
+            return (*self.readonly_fields, "user", "dashboard", "can_view", "can_edit")
+        return (*self.readonly_fields, "user", "dashboard") if obj else self.readonly_fields
+
+    def save_model(self, request, obj, form, change):
+        # Opening/saving a generated grant must not convert it into a manual one.
+        if change and obj.from_department_group and obj.manual_can_view is None:
+            return
+        super().save_model(request, obj, form, change)
+
+    def delete_queryset(self, request, queryset):
+        using = queryset.db
+        with transaction.atomic(using=using):
+            user_ids = queryset.values_list("user_id", flat=True)
+            list(get_user_model().objects.using(using).select_for_update().filter(pk__in=user_ids).order_by("pk"))
+            super().delete_queryset(request, queryset)
+
+    def delete_model(self, request, obj):
+        using = router.db_for_write(DashboardAccess, instance=obj)
+        with transaction.atomic(using=using):
+            get_user_model().objects.using(using).select_for_update().get(pk=obj.user_id)
+            super().delete_model(request, obj)
 
     @admin.display(description="Организация", ordering="dashboard__organization")
     def organization(self, obj):
@@ -225,3 +275,6 @@ class DashboardPublicGroupItemAdmin(admin.ModelAdmin):
         "section",
         "position",
     )
+
+
+from .department_admin import DashboardDepartmentGroupAdmin  # noqa: E402,F401

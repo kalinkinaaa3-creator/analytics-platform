@@ -1,10 +1,12 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.forms.models import BaseInlineFormSet
 from .models import Organization, OrganizationMembership, OrganizationSwitchLog, UserProfile
+from .admin_helpers import full_name, department_name
 
 
 @admin.register(Organization)
@@ -55,28 +57,42 @@ class MembershipInline(admin.TabularInline):
 
 User = get_user_model()
 admin.site.unregister(User)
+if admin.site.is_registered(Group):
+    admin.site.unregister(Group)
 
 
 @admin.register(User)
 class WorkspaceUserAdmin(UserAdmin):
     inlines = (ProfileInline, MembershipInline)
-    list_display = ("username", "email", "display_full_name", "is_staff", "is_active")
-    search_fields = ("username", "email", "organization_profile__full_name")
+    list_display = ("username", "email", "display_full_name", "display_department", "is_staff", "is_active")
+    search_fields = ("username", "email", "organization_profile__full_name", "organization_memberships__department")
+    filter_horizontal = ("user_permissions",)
     fieldsets = tuple((name, {**options, "fields": tuple(
-        field for field in options["fields"] if field not in ("first_name", "last_name")
+        field for field in options["fields"] if field not in ("first_name", "last_name", "groups")
     )}) for name, options in UserAdmin.fieldsets)
 
     @admin.display(description="ФИО")
     def display_full_name(self, obj):
-        profile = getattr(obj, "organization_profile", None)
-        return profile.full_name if profile else obj.get_full_name()
+        return full_name(obj)
+
+    @admin.display(description="Department name")
+    def display_department(self, obj):
+        return department_name(obj)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("organization_profile").prefetch_related("organization_memberships__organization")
 
 
 @admin.register(OrganizationMembership)
 class MembershipAdmin(admin.ModelAdmin):
-    list_display = ("user", "organization", "department", "is_active", "is_default")
+    list_display = ("user", "organization", "display_full_name", "department", "is_active", "is_default")
     list_filter = ("organization", "is_active")
-    search_fields = ("user__username", "department")
+    search_fields = ("user__username", "user__organization_profile__full_name", "department")
+    list_select_related = ("user__organization_profile", "organization")
+
+    @admin.display(description="ФИО")
+    def display_full_name(self, obj):
+        return full_name(obj.user)
 
 
 @admin.register(OrganizationSwitchLog)

@@ -113,6 +113,9 @@ class DashboardAccess(models.Model):
 
     can_view = models.BooleanField(default=True)
     can_edit = models.BooleanField(default=False)
+    manual_can_view = models.BooleanField(null=True, editable=False)
+    manual_can_edit = models.BooleanField(null=True, editable=False)
+    from_department_group = models.BooleanField(default=False, editable=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -132,6 +135,40 @@ class DashboardAccess(models.Model):
             user_id=self.user_id, organization_id=self.dashboard.organization_id, is_active=True,
         ).exists():
             raise ValidationError("Сначала добавьте пользователю доступ к организации дашборда.")
+
+
+class DashboardDepartmentGroup(models.Model):
+    name = models.CharField("Название группы", max_length=255)
+    dashboard = models.ForeignKey(Dashboard, on_delete=models.CASCADE, verbose_name="Dashboard")
+    departments = models.JSONField("Department name", default=list)
+    can_view = models.BooleanField("Право на просмотр", default=True)
+    can_edit = models.BooleanField("Право на редактирование", default=False)
+    is_active = models.BooleanField("Активна", default=True)
+
+    class Meta:
+        verbose_name = "Group"
+        verbose_name_plural = "Groups"
+        ordering = ("name", "pk")
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        super().clean()
+        if not isinstance(self.departments, list) or not self.departments or any(
+            not isinstance(value, str) or not value.strip() or len(value) > 255 for value in self.departments
+        ):
+            raise ValidationError({"departments": "Выберите хотя бы одно подразделение."})
+        self.departments = list(dict.fromkeys(self.departments))
+
+
+class DashboardDepartmentExclusion(models.Model):
+    """A deleted personal access must not be recreated by department rules."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    dashboard = models.ForeignKey(Dashboard, on_delete=models.CASCADE)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=("user", "dashboard"), name="dashboard_department_exclusion_unique")]
 
 
 class DashboardPublicAccess(models.Model):

@@ -1,0 +1,6 @@
+#department-recipients { max-width:1000px; overflow:auto; padding:16px; border:1px solid var(--hairline-color); border-radius:6px; background:var(--darkened-bg); }
+#department-recipients > strong { color:var(--body-fg); }
+#department-recipients table { width:100%; margin-top:12px; background:var(--body-bg); }
+#department-recipients th,#department-recipients td { padding:10px 12px; text-align:left; }
+#department-recipients .department-excluded td:last-child { color:var(--error-fg); font-weight:600; }
+.field-departments select { min-width:300px; max-width:100%; }
