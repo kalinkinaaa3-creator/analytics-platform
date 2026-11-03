@@ -160,7 +160,8 @@
 .sc-quick-settings :focus-visible { outline:2px solid #59714e; outline-offset:3px; }
 .sc-dashboard .sc-compare-toggle { display:flex; align-items:center; justify-content:center; gap:7px; min-height:38px; height:38px; padding:0 12px; background:#fff; color:#4c6042; border:1px solid #aebda4; border-radius:6px; font-weight:600; }
 .sc-compare-toggle svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.6; }
-.sc-dashboard .sc-compare-toggle.is-active { background:#536a46; color:#fff; border-color:#536a46; }
+.sc-dashboard .sc-compare-toggle.is-active { background:linear-gradient(90deg,#6c6c5a,#4e4e43); color:#fff; border-color:#4d5747; }
+.sc-dashboard .sc-compare-toggle.is-active:hover:not(:disabled) { background:linear-gradient(90deg,#a0a699,#c8cec5); color:#111; }
 .sc-quick-warehouse select:disabled { background:#e8ece4; color:#899080; cursor:not-allowed; opacity:.8; }
 .sc-dashboard .sc-reset-settings { background:#fff; color:#59634f; border-color:#cbd2c6; }
 .sc-reset-settings > span { font-size:18px; vertical-align:middle; margin-right:4px; }
