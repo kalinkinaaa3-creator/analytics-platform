@@ -14,10 +14,7 @@ from .export import display, price_text, NUMERIC_COLUMNS, comparison_column
 def heading(result, mode):
     title = "ПРАЙС-ЛИСТ" if mode == "simple" else "КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ"
     if result.get("warehouses"):
-        return (f'ООО "Ай-Пласт" • {title} • {timezone.localdate():%d.%m.%Y} • СРАВНЕНИЕ ЦЕН ПО СКЛАДАМ'
-                f'\nВыбранный склад: {result["rows"][0]["region"]}. '
-                + ('Итоги рассчитаны по выбранному складу. ' if mode == "full" else '')
-                + '— товар отсутствует на складе.')
+        return f'ООО "Ай-Пласт" • {title} • {timezone.localdate():%d.%m.%Y} • СРАВНЕНИЕ ЦЕН ПО СКЛАДАМ'
     return f'ООО "Ай-Пласт" • {title} • {timezone.localdate():%d.%m.%Y} • СКЛАД ОТГРУЗКИ: {result["rows"][0]["region"].upper()}'
 
 
