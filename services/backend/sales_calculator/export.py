@@ -93,6 +93,8 @@ def export_document(result, config, mode, kind):
     if mode == "simple":
         bounds = [price_text(value) for value in [0, *config["thresholds"]]]
         for index, (tier, label) in enumerate(PRICE_LABELS.items()):
+            if index >= 4:
+                continue  # Distributor prices have no automatic order-value thresholds.
             band = f"{bounds[index]}–{bounds[index + 1]} руб." if index < 3 else f"свыше {bounds[index]} руб."
             for tax in ("net", "gross"):
                 labels[f"{tier}_{tax}"] = f"{label} руб. {'без НДС' if tax == 'net' else 'с НДС'}\n({band})"

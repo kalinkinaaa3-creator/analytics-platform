@@ -4,11 +4,12 @@ import { api } from "../../api/client";
 import { DashboardMultiSelect } from "../../components/DashboardMultiSelect";
 import { RefreshInfoTooltip } from "../../components/RefreshInfoTooltip";
 import { SalesProductImage } from "./SalesProductImage";
+import { DashboardInstruction } from "../../components/DashboardInstruction";
 import "./sales_calculator.css";
 import "../spinner.css";
 
 const ROOT = "/v1/sales-calculator/";
-const TYPES = { auto: "Авто", retail: "Розница", small: "Мелкий опт", medium: "Средний опт", large: "Крупный опт" };
+const TYPES = { auto: "Авто", retail: "Розница", small: "Мелкий опт", medium: "Средний опт", large: "Крупный опт", distr: "Дистрибьютор", distr_1: "Дистрибьютор 1" };
 const price = value => value == null ? "—" : Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 20 });
 const numericColumn = key => key === "row_number" || key === "code" || key === "quantity" || /_(net|gross)$/.test(key);
 const money = (value, digits = 2) => value == null ? "—" : Number(value).toLocaleString("ru-RU", { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -391,7 +392,7 @@ export function SalesCalculatorDashboard() {
   return <>
     {(initialLoading || adding) && <div className="global-spinner-overlay show" role="status" aria-live="polite"><div className="spinner-container"><div className="infinite-spinner" aria-hidden="true" /><div className="spinner-text">{adding ? "Добавляем товары в расчёт…" : "Загрузка данных..."}</div></div></div>}
     <div ref={dashboardRef} className="sc-dashboard" data-dashboard-type="commercial-price" aria-busy={initialLoading}>
-    <header className="sc-topbar"><div><h1>Коммерческий прайс</h1></div><nav><ResetSettingsButton onReset={resetSettings} disabled={!config || settingsBusy} /><button onClick={() => setModal("settings")} disabled={!config || settingsBusy}>Настройки</button><RefreshInfoTooltip sections={[{ title: "Прайс 1С", content: date(state.price_updated_at) }, { title: "Остатки", content: date(state.stock_updated_at) }]}><button onClick={refresh} disabled={state.running || !catalog.can_refresh}>{state.running ? "Обновление…" : "Обновить"}</button></RefreshInfoTooltip></nav></header>
+    <header className="sc-topbar"><div className="dashboard-title-with-instruction"><h1>Коммерческий прайс</h1><DashboardInstruction dashboard="price" /></div><nav><ResetSettingsButton onReset={resetSettings} disabled={!config || settingsBusy} /><button onClick={() => setModal("settings")} disabled={!config || settingsBusy}>Настройки</button><RefreshInfoTooltip sections={[{ title: "Прайс 1С", content: date(state.price_updated_at) }, { title: "Остатки", content: date(state.stock_updated_at) }]}><button onClick={refresh} disabled={state.running || !catalog.can_refresh}>{state.running ? "Обновление…" : "Обновить"}</button></RefreshInfoTooltip></nav></header>
     {message && <div className="sc-toast-stack"><div className={`sc-toast sc-toast--${notice.kind}`} role={notice.kind === "error" ? "alert" : "status"}><span>{message}</span><button aria-label="Закрыть уведомление" onClick={() => setMessage("")}>×</button></div></div>}
     {catalog.stale && <div className="sc-notice">Показан последний доступный прайс. Данные за сегодня ещё не обновлены.</div>}
     <div className="sc-toolbar"><div className="sc-tabs"><button className={mode === "simple" ? "is-active" : ""} onClick={() => setMode("simple")}>Прайс</button>{metadata?.can_use_calculator && <button className={mode === "full" ? "is-active" : ""} onClick={() => setMode("full")}>Калькулятор</button>}</div>{config && metadata && <QuickSettings metadata={metadata} config={config} regions={catalog.regions} region={catalog.region || config.region} mode={mode} onSave={applySettings} onError={setMessage} onBusy={setSettingsBusy} disabled={settingsBusy} comparing={comparing} onCompare={() => { setComparison({ identity: null, warehouses: [], error: "" }); setComparing(value => !value); }} />}</div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CrmAnalyticsDashboard } from "./CrmAnalyticsDashboard";
 import { CrmDealSection } from "./CrmDealSection";
+import { DashboardInstruction } from "../../components/DashboardInstruction";
 import "./crm_sections.css";
 
 const SECTIONS = [["leads", "Лиды"], ["deals", "Сделки"]];
@@ -31,7 +32,7 @@ export function CrmWorkspace({ dashboard }) {
     setParams((old) => { const next = new URLSearchParams(old); next.set("section", section); next.set("tab", tab); return next; }, { replace: true });
   };
   return <section className="crm-workspace crm-dashboard" data-heading-tooltip="disabled">
-    <header className="crm-workspace-heading"><h1>Аналитика CRM</h1><div className="crm-filter-actions" ref={setToolbarTarget} /></header>
+    <header className="crm-workspace-heading"><div className="dashboard-title-with-instruction"><h1>Аналитика CRM</h1><DashboardInstruction dashboard="crm" /></div><div className="crm-filter-actions" ref={setToolbarTarget} /></header>
     <nav className="crm-section-tabs" aria-label="Раздел CRM">{SECTIONS.map(([key, label]) => <button key={key} type="button" aria-pressed={section === key} className={section === key ? "active" : ""} onClick={() => { if (key === section) return; setTabs((old) => ({ ...old, [section]: currentTab })); setResetTokens((old) => ({ ...old, [key]: old[key] + 1 })); setPendingSection(key); setParams((old) => { const next = new URLSearchParams(old); next.set("section", key); next.set("tab", tabs[key]); return next; }, { replace: true }); }}><SectionIcon section={key} /><span>{label}</span></button>)}</nav>
     <div hidden={section !== "leads"}><CrmAnalyticsDashboard dashboard={dashboard} toolbarTarget={toolbarTarget} embedded onPreferencesSaved={() => setResetTokens((old) => ({ ...old, deals: old.deals + 1 }))} resetToken={resetTokens.leads} tab={section === "leads" ? currentTab : tabs.leads} onTabChange={changeTab} /></div>
     <div hidden={section !== "deals"}><CrmDealSection section="deals" active={section === "deals"} resetToken={resetTokens.deals} tab={section === "deals" ? currentTab : tabs.deals} onTabChange={changeTab} /></div>

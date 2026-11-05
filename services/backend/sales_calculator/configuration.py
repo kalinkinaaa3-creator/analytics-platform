@@ -2,8 +2,9 @@ from copy import deepcopy
 from decimal import Decimal, InvalidOperation
 from .properties import EXTRA_CHARACTERISTICS
 
-PRICE_TYPES = ("retail", "small", "medium", "large")
-PRICE_LABELS = dict(zip(PRICE_TYPES, ("Розница", "Мелкий опт", "Средний опт", "Крупный опт")))
+AUTO_PRICE_TYPES = ("retail", "small", "medium", "large")
+PRICE_TYPES = (*AUTO_PRICE_TYPES, "distr", "distr_1")
+PRICE_LABELS = dict(zip(PRICE_TYPES, ("Розница", "Мелкий опт", "Средний опт", "Крупный опт", "Дистрибьютор", "Дистрибьютор 1")))
 CHARACTERISTICS = {
     "dimensions": "Габариты Д×Ш×В, мм", "color": "Цвет", "bottom": "Тип дна",
     "walls": "Тип стенок", "perforation": "Стенки", "lid": "Тип крышки",
@@ -67,6 +68,12 @@ def validate_config(data):
         if not isinstance(order, list) or any(not isinstance(x, str) or x not in choices for x in order):
             raise ValueError(f"Некорректный список: {key}")
         # Keep positions of hidden columns; append future columns in default order.
+        order = list(dict.fromkeys(order))
+        if mode == "simple":
+            # Insert newly available price columns after the existing price types.
+            missing = [f"{tier}_{tax}" for tier in ("distr", "distr_1") for tax in ("net", "gross") if f"{tier}_{tax}" not in order]
+            position = max((index + 1 for index, column in enumerate(order) if column.endswith(("_net", "_gross"))), default=len(order))
+            order[position:position] = missing
         result[key] = list(dict.fromkeys([*order, *choices]))
         result[mode + "_columns"] = [x for x in result[key] if x in result[mode + "_columns"]]
     try:

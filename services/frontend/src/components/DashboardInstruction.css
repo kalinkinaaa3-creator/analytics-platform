@@ -1,0 +1,8 @@
+.dashboard-title-with-instruction { display:flex; align-items:center; gap:10px; min-width:0; }
+.dashboard-instruction { position:relative; display:inline-flex; flex-shrink:0; vertical-align:middle; }
+.dashboard-instruction .dashboard-instruction-button { display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; min-height:34px; padding:6px; border:1px solid #cbd2c6; border-radius:6px; background:#fff; color:#52634c; cursor:pointer; box-shadow:none; }
+.dashboard-instruction .dashboard-instruction-button:hover:not(:disabled) { background:#edf2e9; color:#344b2f; }
+.dashboard-instruction .dashboard-instruction-button:focus-visible { outline:2px solid #52634c; outline-offset:3px; }
+.dashboard-instruction .dashboard-instruction-button:disabled { opacity:.5; cursor:wait; }
+.dashboard-instruction-button svg { width:21px; height:21px; }
+.dashboard-instruction-error { position:absolute; top:calc(100% + 8px); right:0; width:230px; max-width:70vw; padding:10px 12px; border:1px solid #dcc6be; border-radius:6px; background:#fff8f5; color:#814735; font:400 13px/1.4 Arial,sans-serif; z-index:100; box-shadow:0 3px 12px #0002; }

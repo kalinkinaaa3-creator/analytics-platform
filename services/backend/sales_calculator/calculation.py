@@ -2,7 +2,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from fractions import Fraction
 from math import ceil
 
-from .configuration import PRICE_TYPES, validate_config
+from .configuration import AUTO_PRICE_TYPES, PRICE_TYPES, validate_config
 
 CENT = Decimal("0.01")
 
@@ -35,16 +35,16 @@ def calculate(products, items, config):
             raise ValueError("Некорректный тип цены")
         rows.append({**products[key], "quantity": quantity, "override": override})
     def price(row, tier):
-        return number(row[tier]).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        return number(row.get(tier)).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
     def total(tier):
         return sum(((price(r, tier) * r["quantity"]).quantize(CENT, rounding=ROUND_HALF_UP) for r in rows), Decimal(0))
     tier_index = 0
     for index, boundary in enumerate(config["thresholds"]):
-        if total(PRICE_TYPES[index]) > Decimal(boundary):
+        if total(AUTO_PRICE_TYPES[index]) > Decimal(boundary):
             tier_index = index + 1
         else:
             break
-    automatic = PRICE_TYPES[tier_index]
+    automatic = AUTO_PRICE_TYPES[tier_index]
     factor = 1 + Decimal(config["vat"]) / 100
     for row in rows:
         row["price_type"] = automatic if row["override"] == "auto" else row["override"]
@@ -54,6 +54,9 @@ def calculate(products, items, config):
         row["vat_amount"] = (row["sum_net"] * (factor - 1)).quantize(CENT, rounding=ROUND_HALF_UP)
         row["sum_gross"] = row["sum_net"] + row["vat_amount"]
         for tier in PRICE_TYPES:
+            if tier not in AUTO_PRICE_TYPES and row.get(tier) is None:
+                row[tier + "_net"] = row[tier + "_gross"] = None
+                continue
             row[tier + "_net"] = price(row, tier)
             row[tier + "_gross"] = (price(row, tier) * factor).quantize(CENT, rounding=ROUND_HALF_UP)
     net = sum((r["sum_net"] for r in rows), Decimal(0))
@@ -81,7 +84,7 @@ def calculate(products, items, config):
             "positions": len(rows), "quantity": sum((r["quantity"] for r in rows), Decimal(0)),
             "net": net, "vat": vat, "gross": net + vat,
             "warning": net > Decimal(config["warning_threshold"]),
-            "next_type": PRICE_TYPES[tier_index + 1] if tier_index < 3 else None,
+            "next_type": AUTO_PRICE_TYPES[tier_index + 1] if tier_index < 3 else None,
             "next_gap": max(Decimal(0), Decimal(config["thresholds"][tier_index]) - total(automatic)) if tier_index < 3 else None,
             "logistics": {k: None if rows and missing[k] == len(rows) else v for k, v in logistics.items()},
             "logistics_missing": missing}

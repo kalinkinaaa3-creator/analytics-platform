@@ -2,6 +2,22 @@
 const assert = require('node:assert/strict');
 const { chromium } = require(process.env.IPRICE_PLAYWRIGHT_PACKAGE || 'playwright');
 const base = process.env.IPRICE_UI_URL || 'http://127.0.0.1:5188';
+async function checkInstruction(page, filename) {
+  const button = page.getByRole('button', { name: 'Скачать инструкцию пользователя в формате Word (.docx)', exact: true });
+  assert.equal(await button.count(), 1);
+  assert.equal(await button.getAttribute('title'), 'Скачать инструкцию пользователя в формате Word (.docx)');
+  const url = `${base}/instructions/${encodeURIComponent(filename)}`;
+  await page.route(url, route => route.fulfill({ contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', body: Buffer.from([80, 75, 3, 4, 1, 2, 3, 4]) }));
+  const pending = page.waitForEvent('download');
+  await button.click();
+  assert.equal((await pending).suggestedFilename(), filename);
+  await page.unroute(url);
+  await page.route(url, route => route.fulfill({ contentType: 'text/html', body: '<html>Fallback</html>' }));
+  await button.click();
+  const error = page.getByRole('alert').filter({ hasText: 'Инструкция пока недоступна' });
+  await error.waitFor();
+  await error.click();
+}
 async function mount(page, module, component) {
   await page.route(`${base}/review-check`, route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><html lang="ru"><meta charset="utf-8"><div id="root"></div><script type="module">
     import React from '/node_modules/.vite/deps/react.js';
@@ -22,6 +38,7 @@ async function mount(page, module, component) {
       const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       const columns = { code: 'Артикул', name: 'Наименование', retail_net: 'Розница без НДС', retail_gross: 'Розница с НДС', quantity: 'Количество' };
+      Object.assign(columns, { distr_net: 'Дистрибьютор без НДС', distr_gross: 'Дистрибьютор с НДС', distr_1_net: 'Дистрибьютор 1 без НДС', distr_1_gross: 'Дистрибьютор 1 с НДС' });
       let config = { region: 'Москва', vat: 22, thresholds: [50000, 300000, 800000], warning_threshold: 2200000,
         characteristics: [], logistics: [], warehouses: [], simple_columns: ['code', 'name', 'retail_net'], full_columns: ['code', 'name', 'retail_net', 'quantity'],
         simple_column_order: Object.keys(columns), full_column_order: Object.keys(columns) };
@@ -51,12 +68,16 @@ async function mount(page, module, component) {
       await mount(page, 'salesCalculator/SalesCalculatorDashboard.jsx', 'SalesCalculatorDashboard');
       const quick = page.locator('.sc-quick-settings');
       await quick.waitFor();
+      await checkInstruction(page, 'Коммерческий прайс - инструкция пользователя.docx');
       const resetHeight = (await page.locator('.sc-reset-settings').boundingBox()).height;
       assert.equal(resetHeight, (await page.getByRole('button', { name: 'Настройки', exact: true }).boundingBox()).height);
       assert.equal(await page.getByRole('button', { name: 'Калькулятор', exact: true }).count(), allowed ? 1 : 0);
       await quick.getByLabel('Склад отгрузки — быстрый выбор').selectOption('Санкт-Петербург');
       await page.waitForFunction(() => !document.querySelector('.sc-quick-settings select').disabled);
       await quick.locator('summary').click();
+      for (const label of ['Дистрибьютор без НДС', 'Дистрибьютор с НДС', 'Дистрибьютор 1 без НДС', 'Дистрибьютор 1 с НДС']) {
+        assert.equal(await quick.getByLabel(label, { exact: true }).count(), 1);
+      }
       await quick.getByLabel('Розница с НДС', { exact: true }).check();
       await page.waitForFunction(() => !document.querySelector('.sc-quick-popover fieldset').disabled);
       assert.ok(config.simple_columns.includes('retail_gross'));
@@ -139,6 +160,7 @@ async function mount(page, module, component) {
     await page.route('**/v1/bitrix24/**', route => route.fulfill({ json: route.request().url().endsWith('/dashboard/') ? { cards: { total: 120, apm: 30, target: 20, low_quality: 50, in_progress: 20, conversion: 20 / 70 * 100 }, dynamics: { stages, sources: [], managers: [] }, summaries: { sources: summary, managers: summary } } : {} }));
     await mount(page, 'crmAnalytics/CrmAnalyticsDashboard.jsx', 'CrmAnalyticsDashboard');
     await page.locator('.crm-summary-total').first().waitFor();
+    await checkInstruction(page, 'Аналитика CRM инструкция пользователя.docx');
     assert.deepEqual(await page.locator('.crm-lead-kpis .crm-kpi-card__label > span:first-child').allTextContents(), ["Итого", "Передано в СМ", "Целевые", "Целевые, включая СМ", "Некачественные", "Конверсия", "Конверсия, включая СМ", "В работе", "Повторные"]);
     assert.equal(await page.locator('.crm-lead-kpis article').nth(3).locator('strong').innerText(), '50');
     assert.equal(await page.locator('.crm-lead-kpis article').nth(6).locator('strong').innerText(), '50,0%');

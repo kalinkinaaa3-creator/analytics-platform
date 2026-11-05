@@ -28,6 +28,46 @@ def product(**changes):
 
 
 class CalculationTests(UnitTestCase):
+    def test_distributor_prices_vat_optional_values_and_default_order(self):
+        config = validate_config({})
+        columns = config["simple_columns"]
+        start = columns.index("large_gross") + 1
+        self.assertEqual(columns[start:start + 4], ["distr_net", "distr_gross", "distr_1_net", "distr_1_gross"])
+        source = product(distr="60.5", distr_1="55.4")
+        result = calculate({"1": source}, [{"product_key": 1}], config)
+        row = result["rows"][0]
+        self.assertEqual((row["distr_net"], row["distr_gross"], row["distr_1_net"], row["distr_1_gross"]),
+                         (Decimal(61), Decimal("74.42"), Decimal(55), Decimal("67.10")))
+        zero = calculate({"1": source}, [{"product_key": 1}], validate_config({"vat": 0}))["rows"][0]
+        self.assertEqual(zero["distr_gross"], zero["distr_net"])
+        absent = calculate({"1": product()}, [{"product_key": 1}], config)["rows"][0]
+        self.assertIsNone(absent["distr_net"])
+        self.assertIsNone(absent["distr_1_gross"])
+        automatic = calculate({"1": source}, [{"product_key": 1, "quantity": 1000000}], config)
+        self.assertEqual(automatic["automatic_type"], "large")
+        self.assertIsNone(automatic["next_type"])
+        manual = calculate({"1": source}, [{"product_key": 1, "price_type": "distr_1"}], config)
+        self.assertEqual(manual["rows"][0]["unit_net"], 55)
+
+    def test_distributor_exports_and_comparison(self):
+        from openpyxl import load_workbook
+        config = validate_config({"simple_columns": ["code", "distr_net", "distr_gross", "distr_1_net", "distr_1_gross"]})
+        result = calculate({"1": product(distr="60", distr_1="50")}, [{"product_key": 1}], config)
+        ws = load_workbook(export_document(result, config, "simple", "xlsx")).active
+        self.assertEqual([ws.cell(4, col).value for col in range(3, 7)], [60, 73.2, 50, 61])
+        self.assertNotIn("800", ws.cell(3, 3).value)
+        self.assertEqual(export_document(result, config, "simple", "pdf").read(4), b"%PDF")
+        result["warehouses"] = [{"region": "Main", "rows": result["rows"]}, {"region": "Missing", "rows": []}]
+        ws = load_workbook(export_document(result, config, "simple", "xlsx")).active
+        self.assertEqual(ws.cell(4, 3).value, "Main: 60\nMissing: —")
+        self.assertEqual(export_document(result, config, "simple", "pdf").read(4), b"%PDF")
+
+    def test_existing_column_visibility_is_preserved_with_new_price_order(self):
+        old_order = ["code", "large_net", "large_gross", "url"]
+        config = validate_config({"simple_column_order": old_order, "simple_columns": ["code", "large_gross"]})
+        self.assertEqual(config["simple_columns"], ["code", "large_gross"])
+        self.assertEqual(config["simple_column_order"][:8], ["code", "large_net", "large_gross", "distr_net", "distr_gross", "distr_1_net", "distr_1_gross", "url"])
+
     def test_comparison_exports_preserve_warehouses_prices_and_missing_products(self):
         from openpyxl import load_workbook
         from reportlab.platypus import Table
