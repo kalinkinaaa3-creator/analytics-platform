@@ -3,8 +3,8 @@ from decimal import Decimal, InvalidOperation
 from .properties import EXTRA_CHARACTERISTICS
 
 AUTO_PRICE_TYPES = ("retail", "small", "medium", "large")
-PRICE_TYPES = (*AUTO_PRICE_TYPES, "distr", "distr_1")
-PRICE_LABELS = dict(zip(PRICE_TYPES, ("Розница", "Мелкий опт", "Средний опт", "Крупный опт", "Дистрибьютор", "Дистрибьютор 1")))
+PRICE_TYPES = (*AUTO_PRICE_TYPES, "distr_1", "distr")
+PRICE_LABELS = dict(zip(PRICE_TYPES, ("Розница", "Мелкий опт", "Средний опт", "Крупный опт", "Дистрибьютор 1", "Дистрибьютор")))
 CHARACTERISTICS = {
     "dimensions": "Габариты Д×Ш×В, мм", "color": "Цвет", "bottom": "Тип дна",
     "walls": "Тип стенок", "perforation": "Стенки", "lid": "Тип крышки",
@@ -71,7 +71,7 @@ def validate_config(data):
         order = list(dict.fromkeys(order))
         if mode == "simple":
             # Insert newly available price columns after the existing price types.
-            missing = [f"{tier}_{tax}" for tier in ("distr", "distr_1") for tax in ("net", "gross") if f"{tier}_{tax}" not in order]
+            missing = [f"{tier}_{tax}" for tier in ("distr_1", "distr") for tax in ("net", "gross") if f"{tier}_{tax}" not in order]
             position = max((index + 1 for index, column in enumerate(order) if column.endswith(("_net", "_gross"))), default=len(order))
             order[position:position] = missing
         result[key] = list(dict.fromkeys([*order, *choices]))

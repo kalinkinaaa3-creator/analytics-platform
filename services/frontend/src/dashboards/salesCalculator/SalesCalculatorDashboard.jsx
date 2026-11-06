@@ -9,7 +9,7 @@ import "./sales_calculator.css";
 import "../spinner.css";
 
 const ROOT = "/v1/sales-calculator/";
-const TYPES = { auto: "Авто", retail: "Розница", small: "Мелкий опт", medium: "Средний опт", large: "Крупный опт", distr: "Дистрибьютор", distr_1: "Дистрибьютор 1" };
+const TYPES = { auto: "Авто", retail: "Розница", small: "Мелкий опт", medium: "Средний опт", large: "Крупный опт", distr_1: "Дистрибьютор 1", distr: "Дистрибьютор" };
 const price = value => value == null ? "—" : Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 20 });
 const numericColumn = key => key === "row_number" || key === "code" || key === "quantity" || /_(net|gross)$/.test(key);
 const money = (value, digits = 2) => value == null ? "—" : Number(value).toLocaleString("ru-RU", { minimumFractionDigits: digits, maximumFractionDigits: digits });

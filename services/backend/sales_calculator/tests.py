@@ -32,7 +32,7 @@ class CalculationTests(UnitTestCase):
         config = validate_config({})
         columns = config["simple_columns"]
         start = columns.index("large_gross") + 1
-        self.assertEqual(columns[start:start + 4], ["distr_net", "distr_gross", "distr_1_net", "distr_1_gross"])
+        self.assertEqual(columns[start:start + 4], ["distr_1_net", "distr_1_gross", "distr_net", "distr_gross"])
         source = product(distr="60.5", distr_1="55.4")
         result = calculate({"1": source}, [{"product_key": 1}], config)
         row = result["rows"][0]
@@ -54,19 +54,19 @@ class CalculationTests(UnitTestCase):
         config = validate_config({"simple_columns": ["code", "distr_net", "distr_gross", "distr_1_net", "distr_1_gross"]})
         result = calculate({"1": product(distr="60", distr_1="50")}, [{"product_key": 1}], config)
         ws = load_workbook(export_document(result, config, "simple", "xlsx")).active
-        self.assertEqual([ws.cell(4, col).value for col in range(3, 7)], [60, 73.2, 50, 61])
+        self.assertEqual([ws.cell(4, col).value for col in range(3, 7)], [50, 61, 60, 73.2])
         self.assertNotIn("800", ws.cell(3, 3).value)
         self.assertEqual(export_document(result, config, "simple", "pdf").read(4), b"%PDF")
         result["warehouses"] = [{"region": "Main", "rows": result["rows"]}, {"region": "Missing", "rows": []}]
         ws = load_workbook(export_document(result, config, "simple", "xlsx")).active
-        self.assertEqual(ws.cell(4, 3).value, "Main: 60\nMissing: —")
+        self.assertEqual(ws.cell(4, 3).value, "Main: 50\nMissing: —")
         self.assertEqual(export_document(result, config, "simple", "pdf").read(4), b"%PDF")
 
     def test_existing_column_visibility_is_preserved_with_new_price_order(self):
         old_order = ["code", "large_net", "large_gross", "url"]
         config = validate_config({"simple_column_order": old_order, "simple_columns": ["code", "large_gross"]})
         self.assertEqual(config["simple_columns"], ["code", "large_gross"])
-        self.assertEqual(config["simple_column_order"][:8], ["code", "large_net", "large_gross", "distr_net", "distr_gross", "distr_1_net", "distr_1_gross", "url"])
+        self.assertEqual(config["simple_column_order"][:8], ["code", "large_net", "large_gross", "distr_1_net", "distr_1_gross", "distr_net", "distr_gross", "url"])
 
     def test_comparison_exports_preserve_warehouses_prices_and_missing_products(self):
         from openpyxl import load_workbook
