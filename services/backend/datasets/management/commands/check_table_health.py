@@ -103,6 +103,13 @@ TABLE_CHECKS = [
         "data_date_column": "date",
         "fresh_days": 0,
     },
+    {
+        "name": "Nomenclature stock",
+        "table": "nomenclature_stock",
+        "date_add_column": "date_add",
+        "data_date_column": "date",
+        "fresh_days": 0,
+    },
     
 ]
 
