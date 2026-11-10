@@ -15,9 +15,9 @@ INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
 
 with DAG(
     dag_id="nomenclature_stock_api_daily",
-    description="Daily nomenclature stocks load from 1C API",
+    description="Nomenclature stocks load from 1C API at minutes 04 and 34 every hour",
     start_date=datetime(2026, 1, 1),
-    schedule="30 1 * * *",
+    schedule="4,34 * * * *",
     catchup=False,
     is_paused_upon_creation=True,
     max_active_runs=1,
